@@ -1,0 +1,7 @@
+# Dependencies are auto-installed by mcdr2restic at plugin runtime.
+# Keep this file comment-only so MCDR does not block plugin loading before
+# the bootstrap installer can run.
+#
+# Runtime bootstrap installs:
+#   PyYAML>=6.0
+#   websocket-client>=1.8.0
