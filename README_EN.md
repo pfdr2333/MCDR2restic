@@ -24,6 +24,7 @@ This project supports both Chinese and English, following the MCDR language conv
 * Dual-language (Chinese/English) messages and configuration comments
 * Skip scheduled backups when idle: Executes a `list` command upon trigger, combined with join/left player events for precise determination
 * Forced backup scheduling support: Bypasses player activity detection (disabled by default)
+* Configuration safety check: The local restic repository must not be inside any backup source directory
 
 ## Installation
 
@@ -86,6 +87,22 @@ force_schedule:
 
 ```
 
+`update_check` controls version update checks and is enabled by default. The plugin checks once in the background when it loads, then once every day at `00:00`; it only writes log messages and never downloads or updates the plugin automatically. Set `enabled` to `false` to disable it.
+
+```yaml
+update_check:
+  enabled: true
+  check_on_startup: true
+  daily_time: "00:00"
+  api_url: "https://api.github.com/repos/pfdr2333/MCDR2restic/releases/latest"
+  release_page_url: "https://github.com/pfdr2333/MCDR2restic/releases/latest"
+  proxy_prefixes:
+    - "https://gh.llkk.cc/"
+    - "https://gh-proxy.com/"
+    - "https://hub.gitmirror.com/"
+  timeout_seconds: 10
+```
+
 The default generated restic configuration is a minimal, ready-to-run local example:
 
 ```yaml
@@ -127,6 +144,8 @@ The automatic download first requests the GitHub latest release API. If `api.git
 `restic.password` takes precedence over `restic.password_file`. The plugin will only configure `RESTIC_PASSWORD_FILE` to use a password file if `password` is left as an empty string. The value of `restic.repository` is automatically exported to `RESTIC_REPOSITORY`.
 
 When `restic.auto_init_local_repository` is `true`, the plugin will automatically execute `restic init` before backing up if the local repository does not exist or lacks a `config` file. Remote repositories such as S3, B2, rest, sftp, and rclone will not be initialized automatically.
+
+Before a backup starts, the plugin performs a configuration safety check. If the local `restic.repository` is inside a source directory listed by `backup_command`, for example backing up `.` while using `./restic-repo`, the backup is aborted and administrators are notified. Move the repository outside the backup source or adjust `backup_command`.
 
 `restic.environment` overlays environment variables onto each executed restic command, making it ideal for adding secret variables required by backends like S3 or B2. Since `repository`, `password`, and `password_file` are automatically converted into their corresponding restic environment variables, you typically do not need to rewrite `RESTIC_REPOSITORY`, `RESTIC_PASSWORD`, or `RESTIC_PASSWORD_FILE` inside `environment`.
 

@@ -25,6 +25,7 @@ This project supports both Chinese and English, following the MCDR language conv
 - 中英文消息和配置注释
 - 无人游玩跳过正常备份：触发时执行一次 `list`，并结合 join/left 事件判断
 - 支持强制备份调度：不受玩家活动感知影响，默认关闭
+- 配置安全检查：本地 restic 仓库不能位于备份源目录内，避免仓库被备份进自身
 
 ## 安装
 >**快速开始：将插件放入`mcdr`的`plugins`目录然后`!!MCDR reload all`即可以默认配置自动运行**
@@ -86,6 +87,22 @@ force_schedule:
   cron_expression: "0"
 ```
 
+`update_check` 是版本更新检查，默认开启。插件加载时会在后台检查一次，之后每天 `00:00` 检查一次；只写日志提示，不会自动下载或更新插件。需要关闭时把 `enabled` 改为 `false`。
+
+```yaml
+update_check:
+  enabled: true
+  check_on_startup: true
+  daily_time: "00:00"
+  api_url: "https://api.github.com/repos/pfdr2333/MCDR2restic/releases/latest"
+  release_page_url: "https://github.com/pfdr2333/MCDR2restic/releases/latest"
+  proxy_prefixes:
+    - "https://gh.llkk.cc/"
+    - "https://gh-proxy.com/"
+    - "https://hub.gitmirror.com/"
+  timeout_seconds: 10
+```
+
 默认生成的 restic 配置是一个可直接运行的最小本地示例：
 
 ```yaml
@@ -126,6 +143,8 @@ restic:
 `restic.password` 优先级高于 `restic.password_file`。如果 `password` 留空字符串，插件才会设置 `RESTIC_PASSWORD_FILE` 使用密码文件。`restic.repository` 会自动写入 `RESTIC_REPOSITORY`。
 
 `restic.auto_init_local_repository` 为 `true` 时，如果本地仓库不存在或缺少 `config`，插件会在备份前自动执行 `restic init`。S3、B2、rest、sftp、rclone 等远端仓库不会自动初始化。
+
+备份开始前会执行配置安全检查：如果本地 `restic.repository` 位于 `backup_command` 指定的备份源目录内，例如备份 `.` 且仓库是 `./restic-repo`，插件会直接终止备份并通知管理员。请把仓库放到备份源目录之外，或调整 `backup_command`。
 
 `restic.environment` 会在执行每条 restic 命令时叠加到环境变量中，适合加入 S3/B2 等后端需要的密钥变量。`repository`、`password`、`password_file` 会自动转换为 restic 对应环境变量，因此通常不需要在 `environment` 里重复写 `RESTIC_REPOSITORY`、`RESTIC_PASSWORD` 或 `RESTIC_PASSWORD_FILE`。
 

@@ -126,7 +126,14 @@ PLUGIN_ID = 'mcdr2restic'
 CONFIG_NAME = 'config.yml'
 STATE_NAME = 'state.yml'
 LEGACY_CONFIG_NAME = 'config.json'
-CONFIG_VERSION = 5
+CONFIG_VERSION = 6
+PLUGIN_REPOSITORY_URL = 'https://github.com/pfdr2333/MCDR2restic'
+DEFAULT_UPDATE_API_URL = 'https://api.github.com/repos/pfdr2333/MCDR2restic/releases/latest'
+DEFAULT_PROXY_PREFIXES = [
+    'https://gh.llkk.cc/',
+    'https://gh-proxy.com/',
+    'https://hub.gitmirror.com/'
+]
 RESTIC_FALLBACK_RELEASE: Dict[str, Any] = {
     'tag_name': 'v0.19.1',
     'assets': [
@@ -158,6 +165,15 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         'interval_seconds': 0,
         'cron_expression': '0'
     },
+    'update_check': {
+        'enabled': True,
+        'check_on_startup': True,
+        'daily_time': '00:00',
+        'api_url': DEFAULT_UPDATE_API_URL,
+        'release_page_url': PLUGIN_REPOSITORY_URL + '/releases/latest',
+        'proxy_prefixes': copy.deepcopy(DEFAULT_PROXY_PREFIXES),
+        'timeout_seconds': 10
+    },
     'minecraft': {
         'save_off_command': 'save-off',
         'save_all_command': 'save-all flush',
@@ -175,9 +191,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         'auto_download': True,
         'download_version': 'latest',
         'download_proxy_prefixes': [
-            'https://gh.llkk.cc/',
-            'https://gh-proxy.com/',
-            'https://hub.gitmirror.com/'
+            *DEFAULT_PROXY_PREFIXES
         ],
         'download_timeout_seconds': 120,
         'auto_init_local_repository': True,
@@ -287,6 +301,7 @@ SERVER: Optional[PluginServerInterface] = None
 SERVER_READY = False
 
 SCHEDULER: Optional['BackupScheduler'] = None
+UPDATE_CHECKER: Optional['UpdateChecker'] = None
 ONEBOT: Optional['OneBotClient'] = None
 DISCORD: Optional['DiscordWebhookClient'] = None
 
@@ -426,6 +441,20 @@ force_schedule:
   # interval_seconds = 0 且 cron_expression = "0" 表示关闭强制备份。
   interval_seconds: 0
   cron_expression: "0"
+
+update_check:
+  # 版本更新检查。启用后插件加载时检查一次，并在每天 00:00 检查一次。
+  enabled: true
+  check_on_startup: true
+  daily_time: "00:00"
+  # GitHub latest release API。网络不佳时会按 proxy_prefixes 尝试代理。
+  api_url: "https://api.github.com/repos/pfdr2333/MCDR2restic/releases/latest"
+  release_page_url: "https://github.com/pfdr2333/MCDR2restic/releases/latest"
+  proxy_prefixes:
+    - "https://gh.llkk.cc/"
+    - "https://gh-proxy.com/"
+    - "https://hub.gitmirror.com/"
+  timeout_seconds: 10
 
 minecraft:
   # Linux Java 版示例。若服务端不支持 save-all flush，可改为 save-all。
@@ -574,7 +603,7 @@ messages:
     计算下次备份时间失败：{error}
 
 # 配置文件版本标识。请保留在文件尾部，方便后续迁移。
-config_version: 5
+config_version: 6
 """
 
 
@@ -620,6 +649,20 @@ force_schedule:
   # interval_seconds = 0 with cron_expression = "0" disables forced backups.
   interval_seconds: 0
   cron_expression: "0"
+
+update_check:
+  # Version update checks. When enabled, the plugin checks once on load and once every day at 00:00.
+  enabled: true
+  check_on_startup: true
+  daily_time: "00:00"
+  # GitHub latest release API. When the network is slow or blocked, proxy_prefixes are tried in order.
+  api_url: "https://api.github.com/repos/pfdr2333/MCDR2restic/releases/latest"
+  release_page_url: "https://github.com/pfdr2333/MCDR2restic/releases/latest"
+  proxy_prefixes:
+    - "https://gh.llkk.cc/"
+    - "https://gh-proxy.com/"
+    - "https://hub.gitmirror.com/"
+  timeout_seconds: 10
 
 minecraft:
   # Linux Java Edition example. If your server does not support save-all flush, use save-all instead.
@@ -778,7 +821,7 @@ messages:
     Failed to calculate the next backup time: {error}
 
 # Config file version marker. Keep it at the end for future migrations.
-config_version: 5
+config_version: 6
 """
 
 
@@ -1225,8 +1268,89 @@ class BackupScheduler:
         return True
 
 
+class UpdateChecker:
+    def __init__(self, server: PluginServerInterface, check_on_startup: bool):
+        self.server = server
+        self.check_on_startup = check_on_startup
+        self.stop_event = threading.Event()
+        self.wakeup_event = threading.Event()
+        self.thread = threading.Thread(target=self._main, name='MCDR2Restic-UpdateCheck', daemon=True)
+
+    def start(self):
+        self.thread.start()
+
+    def stop(self):
+        self.stop_event.set()
+        self.wakeup_event.set()
+        if self.thread.is_alive():
+            self.thread.join(timeout=5)
+
+    def _main(self):
+        self.server.logger.info('MCDR2Restic 版本更新检查线程已启动')
+        if self.check_on_startup:
+            self.check_now('startup')
+        while not self.stop_event.is_set():
+            try:
+                wait_seconds, due_text = compute_update_check_wait_seconds(get_config_snapshot())
+            except Exception as exc:
+                self.server.logger.warning('计算下次版本更新检查时间失败: {}'.format(exc))
+                if self._wait(60):
+                    continue
+                continue
+            self.server.logger.debug('下次版本更新检查等待 {} 秒（{}）'.format(int(wait_seconds), due_text))
+            if self._wait(wait_seconds):
+                continue
+            if self.stop_event.is_set():
+                break
+            self.check_now('daily')
+        self.server.logger.info('MCDR2Restic 版本更新检查线程已停止')
+
+    def check_now(self, reason: str):
+        cfg = get_config_snapshot()
+        update_cfg = cfg.get('update_check', {}) if isinstance(cfg.get('update_check'), dict) else {}
+        if not bool(update_cfg.get('enabled', True)):
+            return
+        try:
+            current_version = get_current_plugin_version(self.server)
+            latest = fetch_latest_plugin_release(update_cfg)
+            latest_version = normalize_release_version(str(latest.get('tag_name') or latest.get('name') or ''))
+            if not latest_version:
+                raise BackupProblem('latest release 未包含 tag_name/name')
+            latest_url = str(latest.get('html_url') or update_cfg.get('release_page_url') or PLUGIN_REPOSITORY_URL)
+            if is_newer_version(latest_version, current_version):
+                self.server.logger.warning(
+                    '检测到 MCDR2Restic 新版本：{}（当前 {}），发布页: {}'.format(
+                        latest_version,
+                        current_version,
+                        latest_url
+                    )
+                )
+            else:
+                self.server.logger.info(
+                    'MCDR2Restic 版本检查完成：当前 {}，最新 {}（{}）'.format(
+                        current_version,
+                        latest_version,
+                        reason
+                    )
+                )
+        except Exception as exc:
+            self.server.logger.warning('MCDR2Restic 版本更新检查失败（{}）: {}'.format(reason, exc))
+
+    def _wait(self, seconds: float) -> bool:
+        end = time.monotonic() + max(0.0, seconds)
+        self.wakeup_event.clear()
+        while not self.stop_event.is_set():
+            remaining = end - time.monotonic()
+            if remaining <= 0:
+                return False
+            if self.wakeup_event.wait(timeout=min(60.0, remaining)):
+                self.wakeup_event.clear()
+                return True
+        return True
+
+
 def on_load(server: PluginServerInterface, prev_module):
-    global SERVER, SERVER_READY, SCHEDULER, ONEBOT, DISCORD
+    global SERVER, SERVER_READY, SCHEDULER, UPDATE_CHECKER, ONEBOT, DISCORD
     if prev_module is not None and hasattr(prev_module, '_shutdown_runtime'):
         try:
             prev_module._shutdown_runtime(server, 'plugin reload')
@@ -1250,6 +1374,7 @@ def on_load(server: PluginServerInterface, prev_module):
 
     SCHEDULER = BackupScheduler(server)
     SCHEDULER.start()
+    restart_update_checker(server, startup_check=True)
     server.logger.info('MCDR2Restic 已加载')
 
 
@@ -1325,8 +1450,11 @@ def on_player_left(server: PluginServerInterface, player: str):
 
 
 def _shutdown_runtime(server: PluginServerInterface, reason: str):
-    global SCHEDULER, ONEBOT, DISCORD
+    global SCHEDULER, UPDATE_CHECKER, ONEBOT, DISCORD
     PLUGIN_STOPPING.set()
+    if UPDATE_CHECKER is not None:
+        UPDATE_CHECKER.stop()
+        UPDATE_CHECKER = None
     if SCHEDULER is not None:
         SCHEDULER.stop()
         SCHEDULER = None
@@ -1537,6 +1665,7 @@ def command_reload(source: CommandSource):
     load_config(server, source)
     restart_onebot(server)
     restart_discord(server)
+    restart_update_checker(server, startup_check=False)
     wake_scheduler()
 
 
@@ -1646,6 +1775,7 @@ def migrate_config_file(server: PluginServerInterface, language: str, cfg: Dict[
         lines = remove_deprecated_schedule_lines(lines)
         lines = ensure_restic_migration_lines(lines, language, cfg)
         lines = ensure_force_schedule_block(lines, language, cfg)
+        lines = ensure_update_check_block(lines, language, cfg)
         lines = ensure_discord_block(lines, language, cfg)
         lines = ensure_config_version_tail(lines, language)
         updated = ''.join(lines)
@@ -1675,6 +1805,14 @@ def ensure_force_schedule_block(lines: List[str], language: str, cfg: Dict[str, 
     force_schedule = cfg.get('force_schedule', {}) if isinstance(cfg.get('force_schedule'), dict) else {}
     block = get_force_schedule_lines(language, force_schedule)
     return insert_before_config_version_or_end(lines, block)
+
+
+def ensure_update_check_block(lines: List[str], language: str, cfg: Dict[str, Any]) -> List[str]:
+    if has_top_level_key(lines, 'update_check'):
+        return lines
+    update_check = cfg.get('update_check', {}) if isinstance(cfg.get('update_check'), dict) else {}
+    block = get_update_check_lines(language, update_check)
+    return insert_before_top_level_key(lines, 'minecraft', block)
 
 
 def ensure_restic_migration_lines(lines: List[str], language: str, cfg: Dict[str, Any]) -> List[str]:
@@ -1822,6 +1960,46 @@ def get_force_schedule_lines(language: str, force_schedule: Dict[str, Any]) -> L
         '  # interval_seconds > 0 uses a fixed interval; interval_seconds = 0 with cron_expression = "0" disables it.\n',
         '  interval_seconds: {}\n'.format(interval),
         '  cron_expression: {}\n'.format(cron)
+    ]
+
+
+def get_update_check_lines(language: str, update_check: Dict[str, Any]) -> List[str]:
+    enabled = yaml_scalar(update_check.get('enabled', True))
+    startup = yaml_scalar(update_check.get('check_on_startup', True))
+    daily_time = yaml_scalar(update_check.get('daily_time', '00:00'))
+    api_url = yaml_scalar(update_check.get('api_url', DEFAULT_UPDATE_API_URL))
+    release_page_url = yaml_scalar(update_check.get('release_page_url', PLUGIN_REPOSITORY_URL + '/releases/latest'))
+    timeout = yaml_scalar(update_check.get('timeout_seconds', 10))
+    prefixes = update_check.get('proxy_prefixes', DEFAULT_PROXY_PREFIXES)
+    if not isinstance(prefixes, list):
+        prefixes = DEFAULT_PROXY_PREFIXES
+    prefix_lines = ['  proxy_prefixes:\n'] + ['    - {}\n'.format(yaml_scalar(prefix)) for prefix in prefixes]
+    if is_zh_language(language):
+        return [
+            '\n',
+            'update_check:\n',
+            '  # 版本更新检查。启用后插件加载时检查一次，并在每天 00:00 检查一次。\n',
+            '  enabled: {}\n'.format(enabled),
+            '  check_on_startup: {}\n'.format(startup),
+            '  daily_time: {}\n'.format(daily_time),
+            '  # GitHub latest release API。网络不佳时会按 proxy_prefixes 尝试代理。\n',
+            '  api_url: {}\n'.format(api_url),
+            '  release_page_url: {}\n'.format(release_page_url)
+        ] + prefix_lines + [
+            '  timeout_seconds: {}\n'.format(timeout)
+        ]
+    return [
+        '\n',
+        'update_check:\n',
+        '  # Version update checks. When enabled, the plugin checks once on load and once every day at 00:00.\n',
+        '  enabled: {}\n'.format(enabled),
+        '  check_on_startup: {}\n'.format(startup),
+        '  daily_time: {}\n'.format(daily_time),
+        '  # GitHub latest release API. When the network is slow or blocked, proxy_prefixes are tried in order.\n',
+        '  api_url: {}\n'.format(api_url),
+        '  release_page_url: {}\n'.format(release_page_url)
+    ] + prefix_lines + [
+        '  timeout_seconds: {}\n'.format(timeout)
     ]
 
 
@@ -2147,6 +2325,19 @@ def restart_discord(server: PluginServerInterface):
     DISCORD = DiscordWebhookClient(server, get_config_snapshot().get('discord', {}))
 
 
+def restart_update_checker(server: PluginServerInterface, startup_check: bool):
+    global UPDATE_CHECKER
+    if UPDATE_CHECKER is not None:
+        UPDATE_CHECKER.stop()
+        UPDATE_CHECKER = None
+    update_cfg = get_config_snapshot().get('update_check', {})
+    if not isinstance(update_cfg, dict) or not bool(update_cfg.get('enabled', True)):
+        server.logger.info('MCDR2Restic 版本更新检查已关闭')
+        return
+    UPDATE_CHECKER = UpdateChecker(server, startup_check and bool(update_cfg.get('check_on_startup', True)))
+    UPDATE_CHECKER.start()
+
+
 def wake_scheduler():
     if SCHEDULER is not None:
         SCHEDULER.wakeup()
@@ -2278,6 +2469,7 @@ def run_backup_body(server: PluginServerInterface, cfg: Dict[str, Any], label: s
     restic_cfg = cfg.get('restic', {})
     timeout_seconds = int(restic_cfg.get('timeout_seconds', 3600))
     deadline = time.monotonic() + max(1, timeout_seconds)
+    assert_backup_sources_do_not_contain_repository(restic_cfg)
     ensure_default_restic_executable_available(server, restic_cfg)
     newly_initialized = ensure_restic_repository_initialized(server, restic_cfg, deadline)
 
@@ -2580,6 +2772,137 @@ def resolve_restic_repository_path(restic_cfg: Dict[str, Any], repository: str) 
     return os.path.abspath(os.path.join(str(cwd), repository))
 
 
+def assert_backup_sources_do_not_contain_repository(restic_cfg: Dict[str, Any]):
+    repository = get_effective_restic_repository(restic_cfg)
+    if not repository or not is_local_restic_repository(repository):
+        return
+
+    repository_path = resolve_restic_repository_path(restic_cfg, repository)
+    source_paths = get_backup_source_paths(restic_cfg)
+    conflicts = [
+        source_path
+        for source_path in source_paths
+        if path_contains_or_equals(source_path, repository_path)
+    ]
+    if not conflicts:
+        return
+
+    raise BackupProblem(
+        '配置安全检查失败：备份源目录包含 restic 本地存储库，已终止备份。\n'
+        'restic 仓库: {}\n'
+        '冲突备份源: {}\n'
+        '请把 repository 移到备份源目录之外，或调整 backup_command。'.format(
+            repository_path,
+            ', '.join(conflicts)
+        )
+    )
+
+
+def get_effective_restic_repository(restic_cfg: Dict[str, Any]) -> str:
+    env = build_restic_environment(restic_cfg)
+    repository = str(env.get('RESTIC_REPOSITORY', '') or '').strip()
+    if repository:
+        return repository
+    try:
+        args = normalize_command_args(restic_cfg.get('backup_command', []))
+    except BackupProblem:
+        return ''
+    return find_option_value(args, {'--repo', '--repository', '-r'})
+
+
+def find_option_value(args: List[str], names: Set[str]) -> str:
+    for index, item in enumerate(args):
+        for name in names:
+            if item == name and index + 1 < len(args):
+                return str(args[index + 1]).strip()
+            if item.startswith(name + '='):
+                return item.split('=', 1)[1].strip()
+    return ''
+
+
+def get_backup_source_paths(restic_cfg: Dict[str, Any]) -> List[str]:
+    args = normalize_command_args(restic_cfg.get('backup_command', []))
+    sources = extract_restic_backup_sources(args)
+    cwd = str(restic_cfg.get('working_directory') or os.getcwd())
+    return [resolve_backup_source_path(cwd, source) for source in sources]
+
+
+def extract_restic_backup_sources(args: List[str]) -> List[str]:
+    try:
+        index = args.index('backup') + 1
+    except ValueError:
+        index = 0
+
+    sources: List[str] = []
+    while index < len(args):
+        item = args[index]
+        if item == '--':
+            sources.extend(args[index + 1:])
+            break
+        if item.startswith('-') and item != '-':
+            index += restic_backup_option_width(args, index)
+            continue
+        sources.append(item)
+        index += 1
+    return sources
+
+
+def restic_backup_option_width(args: List[str], index: int) -> int:
+    option = args[index]
+    if '=' in option:
+        return 1
+    name = option.split('=', 1)[0]
+    value_options = {
+        '--exclude',
+        '--iexclude',
+        '--exclude-file',
+        '--iexclude-file',
+        '--exclude-if-present',
+        '--exclude-larger-than',
+        '--files-from',
+        '--files-from-raw',
+        '--files-from-verbatim',
+        '--group-by',
+        '--host',
+        '--limit-download',
+        '--limit-upload',
+        '--option',
+        '--parent',
+        '--password-command',
+        '--password-file',
+        '--repo',
+        '--repository',
+        '--repository-file',
+        '--stdin-filename',
+        '--tag',
+        '--time'
+    }
+    if name in value_options and index + 1 < len(args):
+        return 2
+    return 1
+
+
+def resolve_backup_source_path(cwd: str, source: str) -> str:
+    source = os.path.expanduser(os.path.expandvars(str(source)))
+    if os.path.isabs(source):
+        return normalize_filesystem_path(source)
+    return normalize_filesystem_path(os.path.join(cwd, source))
+
+
+def normalize_filesystem_path(path: str) -> str:
+    return os.path.realpath(os.path.abspath(os.path.normpath(path)))
+
+
+def path_contains_or_equals(parent: str, child: str) -> bool:
+    parent_path = normalize_filesystem_path(parent)
+    child_path = normalize_filesystem_path(child)
+    try:
+        common = os.path.commonpath([parent_path, child_path])
+    except ValueError:
+        return False
+    return os.path.normcase(common) == os.path.normcase(parent_path)
+
+
 def run_restic_command(restic_cfg: Dict[str, Any], configured_args: Any, phase: str, deadline: float) -> ResticCommandResult:
     global CURRENT_PROCESS
     args = normalize_command_args(configured_args)
@@ -2760,6 +3083,90 @@ def sleep_or_cancel(seconds: float):
     while time.monotonic() < end:
         check_canceled()
         time.sleep(min(0.2, end - time.monotonic()))
+
+
+def compute_update_check_wait_seconds(cfg: Dict[str, Any]) -> Tuple[float, str]:
+    update_cfg = cfg.get('update_check', {}) if isinstance(cfg.get('update_check'), dict) else {}
+    hour, minute = parse_daily_time(str(update_cfg.get('daily_time', '00:00') or '00:00'))
+    now = datetime.now()
+    target = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    if target <= now:
+        target += timedelta(days=1)
+    return max(1.0, (target - now).total_seconds()), target.strftime('%Y-%m-%d %H:%M:%S')
+
+
+def parse_daily_time(value: str) -> Tuple[int, int]:
+    match = re.match(r'^\s*(\d{1,2}):(\d{1,2})\s*$', str(value or ''))
+    if not match:
+        raise ValueError('daily_time 必须使用 HH:MM 格式，例如 00:00')
+    hour = int(match.group(1))
+    minute = int(match.group(2))
+    if hour < 0 or hour > 23 or minute < 0 or minute > 59:
+        raise ValueError('daily_time 超出范围: {}'.format(value))
+    return hour, minute
+
+
+def get_current_plugin_version(server: Optional[PluginServerInterface]) -> str:
+    if server is not None:
+        try:
+            metadata = server.get_self_metadata()
+            version = getattr(metadata, 'version', '')
+            if version:
+                return normalize_release_version(str(version))
+        except Exception:
+            pass
+    return normalize_release_version(read_bundled_plugin_version()) or '0.0.0'
+
+
+def read_bundled_plugin_version() -> str:
+    metadata_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'mcdreforged.plugin.json'))
+    try:
+        with open(metadata_path, 'r', encoding='utf8') as file:
+            data = json.load(file)
+        return str(data.get('version', '') or '')
+    except Exception:
+        return ''
+
+
+def fetch_latest_plugin_release(update_cfg: Dict[str, Any]) -> Dict[str, Any]:
+    api_url = str(update_cfg.get('api_url', DEFAULT_UPDATE_API_URL) or DEFAULT_UPDATE_API_URL).strip()
+    timeout = max(3, int(update_cfg.get('timeout_seconds', 10)))
+    urls = build_download_urls(api_url, update_cfg.get('proxy_prefixes', DEFAULT_PROXY_PREFIXES))
+    last_error = ''
+    for url in urls:
+        try:
+            data = download_bytes(url, timeout)
+            payload = json.loads(data.decode('utf-8'))
+            if isinstance(payload, dict) and (payload.get('tag_name') or payload.get('name')):
+                return payload
+            raise BackupProblem('release API 返回格式异常')
+        except Exception as exc:
+            last_error = '{}: {}'.format(mask_download_url(url), exc)
+    raise BackupProblem(last_error or '无法获取最新版本信息')
+
+
+def normalize_release_version(version: str) -> str:
+    text = str(version or '').strip()
+    if text.lower().startswith('version '):
+        text = text.split(None, 1)[1].strip()
+    return text.lstrip('vV').strip()
+
+
+def is_newer_version(latest: str, current: str) -> bool:
+    latest_tuple = version_number_tuple(latest)
+    current_tuple = version_number_tuple(current)
+    if latest_tuple or current_tuple:
+        width = max(len(latest_tuple), len(current_tuple), 1)
+        latest_tuple = latest_tuple + (0,) * (width - len(latest_tuple))
+        current_tuple = current_tuple + (0,) * (width - len(current_tuple))
+        return latest_tuple > current_tuple
+    return normalize_release_version(latest) > normalize_release_version(current)
+
+
+def version_number_tuple(version: str) -> Tuple[int, ...]:
+    text = normalize_release_version(version)
+    main = re.split(r'[-+_\s]', text, maxsplit=1)[0]
+    return tuple(int(part) for part in re.findall(r'\d+', main))
 
 
 def compute_wait_seconds(cfg: Dict[str, Any]) -> Tuple[float, str]:
