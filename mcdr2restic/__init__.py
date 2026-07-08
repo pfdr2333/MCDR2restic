@@ -2414,6 +2414,8 @@ def install_restic_archive(archive_path: str, asset_keyword: str, output_name: s
     elif asset_keyword.endswith('.bz2'):
         with open(archive_path, 'rb') as source:
             data = bz2.decompress(source.read())
+        if not data:
+            raise BackupProblem('bz2 解压后内容为空')
         with open(target_path, 'wb') as target:
             target.write(data)
     else:
@@ -2424,11 +2426,36 @@ def install_restic_archive(archive_path: str, asset_keyword: str, output_name: s
 
 
 def find_zip_member(archive: zipfile.ZipFile, output_name: str) -> str:
+    members = [
+        name for name in archive.namelist()
+        if not name.endswith('/') and not os.path.basename(name).startswith('__MACOSX')
+    ]
     output_name_lower = output_name.lower()
-    for name in archive.namelist():
-        if name.rstrip('/').lower().endswith(output_name_lower):
+    for name in members:
+        if os.path.basename(name).lower() == output_name_lower:
             return name
-    raise BackupProblem('zip 中未找到 {}'.format(output_name))
+
+    exe_members = [
+        name for name in members
+        if os.path.basename(name).lower().endswith('.exe')
+    ]
+    restic_exe_members = [
+        name for name in exe_members
+        if 'restic' in os.path.basename(name).lower()
+    ]
+    if len(restic_exe_members) == 1:
+        return restic_exe_members[0]
+    if len(exe_members) == 1:
+        return exe_members[0]
+
+    restic_members = [
+        name for name in members
+        if 'restic' in os.path.basename(name).lower()
+    ]
+    if len(restic_members) == 1:
+        return restic_members[0]
+
+    raise BackupProblem('zip 中未找到可识别的 restic 可执行文件，包含文件: {}'.format(', '.join(members[:10])))
 
 
 def mask_download_url(url: str) -> str:
