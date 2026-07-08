@@ -25,6 +25,7 @@ This project supports both Chinese and English, following the MCDR language conv
 * Skip scheduled backups when idle: Executes a `list` command upon trigger, combined with join/left player events for precise determination
 * Forced backup scheduling support: Bypasses player activity detection (disabled by default)
 * Configuration safety check: The local restic repository must not be inside any backup source directory
+* Automated, Secure & Simple Snapshot Restore
 
 ## Installation
 
@@ -57,7 +58,8 @@ When generating the configuration for the first time on Windows, the example wil
 4. Modify the configuration file as needed, then execute `!!restic reload` once finished.
 
 ## Configuration
-
+<details>
+  <summary>Detailed Configuration Guide</summary>
 The runtime status is written to `config/mcdr2restic/state.yml`, tracking metrics such as player join/leave flags, recent online check results, and recent backup outcomes.
 
 `!!restic status` also shows the restic snapshot list. The list is cached in SQLite (default: `config/mcdr2restic/snapshots.sqlite3`) and is invalidated automatically after this plugin runs `init`, maintenance commands, or backup commands. The cache is refreshed the next time status is viewed. By default, 10 snapshots are shown per page; adjust `snapshot_cache.page_size` if needed.
@@ -174,6 +176,7 @@ discord:
 ```
 
 Admin notification texts can be customized within `messages`. Available variables include: `{prefix}`, `{label}`, `{start_time}`, `{end_time}`, `{duration_seconds}`, `{status}`, `{message}`, `{detail}`, and `{error}`. If you need to output literal curly braces, write them as `{{` or `}}`.
+</details>
 
 ## Commands
 

@@ -26,6 +26,7 @@ This project supports both Chinese and English, following the MCDR language conv
 - 无人游玩跳过正常备份：触发时执行一次 `list`，并结合 join/left 事件判断
 - 支持强制备份调度：不受玩家活动感知影响，默认关闭
 - 配置安全检查：本地 restic 仓库不能位于备份源目录内，避免仓库被备份进自身
+- 自动化，安全且简单的快照恢复
 
 ## 安装
 >**快速开始：将插件放入`mcdr`的`plugins`目录然后`!!MCDR reload all`即可以默认配置自动运行**
@@ -59,7 +60,8 @@ This project supports both Chinese and English, following the MCDR language conv
 
 
 ## 配置
-
+<details>
+  <summary>配置详解</summary>
 运行时状态会写入 `config/mcdr2restic/state.yml`，例如玩家进入/退出标志、最近在线检查结果和最近备份结果。
 
 `!!restic status` 会附带显示 restic 快照列表。快照列表缓存写入 SQLite（默认 `config/mcdr2restic/snapshots.sqlite3`），并在本插件执行 `init`、维护命令或备份命令后自动标记失效；下一次查看状态时再刷新缓存。默认每页显示 10 条，可通过 `snapshot_cache.page_size` 调整。
@@ -172,6 +174,7 @@ discord:
 ```
 
 `messages` 里可以自定义管理员通知文本。可用变量包括：`{prefix}`、`{label}`、`{start_time}`、`{end_time}`、`{duration_seconds}`、`{status}`、`{message}`、`{detail}`、`{error}`。如果需要输出字面量花括号，请写成 `{{` 或 `}}`。
+</details>
 
 ## 命令
 
