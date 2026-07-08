@@ -2,6 +2,11 @@
 # Keep this file comment-only so MCDR does not block plugin loading before
 # the bootstrap installer can run.
 #
+# 依赖项会由 mcdr2restic 在插件运行时自动安装。
+# 请保持此文件仅包含注释，以避免在引导安装程序运行前
+# MCDR 阻止插件加载。
+#
 # Runtime bootstrap installs:
+# 运行时引导安装：
 #   PyYAML>=6.0
 #   websocket-client>=1.8.0
