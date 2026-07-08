@@ -62,6 +62,10 @@ This project supports both Chinese and English, following the MCDR language conv
 
 运行时状态会写入 `config/mcdr2restic/state.yml`，例如玩家进入/退出标志、最近在线检查结果和最近备份结果。
 
+`!!restic status` 会附带显示 restic 快照列表。快照列表缓存写入 SQLite（默认 `config/mcdr2restic/snapshots.sqlite3`），并在本插件执行 `init`、维护命令或备份命令后自动标记失效；下一次查看状态时再刷新缓存。默认每页显示 10 条，可通过 `snapshot_cache.page_size` 调整。
+
+恢复任务同样写入 SQLite。`!!restic restore <snapshot>` 会加入整份快照恢复任务；`!!restic restore <snapshot> file /server/whitelist.json` 和 `!!restic restore <snapshot> folder /server/region` 会按 restic 工作目录根路径加入单文件/文件夹恢复任务。任务不会立即执行，`!!restic restore apply` 会先创建一个带 `restore.pre_restore_backup_tag` 的保护快照，再通过 MCDR 停止 MC、恢复文件、启动 MC；停服和启动阶段由 MCDR hook 接力。如果恢复队列执行失败，插件会在启动 MC 前立即恢复到这份保护快照，队列会保留以便排查。
+
 `schedule.require_player_activity_in_wait_period` 为 `true` 时，正常定时备份采用纯事件驱动加触发时检查：
 
 - 本周期有人加入：备份
@@ -134,6 +138,8 @@ restic:
     - "minecraft"
     - "--host"
     - "mcdr2Restic"
+  timeout_seconds: 0
+  progress_interval_seconds: 5
 ```
 
 这样在 Linux/Windows amd64 上，即使 MCDR 工作目录下还没有默认路径的 restic，插件也会尝试自动下载。首次生成配置时默认只备份 `./server/world`；如果生成时检测到 `./server/world`、`./server/world_nether`、`./server/world_the_end` 三个目录都存在，会自动写入三世界目录。Windows 首次生成配置时会自动使用 `.\restic.exe` 和反斜杠路径，并默认排除 `session.lock`，避免 Minecraft 文件锁导致 restic 返回 3。示例密码 `123456` 只用于降低首次配置门槛，正式使用请改成自己的强密码。
@@ -145,6 +151,8 @@ restic:
 `restic.auto_init_local_repository` 为 `true` 时，如果本地仓库不存在或缺少 `config`，插件会在备份前自动执行 `restic init`。S3、B2、rest、sftp、rclone 等远端仓库不会自动初始化。
 
 备份开始前会执行配置安全检查：如果本地 `restic.repository` 位于 `backup_command` 指定的备份源目录内，例如备份 `.` 且仓库是 `./restic-repo`，插件会直接终止备份并通知管理员。请把仓库放到备份源目录之外，或调整 `backup_command`。
+
+`restic.timeout_seconds` 控制 restic 命令流程超时，`0` 表示不限制；旧配置中的默认 `3600` 会在迁移时更新为 `0`。`restic.progress_interval_seconds` 控制 `backup`/`restore` 的 `--json` 进度回显间隔，默认每 5 秒写入一次 MCDR 日志；备份通知仍保持原来的开始/成功/失败行为，不会因进度回显刷通知。
 
 `restic.environment` 会在执行每条 restic 命令时叠加到环境变量中，适合加入 S3/B2 等后端需要的密钥变量。`repository`、`password`、`password_file` 会自动转换为 restic 对应环境变量，因此通常不需要在 `environment` 里重复写 `RESTIC_REPOSITORY`、`RESTIC_PASSWORD` 或 `RESTIC_PASSWORD_FILE`。
 
@@ -168,6 +176,13 @@ discord:
 ## 命令
 
 - `!!restic status` 查看状态
+- `!!restic status p X` 查看 restic 快照列表第 X 页
+- `!!restic restore SNAPSHOT` 添加整份快照恢复任务
+- `!!restic restore SNAPSHOT file /server/path` 添加单文件恢复任务
+- `!!restic restore SNAPSHOT folder /server/path` 添加文件夹恢复任务
+- `!!restic restore list` 查看恢复任务列表
+- `!!restic unrestore ID/all` 删除某个/所有恢复任务
+- `!!restic restore apply` 执行恢复任务队列
 - `!!restic start` 启用定时备份
 - `!!restic stop` 禁用定时备份，并请求停止当前备份
 - `!!restic backup` 立即备份

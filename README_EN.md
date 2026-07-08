@@ -60,6 +60,10 @@ When generating the configuration for the first time on Windows, the example wil
 
 The runtime status is written to `config/mcdr2restic/state.yml`, tracking metrics such as player join/leave flags, recent online check results, and recent backup outcomes.
 
+`!!restic status` also shows the restic snapshot list. The list is cached in SQLite (default: `config/mcdr2restic/snapshots.sqlite3`) and is invalidated automatically after this plugin runs `init`, maintenance commands, or backup commands. The cache is refreshed the next time status is viewed. By default, 10 snapshots are shown per page; adjust `snapshot_cache.page_size` if needed.
+
+Restore tasks are stored in SQLite as well. `!!restic restore <snapshot>` queues a full-snapshot restore; `!!restic restore <snapshot> file /server/whitelist.json` and `!!restic restore <snapshot> folder /server/region` queue single-file/folder restores relative to the restic working directory root. Tasks are not executed immediately. `!!restic restore apply` first creates a safety backup tagged with `restore.pre_restore_backup_tag`, then uses MCDR hooks to stop Minecraft, restore files, and start Minecraft again. If the restore queue fails, the plugin immediately restores this safety snapshot before starting Minecraft again, and keeps the queue for inspection.
+
 When `schedule.require_player_activity_in_wait_period` is set to `true`, standard scheduled backups employ a pure event-driven approach combined with a trigger-time check:
 
 * A player joined during this period: Backup
@@ -134,6 +138,8 @@ restic:
     - "minecraft"
     - "--host"
     - "mcdr2Restic"
+  timeout_seconds: 0
+  progress_interval_seconds: 5
 
 ```
 
@@ -146,6 +152,8 @@ The automatic download first requests the GitHub latest release API. If `api.git
 When `restic.auto_init_local_repository` is `true`, the plugin will automatically execute `restic init` before backing up if the local repository does not exist or lacks a `config` file. Remote repositories such as S3, B2, rest, sftp, and rclone will not be initialized automatically.
 
 Before a backup starts, the plugin performs a configuration safety check. If the local `restic.repository` is inside a source directory listed by `backup_command`, for example backing up `.` while using `./restic-repo`, the backup is aborted and administrators are notified. Move the repository outside the backup source or adjust `backup_command`.
+
+`restic.timeout_seconds` controls restic command workflow timeouts. `0` means unlimited; old configs using the previous default `3600` are migrated to `0`. `restic.progress_interval_seconds` controls the `backup`/`restore --json` progress echo interval, defaulting to one MCDR log line every 5 seconds. Backup notifications keep their original start/success/failure behavior and are not spammed by progress echoes.
 
 `restic.environment` overlays environment variables onto each executed restic command, making it ideal for adding secret variables required by backends like S3 or B2. Since `repository`, `password`, and `password_file` are automatically converted into their corresponding restic environment variables, you typically do not need to rewrite `RESTIC_REPOSITORY`, `RESTIC_PASSWORD`, or `RESTIC_PASSWORD_FILE` inside `environment`.
 
@@ -170,6 +178,13 @@ Admin notification texts can be customized within `messages`. Available variable
 ## Commands
 
 * `!!restic status` View status
+* `!!restic status p X` View page X of the restic snapshot list
+* `!!restic restore SNAPSHOT` Queue a full-snapshot restore
+* `!!restic restore SNAPSHOT file /server/path` Queue a single-file restore
+* `!!restic restore SNAPSHOT folder /server/path` Queue a folder restore
+* `!!restic restore list` View queued restore tasks
+* `!!restic unrestore ID/all` Delete one/all restore tasks
+* `!!restic restore apply` Apply the restore task queue
 * `!!restic start` Enable scheduled backups
 * `!!restic stop` Disable scheduled backups and request to stop the current backup
 * `!!restic backup` Trigger an immediate backup

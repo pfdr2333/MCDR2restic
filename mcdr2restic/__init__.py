@@ -1,15 +1,18 @@
 # -*- coding: utf-8 -*-
 import copy
+import hashlib
 import importlib
 import importlib.metadata
 import bz2
 import json
 import os
 import platform
+import queue
 import re
 import shlex
 import signal
 import shutil
+import sqlite3
 import stat
 import subprocess
 import sys
@@ -125,8 +128,9 @@ except Exception:  # pragma: no cover - optional runtime dependency
 PLUGIN_ID = 'mcdr2restic'
 CONFIG_NAME = 'config.yml'
 STATE_NAME = 'state.yml'
+SNAPSHOT_DB_NAME = 'snapshots.sqlite3'
 LEGACY_CONFIG_NAME = 'config.json'
-CONFIG_VERSION = 6
+CONFIG_VERSION = 9
 PLUGIN_REPOSITORY_URL = 'https://github.com/pfdr2333/MCDR2restic'
 DEFAULT_UPDATE_API_URL = 'https://api.github.com/repos/pfdr2333/MCDR2restic/releases/latest'
 DEFAULT_PROXY_PREFIXES = [
@@ -134,6 +138,9 @@ DEFAULT_PROXY_PREFIXES = [
     'https://gh-proxy.com/',
     'https://hub.gitmirror.com/'
 ]
+SNAPSHOT_PAGE_SIZE = 10
+SNAPSHOT_QUERY_TIMEOUT_SECONDS = 30
+RESTIC_PROGRESS_INTERVAL_SECONDS = 5
 RESTIC_FALLBACK_RELEASE: Dict[str, Any] = {
     'tag_name': 'v0.19.1',
     'assets': [
@@ -207,7 +214,8 @@ DEFAULT_CONFIG: Dict[str, Any] = {
             '--host',
             'mcdr2Restic'
         ],
-        'timeout_seconds': 3600,
+        'timeout_seconds': 0,
+        'progress_interval_seconds': RESTIC_PROGRESS_INTERVAL_SECONDS,
         'success_exit_codes': [0],
         'error_regexes': [
             '(?i)^fatal:',
@@ -248,6 +256,17 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         'notify_on_success': True,
         'notify_on_failure': True,
         'notify_on_skip': False
+    },
+    'snapshot_cache': {
+        'enabled': True,
+        'page_size': SNAPSHOT_PAGE_SIZE,
+        'query_timeout_seconds': SNAPSHOT_QUERY_TIMEOUT_SECONDS,
+        'database': SNAPSHOT_DB_NAME
+    },
+    'restore': {
+        'pre_restore_backup_tag': 'mcdr2restic-pre-restore',
+        'stop_timeout_seconds': 120,
+        'start_timeout_seconds': 120
     },
     'messages': {
         'backup_start': '{prefix} 备份开始\n触发: {label}\n时间: {start_time}',
@@ -311,6 +330,11 @@ CURRENT_PROCESS: Optional[subprocess.Popen] = None
 CURRENT_BACKUP_THREAD: Optional[threading.Thread] = None
 CURRENT_BACKUP_LABEL: Optional[str] = None
 PLUGIN_STOPPING = threading.Event()
+SNAPSHOT_QUERY_LOCK = threading.Lock()
+RESTORE_LOCK = threading.Lock()
+CURRENT_RESTORE_THREAD: Optional[threading.Thread] = None
+RESTORE_STATE_LOCK = threading.RLock()
+RESTORE_SESSION: Optional['RestoreSession'] = None
 
 
 def default_config_for_language(language: str) -> Dict[str, Any]:
@@ -514,8 +538,10 @@ restic:
     - "minecraft"
     - "--host"
     - "mcdr2Restic"
-  # 整个备份流程共用的超时，默认一小时。
-  timeout_seconds: 3600
+  # 整个 restic 命令流程共用的超时。0 表示不限制。
+  timeout_seconds: 0
+  # restic backup/restore --json 进度回显间隔，单位秒。
+  progress_interval_seconds: 5
   # restic 退出码。0 成功；3 表示有源文件不可读，本插件默认按失败处理。
   success_exit_codes:
     - 0
@@ -573,6 +599,24 @@ notification:
   notify_on_failure: true # 备份任务失败时是否发送通知
   notify_on_skip: false # 备份任务被跳过（如无需备份）时是否发送通知
 
+snapshot_cache:
+  # status 命令中的 restic 快照列表缓存。
+  # 缓存写入 SQLite 文件，只有仓库被本插件操作后才会标记失效。
+  enabled: true
+  # 每页显示的快照数量。默认 10。
+  page_size: 10
+  # 缓存刷新时执行 restic snapshots --json 的超时时间。
+  query_timeout_seconds: 30
+  # SQLite 缓存文件名，位于本插件配置目录。
+  database: "snapshots.sqlite3"
+
+restore:
+  # 执行恢复前会自动备份一次，并给该保护快照追加这个 tag。
+  pre_restore_backup_tag: "mcdr2restic-pre-restore"
+  # 恢复流程通过 MCDR 服务端停止/启动 hook 接力，这两个值保留给状态机/外部看门狗使用。
+  stop_timeout_seconds: 120
+  start_timeout_seconds: 120
+
 messages:
   # 管理员通知消息模板，可自行修改文本。
   # 可用变量：{prefix} {label} {start_time} {end_time} {duration_seconds} {status} {message} {detail} {error}
@@ -603,7 +647,7 @@ messages:
     计算下次备份时间失败：{error}
 
 # 配置文件版本标识。请保留在文件尾部，方便后续迁移。
-config_version: 6
+config_version: 9
 """
 
 
@@ -727,8 +771,10 @@ restic:
     - "minecraft"
     - "--host"
     - "mcdr2Restic"
-  # Timeout shared by the entire backup workflow. Default: one hour.
-  timeout_seconds: 3600
+  # Timeout shared by restic command workflows. 0 means unlimited.
+  timeout_seconds: 0
+  # Progress echo interval for restic backup/restore --json, in seconds.
+  progress_interval_seconds: 5
   # restic exit codes.
   # 0 indicates success.
   # 3 indicates some source files were unreadable and is treated as failure by default.
@@ -790,6 +836,24 @@ notification:
   notify_on_failure: true # Send a notification when a backup task fails.
   notify_on_skip: false # Send a notification when a backup task is skipped (e.g. backup not required).
 
+snapshot_cache:
+  # restic snapshot list cache used by the status command.
+  # The cache is stored in SQLite and invalidated only after this plugin changes the repository.
+  enabled: true
+  # Number of snapshots shown per page. Default: 10.
+  page_size: 10
+  # Timeout for restic snapshots --json when refreshing the cache.
+  query_timeout_seconds: 30
+  # SQLite cache file name under this plugin's config directory.
+  database: "snapshots.sqlite3"
+
+restore:
+  # Before applying restore tasks, the plugin creates one safety backup with this tag.
+  pre_restore_backup_tag: "mcdr2restic-pre-restore"
+  # The restore workflow is driven by MCDR server stop/start hooks; these values are reserved for the state machine or external watchdogs.
+  stop_timeout_seconds: 120
+  start_timeout_seconds: 120
+
 messages:
   # Administrator notification message templates. You may freely customize the text.
   # Available variables:
@@ -821,7 +885,7 @@ messages:
     Failed to calculate the next backup time: {error}
 
 # Config file version marker. Keep it at the end for future migrations.
-config_version: 6
+config_version: 9
 """
 
 
@@ -845,6 +909,36 @@ class ResticCommandResult:
     stdout: str
     stderr: str
     duration_seconds: float
+    summary: Dict[str, Any] = None
+    json_errors: List[str] = None
+    snapshot_id: str = ''
+
+
+@dataclass
+class ResticProgressState:
+    phase: str
+    language: str
+    status: Dict[str, Any] = None
+    summary: Dict[str, Any] = None
+    json_errors: List[str] = None
+    last_text: str = ''
+    seen_json: bool = False
+    started_at: float = 0.0
+    last_emit_at: float = 0.0
+    last_emit_text: str = ''
+
+
+@dataclass
+class RestoreSession:
+    tasks: List[Dict[str, Any]]
+    cfg: Dict[str, Any]
+    snapshot_cfg: Dict[str, Any]
+    language: str
+    phase: str
+    started_at: str
+    error: str = ''
+    safety_snapshot_id: str = ''
+    rollback_error: str = ''
 
 
 class CronExpression:
@@ -1366,7 +1460,7 @@ def on_load(server: PluginServerInterface, prev_module):
     SERVER_READY = server_is_running(server)
     load_config(server)
     register_commands(server)
-    server.register_help_message(get_command_root(), 'restic 自动备份管理')
+    register_help_messages(server)
 
     ONEBOT = OneBotClient(server, get_config_snapshot().get('onebot', {}))
     ONEBOT.start()
@@ -1386,6 +1480,7 @@ def on_server_startup(server: PluginServerInterface):
     global SERVER_READY
     SERVER_READY = True
     server.logger.info('检测到 Minecraft 服务端启动完成，允许备份')
+    handle_restore_server_startup(server)
 
 
 def on_server_stop(server: PluginServerInterface, server_return_code: int):
@@ -1400,6 +1495,8 @@ def on_server_stop(server: PluginServerInterface, server_return_code: int):
         runtime['last_online_check_source'] = 'server stop'
         runtime['last_online_check_result'] = '0 online after server stop'
         save_config_unlocked(server)
+    if handle_restore_server_stop(server, server_return_code):
+        return
     if is_backup_running():
         server.logger.warning('Minecraft 服务端已停止，正在请求中止当前备份')
         request_cancel_current_backup('server stopped')
@@ -1483,28 +1580,67 @@ def register_commands(server: PluginServerInterface):
         server.register_command(build_command_tree(root_name))
 
 
+def register_help_messages(server: PluginServerInterface):
+    server.register_help_message(
+        get_command_root(),
+        {
+            'zh_cn': 'Restic 备份、快照列表与恢复队列管理',
+            'en_us': 'Restic backup, snapshot list, and restore queue management'
+        },
+        permission=get_command_permission_level()
+    )
+
+
 def build_command_tree(root_name: str):
     return (
         Literal(root_name)
         .runs(command_status)
-        .then(Literal('status').runs(command_status))
+        .then(
+            Literal('status')
+            .runs(command_status)
+            .then(Literal('p').then(Integer('page').runs(command_status_page)))
+        )
         .then(Literal('start').runs(command_start))
         .then(Literal('stop').runs(command_stop))
         .then(Literal('backup').runs(command_backup))
+        .then(
+            Literal('restore')
+            .then(Literal('list').runs(command_restore_list))
+            .then(Literal('apply').runs(command_restore_apply))
+            .then(
+                Text('snapshot')
+                .runs(command_restore_add_full)
+                .then(Literal('file').then(GreedyText('path').runs(command_restore_add_file)))
+                .then(Literal('folder').then(GreedyText('path').runs(command_restore_add_folder)))
+            )
+        )
+        .then(
+            Literal('unrestore')
+            .then(Literal('all').runs(command_unrestore_all))
+            .then(Integer('task_id').runs(command_unrestore_task))
+        )
         .then(Literal('reload').runs(command_reload))
     )
 
 
 def command_status(source: CommandSource):
+    command_status_with_page(source, 1)
+
+
+def command_status_page(source: CommandSource, context: Dict[str, Any]):
+    command_status_with_page(source, max(1, non_negative_int(context.get('page', 1), 1)))
+
+
+def command_status_with_page(source: CommandSource, page: int):
     if not check_command_permission(source):
         return
     cfg = get_config_snapshot()
     server = SERVER or source.get_server()
     language = get_mcdr_language(server)
-    source.reply(render_status_output(cfg, language, server))
+    source.reply(render_status_output(cfg, language, server, page))
 
 
-def render_status_output(cfg: Dict[str, Any], language: str, server: Optional[PluginServerInterface]) -> str:
+def render_status_output(cfg: Dict[str, Any], language: str, server: Optional[PluginServerInterface], snapshot_page: int = 1) -> str:
     running = is_backup_running()
     runtime = cfg.get('runtime', {})
     current_online = non_negative_int(runtime.get('current_online_players', 0))
@@ -1515,12 +1651,14 @@ def render_status_output(cfg: Dict[str, Any], language: str, server: Optional[Pl
     last_backup_status = localized_backup_status(runtime.get('last_backup_status', 'never'), language)
     normal_next_text = schedule_status_text(cfg, False, language)
     force_next_text = schedule_status_text(cfg, True, language)
+    snapshot_lines = render_snapshot_status_lines(cfg, language, server, snapshot_page)
 
     if is_zh_language(language):
         return '\n'.join([
             'MCDR2Restic 状态',
             '启用: {}'.format(localized_bool(bool(cfg.get('enabled', True)), language)),
             '备份中: {}'.format(localized_bool(running, language)),
+            '恢复中: {}'.format(localized_bool(is_restore_running(), language)),
             'MC 就绪: {}'.format(localized_bool(is_mc_ready(server), language)),
             '玩家活动:',
             '  当前在线: {}'.format(current_online),
@@ -1532,11 +1670,12 @@ def render_status_output(cfg: Dict[str, Any], language: str, server: Optional[Pl
             '  正常备份: {}'.format(normal_next_text),
             '  强制备份: {}'.format(force_next_text),
             '最近备份状态: {}'.format(last_backup_status)
-        ])
+        ] + snapshot_lines)
     return '\n'.join([
         'MCDR2Restic Status',
         'Enabled: {}'.format(localized_bool(bool(cfg.get('enabled', True)), language)),
         'Backup running: {}'.format(localized_bool(running, language)),
+        'Restore running: {}'.format(localized_bool(is_restore_running(), language)),
         'Minecraft ready: {}'.format(localized_bool(is_mc_ready(server), language)),
         'Player activity:',
         '  Current online: {}'.format(current_online),
@@ -1548,7 +1687,724 @@ def render_status_output(cfg: Dict[str, Any], language: str, server: Optional[Pl
         '  Normal backup: {}'.format(normal_next_text),
         '  Forced backup: {}'.format(force_next_text),
         'Last backup status: {}'.format(last_backup_status)
-    ])
+    ] + snapshot_lines)
+
+
+def render_snapshot_status_lines(
+    cfg: Dict[str, Any],
+    language: str,
+    server: Optional[PluginServerInterface],
+    page: int
+) -> List[str]:
+    page = max(1, int(page))
+    title = 'Restic 快照' if is_zh_language(language) else 'Restic Snapshots'
+    if server is None:
+        if is_zh_language(language):
+            return ['', '{}:'.format(title), '  无法访问 MCDR 数据目录，跳过快照列表']
+        return ['', '{}:'.format(title), '  Cannot access the MCDR data folder, snapshots skipped']
+
+    restic_cfg = cfg.get('restic', {}) if isinstance(cfg.get('restic'), dict) else {}
+    snapshot_cfg = get_snapshot_cache_config(cfg)
+    if not bool(snapshot_cfg.get('enabled', True)):
+        if is_zh_language(language):
+            return ['', '{}:'.format(title), '  快照列表缓存已在配置中关闭']
+        return ['', '{}:'.format(title), '  Snapshot list cache is disabled in config']
+    page_size = get_snapshot_page_size(snapshot_cfg)
+    try:
+        cache_key = build_snapshot_cache_key(restic_cfg)
+        refresh_note = ensure_snapshot_cache_fresh(server, restic_cfg, cache_key, snapshot_cfg, language)
+        page_data = read_snapshot_page(server, cache_key, page, page_size, snapshot_cfg)
+    except Exception as exc:
+        if is_zh_language(language):
+            return ['', '{}:'.format(title), '  查询失败: {}'.format(exc)]
+        return ['', '{}:'.format(title), '  Query failed: {}'.format(exc)]
+
+    total = int(page_data.get('total', 0))
+    total_pages = max(1, (total + page_size - 1) // page_size)
+    if page > total_pages:
+        page = total_pages
+        page_data = read_snapshot_page(server, cache_key, page, page_size, snapshot_cfg)
+
+    lines = ['', '{}:'.format(title)]
+    updated_at = page_data.get('updated_at_text') or localized_never(language)
+    error = str(page_data.get('error') or '').strip()
+    invalidated = bool(page_data.get('invalidated', False))
+    invalidation_reason = str(page_data.get('invalidation_reason') or '').strip()
+    if is_zh_language(language):
+        lines.append('  缓存: {}，共 {} 个，第 {}/{} 页'.format(updated_at, total, page, total_pages))
+    else:
+        lines.append('  Cache: {}, total {}, page {}/{}'.format(updated_at, total, page, total_pages))
+
+    if refresh_note:
+        lines.append('  {}'.format(refresh_note))
+    if invalidated and invalidation_reason:
+        if is_zh_language(language):
+            lines.append('  缓存已失效: {}'.format(invalidation_reason))
+        else:
+            lines.append('  Cache invalidated: {}'.format(invalidation_reason))
+    if error:
+        if is_zh_language(language):
+            lines.append('  最近刷新失败，正在显示旧缓存: {}'.format(error))
+        else:
+            lines.append('  Last refresh failed; showing stale cache: {}'.format(error))
+
+    rows = page_data.get('rows', [])
+    if not rows:
+        lines.append('  {}'.format('暂无快照' if is_zh_language(language) else 'No snapshots'))
+        return lines
+
+    for index, row in enumerate(rows, start=(page - 1) * page_size + 1):
+        lines.append(format_snapshot_line(index, row, language))
+    if page < total_pages:
+        root = str(cfg.get('command', {}).get('root', '!!restic'))
+        if is_zh_language(language):
+            lines.append('  下一页: {} status p {}'.format(root, page + 1))
+        else:
+            lines.append('  Next page: {} status p {}'.format(root, page + 1))
+    return lines
+
+
+def build_snapshot_cache_key(restic_cfg: Dict[str, Any]) -> str:
+    configured_env = restic_cfg.get('environment', {})
+    if not isinstance(configured_env, dict):
+        configured_env = {}
+    key_material = {
+        'executable': str(restic_cfg.get('executable', 'restic') or 'restic'),
+        'working_directory': normalize_optional_path(str(restic_cfg.get('working_directory', '') or '')),
+        'repository': str(get_effective_restic_repository(restic_cfg) or ''),
+        'password': sha256_text(str(restic_cfg.get('password', '') or '')),
+        'password_file': normalize_optional_path(str(restic_cfg.get('password_file', '') or '')),
+        'environment': [
+            [str(key), sha256_text('' if value is None else str(value))]
+            for key, value in sorted(configured_env.items(), key=lambda item: str(item[0]))
+        ]
+    }
+    text = json.dumps(key_material, ensure_ascii=False, sort_keys=True, separators=(',', ':'))
+    return sha256_text(text)
+
+
+def normalize_optional_path(path: str) -> str:
+    text = str(path or '').strip()
+    if not text:
+        return ''
+    try:
+        return normalize_filesystem_path(text)
+    except Exception:
+        return text
+
+
+def sha256_text(text: str) -> str:
+    return hashlib.sha256(str(text).encode('utf-8')).hexdigest()
+
+
+def get_snapshot_cache_config(cfg: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    if cfg is None:
+        cfg = get_config_snapshot()
+    snapshot_cfg = cfg.get('snapshot_cache', {}) if isinstance(cfg.get('snapshot_cache'), dict) else {}
+    merged = copy.deepcopy(DEFAULT_CONFIG['snapshot_cache'])
+    merge_defaults(snapshot_cfg, merged)
+    return snapshot_cfg
+
+
+def get_snapshot_page_size(snapshot_cfg: Dict[str, Any]) -> int:
+    return max(1, min(100, int(snapshot_cfg.get('page_size', SNAPSHOT_PAGE_SIZE) or SNAPSHOT_PAGE_SIZE)))
+
+
+def get_snapshot_query_timeout(snapshot_cfg: Dict[str, Any]) -> int:
+    return max(1, int(snapshot_cfg.get('query_timeout_seconds', SNAPSHOT_QUERY_TIMEOUT_SECONDS) or SNAPSHOT_QUERY_TIMEOUT_SECONDS))
+
+
+def get_snapshot_db_path(server: PluginServerInterface, snapshot_cfg: Optional[Dict[str, Any]] = None) -> str:
+    snapshot_cfg = snapshot_cfg or get_snapshot_cache_config()
+    database = str(snapshot_cfg.get('database', SNAPSHOT_DB_NAME) or SNAPSHOT_DB_NAME).strip()
+    if not database:
+        database = SNAPSHOT_DB_NAME
+    if os.path.isabs(database):
+        return database
+    return get_data_file_path(server, database)
+
+
+def open_snapshot_db(server: PluginServerInterface, snapshot_cfg: Optional[Dict[str, Any]] = None) -> sqlite3.Connection:
+    path = get_snapshot_db_path(server, snapshot_cfg)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    conn = sqlite3.connect(path, timeout=10)
+    conn.row_factory = sqlite3.Row
+    ensure_snapshot_db_schema(conn)
+    return conn
+
+
+def ensure_snapshot_db_schema(conn: sqlite3.Connection):
+    conn.execute(
+        '''
+        CREATE TABLE IF NOT EXISTS snapshot_meta (
+            cache_key TEXT PRIMARY KEY,
+            updated_at_epoch REAL NOT NULL DEFAULT 0,
+            updated_at_text TEXT,
+            snapshot_count INTEGER NOT NULL DEFAULT 0,
+            error TEXT NOT NULL DEFAULT '',
+            invalidated INTEGER NOT NULL DEFAULT 1,
+            invalidation_reason TEXT NOT NULL DEFAULT '',
+            last_refresh_duration REAL NOT NULL DEFAULT 0
+        )
+        '''
+    )
+    conn.execute(
+        '''
+        CREATE TABLE IF NOT EXISTS snapshots (
+            cache_key TEXT NOT NULL,
+            id TEXT NOT NULL,
+            short_id TEXT NOT NULL,
+            time_text TEXT NOT NULL,
+            time_epoch REAL NOT NULL DEFAULT 0,
+            hostname TEXT NOT NULL DEFAULT '',
+            username TEXT NOT NULL DEFAULT '',
+            tags_text TEXT NOT NULL DEFAULT '',
+            paths_text TEXT NOT NULL DEFAULT '',
+            program_version TEXT NOT NULL DEFAULT '',
+            summary_json TEXT NOT NULL DEFAULT '',
+            PRIMARY KEY (cache_key, id)
+        )
+        '''
+    )
+    conn.execute(
+        'CREATE INDEX IF NOT EXISTS idx_snapshots_page ON snapshots (cache_key, time_epoch DESC, id DESC)'
+    )
+    conn.execute(
+        '''
+        CREATE TABLE IF NOT EXISTS restore_tasks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            created_at_text TEXT NOT NULL,
+            snapshot TEXT NOT NULL,
+            item_type TEXT NOT NULL,
+            include_path TEXT NOT NULL
+        )
+        '''
+    )
+    ensure_snapshot_meta_columns(conn)
+    conn.commit()
+
+
+def ensure_snapshot_meta_columns(conn: sqlite3.Connection):
+    columns = {
+        str(row[1])
+        for row in conn.execute('PRAGMA table_info(snapshot_meta)').fetchall()
+    }
+    additions = {
+        'invalidated': 'ALTER TABLE snapshot_meta ADD COLUMN invalidated INTEGER NOT NULL DEFAULT 1',
+        'invalidation_reason': "ALTER TABLE snapshot_meta ADD COLUMN invalidation_reason TEXT NOT NULL DEFAULT ''"
+    }
+    for column, statement in additions.items():
+        if column not in columns:
+            conn.execute(statement)
+
+
+def ensure_snapshot_cache_fresh(
+    server: PluginServerInterface,
+    restic_cfg: Dict[str, Any],
+    cache_key: str,
+    snapshot_cfg: Dict[str, Any],
+    language: str
+) -> str:
+    with open_snapshot_db(server, snapshot_cfg) as conn:
+        meta = read_snapshot_meta(conn, cache_key)
+    if meta is not None and int(meta['invalidated'] or 0) == 0:
+        return ''
+    if not SNAPSHOT_QUERY_LOCK.acquire(blocking=False):
+        return '快照缓存正在刷新' if is_zh_language(language) else 'Snapshot cache refresh is running'
+    try:
+        try:
+            refresh_snapshot_cache(server, restic_cfg, cache_key, snapshot_cfg)
+        except BackupProblem:
+            return ''
+        return ''
+    finally:
+        SNAPSHOT_QUERY_LOCK.release()
+
+
+def read_snapshot_meta(conn: sqlite3.Connection, cache_key: str) -> Optional[sqlite3.Row]:
+    return conn.execute(
+        '''
+        SELECT
+            updated_at_epoch, updated_at_text, snapshot_count, error,
+            invalidated, invalidation_reason, last_refresh_duration
+        FROM snapshot_meta
+        WHERE cache_key = ?
+        ''',
+        (cache_key,)
+    ).fetchone()
+
+
+def refresh_snapshot_cache(
+    server: PluginServerInterface,
+    restic_cfg: Dict[str, Any],
+    cache_key: str,
+    snapshot_cfg: Dict[str, Any]
+):
+    temp_key = '{}:refresh:{}:{}'.format(cache_key, int(time.time() * 1000), threading.get_ident())
+    started = time.monotonic()
+    with open_snapshot_db(server, snapshot_cfg) as conn:
+        try:
+            count = import_restic_snapshots_to_sql(restic_cfg, conn, temp_key, get_snapshot_query_timeout(snapshot_cfg))
+            updated_epoch = time.time()
+            updated_text = now_text()
+            with conn:
+                conn.execute('DELETE FROM snapshots WHERE cache_key = ?', (cache_key,))
+                conn.execute('UPDATE snapshots SET cache_key = ? WHERE cache_key = ?', (cache_key, temp_key))
+                conn.execute(
+                    '''
+                    INSERT OR REPLACE INTO snapshot_meta
+                    (
+                        cache_key, updated_at_epoch, updated_at_text, snapshot_count,
+                        error, invalidated, invalidation_reason, last_refresh_duration
+                    )
+                    VALUES (?, ?, ?, ?, '', 0, '', ?)
+                    ''',
+                    (cache_key, updated_epoch, updated_text, count, time.monotonic() - started)
+                )
+        except Exception as exc:
+            error = tail_text(str(exc), 800)
+            existing = read_snapshot_meta(conn, cache_key)
+            with conn:
+                conn.execute('DELETE FROM snapshots WHERE cache_key = ?', (temp_key,))
+                conn.execute(
+                    '''
+                    INSERT OR REPLACE INTO snapshot_meta
+                    (
+                        cache_key, updated_at_epoch, updated_at_text, snapshot_count,
+                        error, invalidated, invalidation_reason, last_refresh_duration
+                    )
+                    VALUES (?, ?, ?, ?, ?, 1, ?, ?)
+                    ''',
+                    (
+                        cache_key,
+                        float(existing['updated_at_epoch'] or 0) if existing is not None else 0,
+                        existing['updated_at_text'] if existing is not None else None,
+                        int(existing['snapshot_count'] or 0) if existing is not None else 0,
+                        error,
+                        existing['invalidation_reason'] if existing is not None else 'refresh failed',
+                        time.monotonic() - started
+                    )
+                )
+            raise BackupProblem(error)
+        finally:
+            with conn:
+                conn.execute('DELETE FROM snapshots WHERE cache_key = ?', (temp_key,))
+
+
+def import_restic_snapshots_to_sql(restic_cfg: Dict[str, Any], conn: sqlite3.Connection, cache_key: str, timeout_seconds: int) -> int:
+    process = start_restic_snapshot_process(restic_cfg)
+    stderr_tail = ''
+
+    def read_stderr():
+        nonlocal stderr_tail
+        if process.stderr is None:
+            return
+        while True:
+            chunk = process.stderr.read(4096)
+            if not chunk:
+                break
+            stderr_tail = (stderr_tail + chunk)[-4000:]
+
+    stderr_thread = threading.Thread(target=read_stderr, name='MCDR2Restic-SnapshotStderr', daemon=True)
+    stderr_thread.start()
+    timed_out = threading.Event()
+
+    def on_timeout():
+        timed_out.set()
+        terminate_process(process)
+
+    timer = threading.Timer(timeout_seconds, on_timeout)
+    timer.daemon = True
+    timer.start()
+    count = 0
+    try:
+        if process.stdout is None:
+            raise BackupProblem('restic snapshots 未返回 stdout')
+        for snapshot in iter_json_array_stream(process.stdout):
+            if not isinstance(snapshot, dict):
+                continue
+            insert_snapshot_row(conn, cache_key, snapshot)
+            count += 1
+            if count % 100 == 0:
+                conn.commit()
+        return_code = process.wait(timeout=5)
+    finally:
+        timer.cancel()
+        stderr_thread.join(timeout=2)
+
+    if timed_out.is_set():
+        raise BackupProblem('restic snapshots --json 超时（{} 秒）'.format(timeout_seconds))
+    if return_code != 0:
+        raise BackupProblem('restic snapshots --json 退出码异常：{}\n{}'.format(return_code, tail_text(stderr_tail, 1000)))
+    conn.commit()
+    return count
+
+
+def start_restic_snapshot_process(restic_cfg: Dict[str, Any]) -> subprocess.Popen:
+    executable = str(restic_cfg.get('executable', 'restic') or 'restic')
+    env = build_snapshot_restic_environment(restic_cfg)
+    cwd = restic_cfg.get('working_directory') or None
+    command = [resolve_popen_executable(executable, cwd), 'snapshots', '--json']
+    popen_kwargs: Dict[str, Any] = {
+        'stdout': subprocess.PIPE,
+        'stderr': subprocess.PIPE,
+        'stdin': subprocess.DEVNULL,
+        'cwd': cwd,
+        'env': env,
+        'text': True,
+        'encoding': 'utf-8',
+        'errors': 'replace'
+    }
+    if os.name == 'nt':
+        popen_kwargs['creationflags'] = getattr(subprocess, 'CREATE_NEW_PROCESS_GROUP', 0)
+    else:
+        popen_kwargs['start_new_session'] = True
+    try:
+        return subprocess.Popen(command, **popen_kwargs)
+    except FileNotFoundError:
+        raise BackupProblem('找不到 restic 可执行文件: {}'.format(executable))
+    except Exception as exc:
+        raise BackupProblem('启动 restic snapshots 失败: {}'.format(exc))
+
+
+def build_snapshot_restic_environment(restic_cfg: Dict[str, Any]) -> Dict[str, str]:
+    env = build_restic_environment(restic_cfg)
+    if not str(env.get('RESTIC_REPOSITORY', '') or '').strip():
+        repository = get_effective_restic_repository(restic_cfg)
+        if repository:
+            env['RESTIC_REPOSITORY'] = repository
+    return env
+
+
+def resolve_popen_executable(executable: str, cwd: Optional[str]) -> str:
+    text = str(executable or '').strip()
+    if not text or os.path.isabs(text):
+        return text
+    if not cwd:
+        return text
+    if os.sep in text or (os.altsep and os.altsep in text):
+        return os.path.abspath(os.path.join(str(cwd), text))
+    return text
+
+
+def iter_json_array_stream(stream):
+    decoder = json.JSONDecoder()
+    buffer = ''
+    in_array = False
+    eof = False
+    while True:
+        if not eof:
+            chunk = stream.read(65536)
+            if chunk:
+                buffer += chunk
+            else:
+                eof = True
+
+        while True:
+            buffer = buffer.lstrip()
+            if not in_array:
+                if not buffer:
+                    break
+                if buffer[0] != '[':
+                    raise BackupProblem('restic snapshots --json 输出不是 JSON 数组')
+                buffer = buffer[1:]
+                in_array = True
+                continue
+            if not buffer:
+                break
+            if buffer[0] == ']':
+                return
+            if buffer[0] == ',':
+                buffer = buffer[1:]
+                continue
+            try:
+                item, index = decoder.raw_decode(buffer)
+            except json.JSONDecodeError:
+                if eof:
+                    raise BackupProblem('解析 restic snapshots --json 输出失败')
+                break
+            buffer = buffer[index:]
+            yield item
+
+        if eof:
+            break
+    raise BackupProblem('restic snapshots --json 输出提前结束')
+
+
+def insert_snapshot_row(conn: sqlite3.Connection, cache_key: str, snapshot: Dict[str, Any]):
+    snapshot_id = str(snapshot.get('id') or snapshot.get('short_id') or '').strip()
+    if not snapshot_id:
+        return
+    paths = snapshot.get('paths', [])
+    tags = snapshot.get('tags', [])
+    if not isinstance(paths, list):
+        paths = [paths]
+    if not isinstance(tags, list):
+        tags = [tags]
+    time_text = str(snapshot.get('time') or '')
+    conn.execute(
+        '''
+        INSERT OR REPLACE INTO snapshots
+        (cache_key, id, short_id, time_text, time_epoch, hostname, username, tags_text, paths_text, program_version, summary_json)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''',
+        (
+            cache_key,
+            snapshot_id,
+            snapshot_id[:8],
+            time_text,
+            parse_restic_time_epoch(time_text),
+            str(snapshot.get('hostname') or ''),
+            str(snapshot.get('username') or ''),
+            ','.join(str(item) for item in tags if str(item).strip()),
+            ', '.join(str(item) for item in paths if str(item).strip()),
+            str(snapshot.get('program_version') or ''),
+            json.dumps(snapshot.get('summary') or {}, ensure_ascii=False, sort_keys=True)
+        )
+    )
+
+
+def parse_restic_time_epoch(value: str) -> float:
+    text = str(value or '').strip()
+    if not text:
+        return 0.0
+    text = text.replace('Z', '+00:00')
+    text = re.sub(r'(\.\d{6})\d+', r'\1', text)
+    try:
+        return datetime.fromisoformat(text).timestamp()
+    except Exception:
+        return 0.0
+
+
+def read_snapshot_page(
+    server: PluginServerInterface,
+    cache_key: str,
+    page: int,
+    page_size: int,
+    snapshot_cfg: Optional[Dict[str, Any]] = None
+) -> Dict[str, Any]:
+    page = max(1, int(page))
+    offset = (page - 1) * page_size
+    with open_snapshot_db(server, snapshot_cfg) as conn:
+        meta = read_snapshot_meta(conn, cache_key)
+        total = conn.execute(
+            'SELECT COUNT(*) FROM snapshots WHERE cache_key = ?',
+            (cache_key,)
+        ).fetchone()[0]
+        rows = conn.execute(
+            '''
+            SELECT id, short_id, time_text, hostname, username, tags_text, paths_text
+            FROM snapshots
+            WHERE cache_key = ?
+            ORDER BY time_epoch DESC, id DESC
+            LIMIT ? OFFSET ?
+            ''',
+            (cache_key, page_size, offset)
+        ).fetchall()
+        return {
+            'total': int(total or 0),
+            'updated_at_text': meta['updated_at_text'] if meta is not None else None,
+            'error': meta['error'] if meta is not None else '',
+            'invalidated': bool(meta['invalidated']) if meta is not None else True,
+            'invalidation_reason': meta['invalidation_reason'] if meta is not None else '',
+            'rows': rows
+        }
+
+
+def invalidate_snapshot_cache(
+    server: Optional[PluginServerInterface] = None,
+    restic_cfg: Optional[Dict[str, Any]] = None,
+    reason: str = 'repository changed'
+):
+    target = server or SERVER
+    if target is None:
+        return
+    if restic_cfg is None:
+        cfg = get_config_snapshot()
+        restic_cfg = cfg.get('restic', {}) if isinstance(cfg.get('restic'), dict) else {}
+        snapshot_cfg = get_snapshot_cache_config(cfg)
+    else:
+        snapshot_cfg = get_snapshot_cache_config()
+    if not bool(snapshot_cfg.get('enabled', True)):
+        return
+    try:
+        cache_key = build_snapshot_cache_key(restic_cfg)
+        with open_snapshot_db(target, snapshot_cfg) as conn:
+            existing = read_snapshot_meta(conn, cache_key)
+            with conn:
+                conn.execute(
+                    '''
+                    INSERT OR REPLACE INTO snapshot_meta
+                    (
+                        cache_key, updated_at_epoch, updated_at_text, snapshot_count,
+                        error, invalidated, invalidation_reason, last_refresh_duration
+                    )
+                    VALUES (?, ?, ?, ?, '', 1, ?, ?)
+                    ''',
+                    (
+                        cache_key,
+                        float(existing['updated_at_epoch'] or 0) if existing is not None else 0,
+                        existing['updated_at_text'] if existing is not None else None,
+                        int(existing['snapshot_count'] or 0) if existing is not None else 0,
+                        '{} @ {}'.format(reason, now_text()),
+                        float(existing['last_refresh_duration'] or 0) if existing is not None else 0
+                    )
+                )
+    except Exception as exc:
+        target.logger.debug('标记 restic 快照缓存失效失败: {}'.format(exc))
+
+
+def add_restore_task(server: PluginServerInterface, snapshot_cfg: Dict[str, Any], snapshot: str, item_type: str, include_path: str) -> int:
+    with open_snapshot_db(server, snapshot_cfg) as conn:
+        with conn:
+            cursor = conn.execute(
+                '''
+                INSERT INTO restore_tasks (created_at_text, snapshot, item_type, include_path)
+                VALUES (?, ?, ?, ?)
+                ''',
+                (now_text(), snapshot, item_type, include_path)
+            )
+        return int(cursor.lastrowid)
+
+
+def list_restore_tasks(server: PluginServerInterface, snapshot_cfg: Dict[str, Any]) -> List[sqlite3.Row]:
+    with open_snapshot_db(server, snapshot_cfg) as conn:
+        return conn.execute(
+            '''
+            SELECT id, created_at_text, snapshot, item_type, include_path
+            FROM restore_tasks
+            ORDER BY id ASC
+            '''
+        ).fetchall()
+
+
+def delete_restore_task(server: PluginServerInterface, snapshot_cfg: Dict[str, Any], task_id: int) -> bool:
+    with open_snapshot_db(server, snapshot_cfg) as conn:
+        with conn:
+            cursor = conn.execute('DELETE FROM restore_tasks WHERE id = ?', (int(task_id),))
+        return int(cursor.rowcount or 0) > 0
+
+
+def clear_restore_tasks(server: PluginServerInterface, snapshot_cfg: Dict[str, Any]) -> int:
+    with open_snapshot_db(server, snapshot_cfg) as conn:
+        with conn:
+            cursor = conn.execute('DELETE FROM restore_tasks')
+        return int(cursor.rowcount or 0)
+
+
+def format_restore_task(row: sqlite3.Row, language: str) -> str:
+    item_type = str(row['item_type'])
+    if is_zh_language(language):
+        type_text = {'file': '文件', 'folder': '文件夹', 'full': '整份快照'}.get(item_type, item_type)
+        return '  {}. [{}] {} -> {}'.format(row['id'], type_text, row['snapshot'], row['include_path'])
+    type_text = {'file': 'file', 'folder': 'folder', 'full': 'full snapshot'}.get(item_type, item_type)
+    return '  {}. [{}] {} -> {}'.format(row['id'], type_text, row['snapshot'], row['include_path'])
+
+
+def restore_tasks_output(server: PluginServerInterface, snapshot_cfg: Dict[str, Any], language: str) -> str:
+    tasks = list_restore_tasks(server, snapshot_cfg)
+    if is_zh_language(language):
+        lines = ['MCDR2Restic 恢复任务列表']
+        if not tasks:
+            lines.append('  暂无任务')
+            return '\n'.join(lines)
+        lines.extend(format_restore_task(task, language) for task in tasks)
+        lines.append('提示: {} restore apply 可以执行任务'.format(get_command_root()))
+        return '\n'.join(lines)
+    lines = ['MCDR2Restic Restore Tasks']
+    if not tasks:
+        lines.append('  No tasks')
+        return '\n'.join(lines)
+    lines.extend(format_restore_task(task, language) for task in tasks)
+    lines.append('Hint: {} restore apply can execute the queued tasks'.format(get_command_root()))
+    return '\n'.join(lines)
+
+
+def normalize_restore_snapshot(value: Any) -> str:
+    text = str(value or '').strip()
+    if not text:
+        raise BackupProblem('snapshot 不能为空')
+    if re.search(r'\s', text):
+        raise BackupProblem('snapshot 不能包含空白字符')
+    return text
+
+
+def normalize_restore_include_path(value: Any, restic_cfg: Dict[str, Any]) -> str:
+    raw = str(value or '').strip().strip('"\'')
+    if not raw:
+        raise BackupProblem('恢复路径不能为空')
+
+    workdir = get_restic_working_directory(restic_cfg)
+    expanded = os.path.expanduser(os.path.expandvars(raw))
+    if os.path.isabs(expanded) and path_contains_or_equals(workdir, expanded):
+        absolute = normalize_filesystem_path(expanded)
+        relative = os.path.relpath(absolute, workdir)
+    elif is_strict_filesystem_absolute_path(expanded):
+        raise BackupProblem('恢复路径必须位于 restic 工作目录内: {}'.format(raw))
+    else:
+        relative = raw
+
+    relative = relative.replace('\\', '/').strip()
+    while relative.startswith('/'):
+        relative = relative[1:]
+    if relative.startswith('./'):
+        relative = relative[2:]
+
+    parts = []
+    for part in relative.split('/'):
+        part = part.strip()
+        if not part or part == '.':
+            continue
+        if part == '..':
+            raise BackupProblem('恢复路径不能包含 ..')
+        parts.append(part)
+    if not parts:
+        raise BackupProblem('请使用 {} restore <snapshot> 恢复整份快照'.format(get_command_root()))
+    return '/' + '/'.join(parts)
+
+
+def get_restic_working_directory(restic_cfg: Dict[str, Any]) -> str:
+    return normalize_filesystem_path(str(restic_cfg.get('working_directory') or os.getcwd()))
+
+
+def is_strict_filesystem_absolute_path(path: str) -> bool:
+    text = str(path or '')
+    if re.match(r'^[A-Za-z]:[\\/]', text):
+        return True
+    if text.startswith('\\\\') or text.startswith('//'):
+        return True
+    return False
+
+
+def format_snapshot_line(index: int, row: sqlite3.Row, language: str) -> str:
+    short_id = str(row['short_id'] or row['id'] or '')[:8]
+    time_text = format_restic_time_for_display(str(row['time_text'] or ''))
+    host = str(row['hostname'] or '')
+    tags = str(row['tags_text'] or '')
+    paths = str(row['paths_text'] or '')
+    if len(paths) > 80:
+        paths = paths[:77] + '...'
+    extras = []
+    if host:
+        extras.append(host)
+    if tags:
+        extras.append('#{}'.format(tags))
+    if paths:
+        extras.append(paths)
+    detail = ' | '.join(extras)
+    if detail:
+        return '  {}. {} {} | {}'.format(index, short_id, time_text, detail)
+    return '  {}. {} {}'.format(index, short_id, time_text)
+
+
+def format_restic_time_for_display(value: str) -> str:
+    text = str(value or '').strip()
+    if not text:
+        return '-'
+    match = re.match(r'^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2}:\d{2})', text)
+    if match:
+        return '{} {}'.format(match.group(1), match.group(2))
+    return text
 
 
 def schedule_status_text(cfg: Dict[str, Any], forced: bool, language: str) -> str:
@@ -1649,6 +2505,9 @@ def command_stop(source: CommandSource):
 def command_backup(source: CommandSource):
     if not check_command_permission(source):
         return
+    if is_restore_running():
+        source.reply('当前正在执行恢复流程，拒绝启动备份')
+        return
     if not is_mc_ready(SERVER or source.get_server()):
         source.reply('Minecraft 服务端尚未确认正常运行，拒绝备份')
         return
@@ -1656,6 +2515,346 @@ def command_backup(source: CommandSource):
         source.reply('已开始立即备份，完成结果会发送到日志和已启用的通知渠道')
     else:
         source.reply('当前已有备份在执行，拒绝重复启动')
+
+
+def command_restore_add_file(source: CommandSource, context: Dict[str, Any]):
+    command_restore_add(source, context, 'file')
+
+
+def command_restore_add_folder(source: CommandSource, context: Dict[str, Any]):
+    command_restore_add(source, context, 'folder')
+
+
+def command_restore_add_full(source: CommandSource, context: Dict[str, Any]):
+    command_restore_add(source, context, 'full')
+
+
+def command_restore_add(source: CommandSource, context: Dict[str, Any], item_type: str):
+    if not check_command_permission(source):
+        return
+    server = SERVER or source.get_server()
+    cfg = get_config_snapshot()
+    language = get_mcdr_language(server)
+    try:
+        snapshot = normalize_restore_snapshot(context.get('snapshot'))
+        if item_type == 'full':
+            include_path = '/'
+        else:
+            include_path = normalize_restore_include_path(context.get('path'), cfg.get('restic', {}))
+        task_id = add_restore_task(server, get_snapshot_cache_config(cfg), snapshot, item_type, include_path)
+    except Exception as exc:
+        if is_zh_language(language):
+            source.reply('添加恢复任务失败: {}'.format(exc))
+        else:
+            source.reply('Failed to add restore task: {}'.format(exc))
+        return
+    if is_zh_language(language):
+        source.reply('已添加恢复任务 #{}\n{}'.format(task_id, restore_tasks_output(server, get_snapshot_cache_config(cfg), language)))
+    else:
+        source.reply('Added restore task #{}\n{}'.format(task_id, restore_tasks_output(server, get_snapshot_cache_config(cfg), language)))
+
+
+def command_restore_list(source: CommandSource):
+    if not check_command_permission(source):
+        return
+    server = SERVER or source.get_server()
+    cfg = get_config_snapshot()
+    source.reply(restore_tasks_output(server, get_snapshot_cache_config(cfg), get_mcdr_language(server)))
+
+
+def command_unrestore_task(source: CommandSource, context: Dict[str, Any]):
+    if not check_command_permission(source):
+        return
+    server = SERVER or source.get_server()
+    cfg = get_config_snapshot()
+    language = get_mcdr_language(server)
+    task_id = int(context.get('task_id'))
+    deleted = delete_restore_task(server, get_snapshot_cache_config(cfg), task_id)
+    if is_zh_language(language):
+        prefix = '已删除恢复任务 #{}'.format(task_id) if deleted else '未找到恢复任务 #{}'.format(task_id)
+    else:
+        prefix = 'Deleted restore task #{}'.format(task_id) if deleted else 'Restore task #{} was not found'.format(task_id)
+    source.reply('{}\n{}'.format(prefix, restore_tasks_output(server, get_snapshot_cache_config(cfg), language)))
+
+
+def command_unrestore_all(source: CommandSource):
+    if not check_command_permission(source):
+        return
+    server = SERVER or source.get_server()
+    cfg = get_config_snapshot()
+    language = get_mcdr_language(server)
+    count = clear_restore_tasks(server, get_snapshot_cache_config(cfg))
+    if is_zh_language(language):
+        prefix = '已删除 {} 个恢复任务'.format(count)
+    else:
+        prefix = 'Deleted {} restore task(s)'.format(count)
+    source.reply('{}\n{}'.format(prefix, restore_tasks_output(server, get_snapshot_cache_config(cfg), language)))
+
+
+def command_restore_apply(source: CommandSource):
+    if not check_command_permission(source):
+        return
+    server = SERVER or source.get_server()
+    cfg = get_config_snapshot()
+    snapshot_cfg = get_snapshot_cache_config(cfg)
+    language = get_mcdr_language(server)
+    tasks = [dict(task) for task in list_restore_tasks(server, snapshot_cfg)]
+    if not tasks:
+        source.reply('暂无恢复任务' if is_zh_language(language) else 'No restore tasks')
+        return
+    if is_backup_running():
+        source.reply('当前已有备份在执行，暂不能开始恢复' if is_zh_language(language) else 'A backup is running; restore cannot start now')
+        return
+    if not is_mc_ready(server):
+        source.reply('Minecraft 服务端尚未确认正常运行，拒绝恢复' if is_zh_language(language) else 'Minecraft is not ready; restore refused')
+        return
+    if not RESTORE_LOCK.acquire(blocking=False):
+        source.reply('当前已有恢复流程在执行' if is_zh_language(language) else 'A restore workflow is already running')
+        return
+
+    session = RestoreSession(
+        tasks=tasks,
+        cfg=cfg,
+        snapshot_cfg=snapshot_cfg,
+        language=language,
+        phase='pre_backup',
+        started_at=now_text()
+    )
+    set_restore_session(session)
+    thread = threading.Thread(
+        target=run_restore_pre_stop_stage,
+        args=(server,),
+        name='MCDR2Restic-Restore-PreStop',
+        daemon=True
+    )
+    global CURRENT_RESTORE_THREAD
+    CURRENT_RESTORE_THREAD = thread
+    thread.start()
+    if is_zh_language(language):
+        source.reply('恢复流程已开始：先创建保护快照，然后通过 MCDR 停止 MC，停机 hook 将继续执行恢复')
+    else:
+        source.reply('Restore workflow started: creating a safety snapshot, then stopping Minecraft via MCDR; the stop hook will continue the restore')
+
+
+def set_restore_session(session: Optional[RestoreSession]):
+    global RESTORE_SESSION
+    with RESTORE_STATE_LOCK:
+        RESTORE_SESSION = session
+
+
+def get_restore_session() -> Optional[RestoreSession]:
+    with RESTORE_STATE_LOCK:
+        return RESTORE_SESSION
+
+
+def update_restore_session(
+    phase: str,
+    error: Optional[str] = None,
+    safety_snapshot_id: Optional[str] = None,
+    rollback_error: Optional[str] = None
+):
+    with RESTORE_STATE_LOCK:
+        if RESTORE_SESSION is not None:
+            RESTORE_SESSION.phase = phase
+            if error is not None:
+                setattr(RESTORE_SESSION, 'error', error)
+            if safety_snapshot_id is not None:
+                setattr(RESTORE_SESSION, 'safety_snapshot_id', safety_snapshot_id)
+            if rollback_error is not None:
+                setattr(RESTORE_SESSION, 'rollback_error', rollback_error)
+
+
+def is_restore_running() -> bool:
+    return RESTORE_LOCK.locked()
+
+
+def finish_restore_workflow(server: Optional[PluginServerInterface], message: str, failure: bool = False):
+    set_restore_session(None)
+    try:
+        RESTORE_LOCK.release()
+    except RuntimeError:
+        pass
+    if server is not None:
+        if failure:
+            server.logger.warning(message)
+        else:
+            server.logger.info(message)
+
+
+def run_restore_pre_stop_stage(server: PluginServerInterface):
+    session = get_restore_session()
+    if session is None:
+        finish_restore_workflow(server, '恢复流程状态丢失', failure=True)
+        return
+    cfg = copy.deepcopy(session.cfg)
+    restic_cfg = cfg.get('restic', {}) if isinstance(cfg.get('restic'), dict) else {}
+
+    if not BACKUP_LOCK.acquire(blocking=False):
+        finish_restore_workflow(server, '恢复流程无法创建保护快照：当前已有备份在执行', failure=True)
+        return
+
+    global CURRENT_BACKUP_LABEL
+    CURRENT_BACKUP_LABEL = 'restore-pre-backup'
+    BACKUP_CANCEL.clear()
+    try:
+        server.logger.info('恢复流程开始：创建恢复前保护快照，共 {} 个恢复任务'.format(len(session.tasks)))
+        restic_cfg['backup_command'] = build_pre_restore_backup_command(cfg)
+        restic_cfg['maintenance_commands'] = []
+        cfg['restic'] = restic_cfg
+        safety_snapshot_id = run_backup_body(server, cfg, 'pre-restore')
+        if not safety_snapshot_id:
+            raise BackupProblem('保护快照已完成，但 restic --json 未返回 snapshot_id，已拒绝继续恢复')
+        update_restore_session('pre_backup', safety_snapshot_id=safety_snapshot_id)
+        server.logger.info('恢复前保护快照已创建: {}'.format(safety_snapshot_id[:8]))
+        update_restore_session('stopping')
+        set_mcdr_exit_after_stop(server, False)
+        server.logger.info('保护快照完成，正在通过 MCDR 停止 Minecraft 服务端')
+        if not server.stop():
+            try_force_save_on(server, 'restore stop failed')
+            finish_restore_workflow(server, '恢复流程无法停止 Minecraft 服务端', failure=True)
+            return
+    except Exception as exc:
+        try:
+            try_force_save_on(server, 'restore pre-backup failed')
+        except Exception as save_exc:
+            server.logger.warning('恢复流程失败后恢复 save-on 也失败: {}'.format(save_exc))
+        finish_restore_workflow(server, '恢复流程在保护快照阶段失败: {}'.format(exc), failure=True)
+    finally:
+        CURRENT_BACKUP_LABEL = None
+        try:
+            BACKUP_LOCK.release()
+        except RuntimeError:
+            pass
+
+
+def build_pre_restore_backup_command(cfg: Dict[str, Any]) -> List[str]:
+    restic_cfg = cfg.get('restic', {}) if isinstance(cfg.get('restic'), dict) else {}
+    args = normalize_command_args(restic_cfg.get('backup_command', []))
+    tag = str(cfg.get('restore', {}).get('pre_restore_backup_tag', 'mcdr2restic-pre-restore') or '').strip()
+    if tag:
+        args.extend(['--tag', tag])
+    return args
+
+
+def set_mcdr_exit_after_stop(server: PluginServerInterface, value: bool):
+    setter = getattr(server, 'set_exit_after_stop_flag', None)
+    if callable(setter):
+        try:
+            setter(bool(value))
+        except Exception as exc:
+            server.logger.debug('设置 MCDR exit-after-stop 标志失败: {}'.format(exc))
+
+
+def handle_restore_server_stop(server: PluginServerInterface, server_return_code: int) -> bool:
+    session = get_restore_session()
+    if session is None or session.phase != 'stopping':
+        return False
+    if server_return_code != 0:
+        server.logger.warning('恢复流程检测到 Minecraft 停止返回码非 0: {}'.format(server_return_code))
+    update_restore_session('restoring')
+    thread = threading.Thread(
+        target=run_restore_after_stop_stage,
+        args=(server,),
+        name='MCDR2Restic-Restore-AfterStop',
+        daemon=True
+    )
+    global CURRENT_RESTORE_THREAD
+    CURRENT_RESTORE_THREAD = thread
+    thread.start()
+    return True
+
+
+def run_restore_after_stop_stage(server: PluginServerInterface):
+    session = get_restore_session()
+    if session is None:
+        finish_restore_workflow(server, '恢复流程状态丢失，无法执行 restore', failure=True)
+        return
+    cfg = session.cfg
+    restic_cfg = cfg.get('restic', {}) if isinstance(cfg.get('restic'), dict) else {}
+    deadline = make_restic_deadline(restic_cfg)
+    failed = ''
+    rollback_failed = ''
+    try:
+        ensure_default_restic_executable_available(server, restic_cfg)
+        for task in session.tasks:
+            result = run_restic_command(restic_cfg, build_restore_command(restic_cfg, task), 'restore', deadline)
+            assert_restic_success(restic_cfg, result)
+            server.logger.info('恢复任务 #{} 完成: {} -> {}'.format(task.get('id'), task.get('snapshot'), task.get('include_path')))
+        server.logger.info('恢复任务全部完成，正在启动 Minecraft 服务端')
+    except Exception as exc:
+        failed = str(exc)
+        server.logger.warning('恢复流程执行 restore 阶段失败，将立即恢复到保护快照: {}'.format(failed))
+        rollback_failed = rollback_to_safety_snapshot(server, restic_cfg, session)
+    else:
+        try:
+            clear_restore_tasks(server, session.snapshot_cfg)
+        except Exception as exc:
+            server.logger.warning('恢复任务已完成，但清空任务队列失败，请手动检查 restore list: {}'.format(exc))
+
+    update_restore_session('starting', failed, rollback_error=rollback_failed)
+    if not server.start():
+        message = '恢复流程已结束，但启动 Minecraft 服务端失败'
+        if failed:
+            message = '{}；restore 阶段错误: {}'.format(message, failed)
+        if rollback_failed:
+            message = '{}；保护快照回滚错误: {}'.format(message, rollback_failed)
+        finish_restore_workflow(server, message, failure=True)
+
+
+def rollback_to_safety_snapshot(
+    server: PluginServerInterface,
+    restic_cfg: Dict[str, Any],
+    session: RestoreSession
+) -> str:
+    snapshot_id = str(getattr(session, 'safety_snapshot_id', '') or '').strip()
+    if not snapshot_id:
+        message = '恢复失败后无法回滚：保护快照 ID 丢失'
+        server.logger.error(message)
+        return message
+    update_restore_session('rollback')
+    try:
+        deadline = make_restic_deadline(restic_cfg)
+        result = run_restic_command(restic_cfg, build_full_restore_command(restic_cfg, snapshot_id), 'rollback', deadline)
+        assert_restic_success(restic_cfg, result)
+        server.logger.info('已恢复到恢复前保护快照: {}'.format(snapshot_id[:8]))
+        return ''
+    except Exception as exc:
+        message = str(exc)
+        server.logger.error('恢复到保护快照失败: {}\n{}'.format(message, traceback.format_exc()))
+        return message
+
+
+def build_restore_command(restic_cfg: Dict[str, Any], task: Dict[str, Any]) -> List[str]:
+    snapshot = normalize_restore_snapshot(task.get('snapshot'))
+    args = build_full_restore_command(restic_cfg, snapshot)
+    item_type = str(task.get('item_type') or '')
+    include_path = str(task.get('include_path') or '').strip()
+    if item_type in ('file', 'folder'):
+        args.extend(['--include', include_path])
+    elif item_type != 'full':
+        raise BackupProblem('未知恢复任务类型: {}'.format(item_type))
+    return args
+
+
+def build_full_restore_command(restic_cfg: Dict[str, Any], snapshot: str) -> List[str]:
+    target = get_restic_working_directory(restic_cfg)
+    return ['restore', normalize_restore_snapshot(snapshot), '--target', target]
+
+
+def handle_restore_server_startup(server: PluginServerInterface):
+    session = get_restore_session()
+    if session is None or session.phase != 'starting':
+        return
+    error = str(getattr(session, 'error', '') or '')
+    rollback_error = str(getattr(session, 'rollback_error', '') or '')
+    if error:
+        if rollback_error:
+            message = '恢复流程结束，Minecraft 已重新启动；restore 阶段曾失败: {}；保护快照回滚也失败: {}'.format(error, rollback_error)
+        else:
+            message = '恢复流程结束，Minecraft 已重新启动；restore 阶段曾失败，已回滚到恢复前保护快照: {}'.format(error)
+        finish_restore_workflow(server, message, failure=True)
+    else:
+        finish_restore_workflow(server, '恢复流程完成，Minecraft 已重新启动')
 
 
 def command_reload(source: CommandSource):
@@ -1670,7 +2869,7 @@ def command_reload(source: CommandSource):
 
 
 def check_command_permission(source: CommandSource) -> bool:
-    level = int(get_config_snapshot().get('command', {}).get('permission_level', 3))
+    level = get_command_permission_level()
     try:
         allowed = source.has_permission(level)
     except Exception:
@@ -1678,6 +2877,11 @@ def check_command_permission(source: CommandSource) -> bool:
     if not allowed:
         source.reply('权限不足，需要 MCDR 权限等级 >= {}'.format(level))
     return allowed
+
+
+def get_command_permission_level() -> int:
+    cfg = get_config_snapshot()
+    return safe_int(cfg.get('command', {}).get('permission_level', 3), 3)
 
 
 def load_config(server: PluginServerInterface, source: Optional[CommandSource] = None):
@@ -1740,6 +2944,10 @@ def merge_defaults(target: Dict[str, Any], defaults: Dict[str, Any]):
 
 
 def migrate_legacy_config(cfg: Dict[str, Any]):
+    try:
+        old_version = int(cfg.get('config_version', 0) or 0)
+    except Exception:
+        old_version = 0
     schedule = cfg.get('schedule')
     if isinstance(schedule, dict):
         old_key = 'require_player_joined_in_wait_period'
@@ -1760,6 +2968,8 @@ def migrate_legacy_config(cfg: Dict[str, Any]):
             restic['password_file'] = environment.get('RESTIC_PASSWORD_FILE')
         if 'password' not in restic and restic.get('password_file'):
             restic['password'] = ''
+        if old_version < 9 and safe_int(restic.get('timeout_seconds', 0), 0) == 3600:
+            restic['timeout_seconds'] = 0
     cfg['config_version'] = CONFIG_VERSION
 
 
@@ -1774,9 +2984,12 @@ def migrate_config_file(server: PluginServerInterface, language: str, cfg: Dict[
         lines = ensure_schedule_migration_lines(lines, language, cfg)
         lines = remove_deprecated_schedule_lines(lines)
         lines = ensure_restic_migration_lines(lines, language, cfg)
+        lines = ensure_restic_timeout_value(lines, cfg)
         lines = ensure_force_schedule_block(lines, language, cfg)
         lines = ensure_update_check_block(lines, language, cfg)
         lines = ensure_discord_block(lines, language, cfg)
+        lines = ensure_snapshot_cache_block(lines, language, cfg)
+        lines = ensure_restore_block(lines, language, cfg)
         lines = ensure_config_version_tail(lines, language)
         updated = ''.join(lines)
         if updated != original:
@@ -1826,7 +3039,9 @@ def ensure_restic_migration_lines(lines: List[str], language: str, cfg: Dict[str
         ('download_version', get_restic_download_version_lines),
         ('download_proxy_prefixes', get_restic_download_proxy_lines),
         ('download_timeout_seconds', get_restic_download_timeout_lines),
-        ('auto_init_local_repository', get_restic_auto_init_lines)
+        ('auto_init_local_repository', get_restic_auto_init_lines),
+        ('timeout_seconds', get_restic_timeout_lines),
+        ('progress_interval_seconds', get_restic_progress_interval_lines)
     ]:
         if not has_nested_key(lines, 'restic', key):
             insertions.extend(builder(language, restic))
@@ -1835,12 +3050,44 @@ def ensure_restic_migration_lines(lines: List[str], language: str, cfg: Dict[str
     return insert_into_top_level_block(lines, 'restic', insertions)
 
 
+def ensure_restic_timeout_value(lines: List[str], cfg: Dict[str, Any]) -> List[str]:
+    restic = cfg.get('restic', {}) if isinstance(cfg.get('restic'), dict) else {}
+    value = restic.get('timeout_seconds', 0)
+    start, end = find_top_level_block(lines, 'restic')
+    if start is None:
+        return lines
+    pattern = re.compile(r'^(\s+timeout_seconds\s*:\s*).*$')
+    for index in range(start + 1, end):
+        match = pattern.match(lines[index])
+        if match:
+            newline = '\n' if lines[index].endswith('\n') else ''
+            lines[index] = '{}{}{}'.format(match.group(1), yaml_scalar(value), newline)
+            break
+    return lines
+
+
 def ensure_discord_block(lines: List[str], language: str, cfg: Dict[str, Any]) -> List[str]:
     if has_top_level_key(lines, 'discord'):
         return lines
     discord = cfg.get('discord', {}) if isinstance(cfg.get('discord'), dict) else {}
     block = get_discord_block_lines(language, discord)
     return insert_before_top_level_key(lines, 'notification', block)
+
+
+def ensure_snapshot_cache_block(lines: List[str], language: str, cfg: Dict[str, Any]) -> List[str]:
+    if has_top_level_key(lines, 'snapshot_cache'):
+        return lines
+    snapshot_cache = cfg.get('snapshot_cache', {}) if isinstance(cfg.get('snapshot_cache'), dict) else {}
+    block = get_snapshot_cache_block_lines(language, snapshot_cache)
+    return insert_before_top_level_key(lines, 'messages', block)
+
+
+def ensure_restore_block(lines: List[str], language: str, cfg: Dict[str, Any]) -> List[str]:
+    if has_top_level_key(lines, 'restore'):
+        return lines
+    restore_cfg = cfg.get('restore', {}) if isinstance(cfg.get('restore'), dict) else {}
+    block = get_restore_block_lines(language, restore_cfg)
+    return insert_before_top_level_key(lines, 'messages', block)
 
 
 def ensure_config_version_tail(lines: List[str], language: str) -> List[str]:
@@ -2112,6 +3359,32 @@ def get_restic_auto_init_lines(language: str, restic: Dict[str, Any]) -> List[st
     ]
 
 
+def get_restic_timeout_lines(language: str, restic: Dict[str, Any]) -> List[str]:
+    value = yaml_scalar(restic.get('timeout_seconds', 0))
+    if is_zh_language(language):
+        return [
+            '  # 整个 restic 命令流程共用的超时。0 表示不限制。\n',
+            '  timeout_seconds: {}\n'.format(value)
+        ]
+    return [
+        '  # Timeout shared by restic command workflows. 0 means unlimited.\n',
+        '  timeout_seconds: {}\n'.format(value)
+    ]
+
+
+def get_restic_progress_interval_lines(language: str, restic: Dict[str, Any]) -> List[str]:
+    value = yaml_scalar(restic.get('progress_interval_seconds', RESTIC_PROGRESS_INTERVAL_SECONDS))
+    if is_zh_language(language):
+        return [
+            '  # restic backup/restore --json 进度回显间隔，单位秒。\n',
+            '  progress_interval_seconds: {}\n'.format(value)
+        ]
+    return [
+        '  # Progress echo interval for restic backup/restore --json, in seconds.\n',
+        '  progress_interval_seconds: {}\n'.format(value)
+    ]
+
+
 def get_discord_block_lines(language: str, discord: Dict[str, Any]) -> List[str]:
     enabled = yaml_scalar(discord.get('enabled', False))
     webhook_url = yaml_scalar(discord.get('webhook_url', ''))
@@ -2155,6 +3428,67 @@ def get_discord_block_lines(language: str, discord: Dict[str, Any]) -> List[str]
         '  mention_role_ids: []\n',
         '  mention_everyone: false\n',
         '  send_timeout_seconds: {}\n'.format(timeout)
+    ]
+
+
+def get_snapshot_cache_block_lines(language: str, snapshot_cache: Dict[str, Any]) -> List[str]:
+    enabled = yaml_scalar(snapshot_cache.get('enabled', True))
+    page_size = yaml_scalar(snapshot_cache.get('page_size', SNAPSHOT_PAGE_SIZE))
+    timeout = yaml_scalar(snapshot_cache.get('query_timeout_seconds', SNAPSHOT_QUERY_TIMEOUT_SECONDS))
+    database = yaml_scalar(snapshot_cache.get('database', SNAPSHOT_DB_NAME))
+    if is_zh_language(language):
+        return [
+            '\n',
+            'snapshot_cache:\n',
+            '  # status 命令中的 restic 快照列表缓存。\n',
+            '  # 缓存写入 SQLite 文件，只有仓库被本插件操作后才会标记失效。\n',
+            '  enabled: {}\n'.format(enabled),
+            '  # 每页显示的快照数量。默认 10。\n',
+            '  page_size: {}\n'.format(page_size),
+            '  # 缓存刷新时执行 restic snapshots --json 的超时时间。\n',
+            '  query_timeout_seconds: {}\n'.format(timeout),
+            '  # SQLite 缓存文件名，位于本插件配置目录。\n',
+            '  database: {}\n'.format(database)
+        ]
+    return [
+        '\n',
+        'snapshot_cache:\n',
+        '  # restic snapshot list cache used by the status command.\n',
+        '  # The cache is stored in SQLite and invalidated only after this plugin changes the repository.\n',
+        '  enabled: {}\n'.format(enabled),
+        '  # Number of snapshots shown per page. Default: 10.\n',
+        '  page_size: {}\n'.format(page_size),
+        '  # Timeout for restic snapshots --json when refreshing the cache.\n',
+        '  query_timeout_seconds: {}\n'.format(timeout),
+        "  # SQLite cache file name under this plugin's config directory.\n",
+        '  database: {}\n'.format(database)
+    ]
+
+
+def get_restore_block_lines(language: str, restore_cfg: Dict[str, Any]) -> List[str]:
+    tag = yaml_scalar(restore_cfg.get('pre_restore_backup_tag', 'mcdr2restic-pre-restore'))
+    stop_timeout = yaml_scalar(restore_cfg.get('stop_timeout_seconds', 120))
+    start_timeout = yaml_scalar(restore_cfg.get('start_timeout_seconds', 120))
+    if is_zh_language(language):
+        return [
+            '\n',
+            'restore:\n',
+            '  # 执行恢复前会自动备份一次，并给该保护快照追加这个 tag。\n',
+            '  pre_restore_backup_tag: {}\n'.format(tag),
+            '  # 保留给恢复状态机/外部看门狗使用的停止等待上限。\n',
+            '  stop_timeout_seconds: {}\n'.format(stop_timeout),
+            '  # 保留给恢复状态机/外部看门狗使用的启动等待上限。\n',
+            '  start_timeout_seconds: {}\n'.format(start_timeout)
+        ]
+    return [
+        '\n',
+        'restore:\n',
+        '  # Before applying restore tasks, the plugin creates one safety backup with this tag.\n',
+        '  pre_restore_backup_tag: {}\n'.format(tag),
+        '  # Reserved stop wait limit for the restore state machine or external watchdogs.\n',
+        '  stop_timeout_seconds: {}\n'.format(stop_timeout),
+        '  # Reserved start wait limit for the restore state machine or external watchdogs.\n',
+        '  start_timeout_seconds: {}\n'.format(start_timeout)
     ]
 
 
@@ -2345,6 +3679,8 @@ def wake_scheduler():
 
 def start_backup_thread(server: PluginServerInterface, label: str) -> bool:
     global CURRENT_BACKUP_THREAD
+    if is_restore_running():
+        return False
     if not BACKUP_LOCK.acquire(blocking=False):
         return False
     thread = threading.Thread(
@@ -2359,6 +3695,9 @@ def start_backup_thread(server: PluginServerInterface, label: str) -> bool:
 
 
 def run_backup_locked(server: PluginServerInterface, label: str) -> bool:
+    if is_restore_running():
+        server.logger.warning('当前正在执行恢复流程，跳过 {} 触发'.format(label))
+        return False
     if not BACKUP_LOCK.acquire(blocking=False):
         server.logger.warning('当前已有备份在执行，跳过 {} 触发'.format(label))
         return False
@@ -2462,13 +3801,12 @@ def run_backup_with_acquired_lock(server: PluginServerInterface, label: str):
             pass
 
 
-def run_backup_body(server: PluginServerInterface, cfg: Dict[str, Any], label: str):
+def run_backup_body(server: PluginServerInterface, cfg: Dict[str, Any], label: str) -> str:
     if not is_mc_ready(server):
         raise BackupProblem('Minecraft 服务端尚未确认正常运行')
 
     restic_cfg = cfg.get('restic', {})
-    timeout_seconds = int(restic_cfg.get('timeout_seconds', 3600))
-    deadline = time.monotonic() + max(1, timeout_seconds)
+    deadline = make_restic_deadline(restic_cfg)
     assert_backup_sources_do_not_contain_repository(restic_cfg)
     ensure_default_restic_executable_available(server, restic_cfg)
     newly_initialized = ensure_restic_repository_initialized(server, restic_cfg, deadline)
@@ -2480,6 +3818,7 @@ def run_backup_body(server: PluginServerInterface, cfg: Dict[str, Any], label: s
             check_canceled()
             result = run_restic_command(restic_cfg, command, 'maintenance', deadline)
             assert_restic_success(restic_cfg, result)
+            invalidate_snapshot_cache(server, restic_cfg, 'maintenance command finished')
 
     check_canceled()
     execute_mc_command(server, cfg, cfg.get('minecraft', {}).get('save_off_command', 'save-off'), 'save-off')
@@ -2492,6 +3831,15 @@ def run_backup_body(server: PluginServerInterface, cfg: Dict[str, Any], label: s
     check_canceled()
     result = run_restic_command(restic_cfg, restic_cfg.get('backup_command', []), 'backup', deadline)
     assert_restic_success(restic_cfg, result)
+    invalidate_snapshot_cache(server, restic_cfg, 'backup command finished')
+    return result.snapshot_id
+
+
+def make_restic_deadline(restic_cfg: Dict[str, Any]) -> Optional[float]:
+    timeout_seconds = safe_int(restic_cfg.get('timeout_seconds', 0), 0)
+    if timeout_seconds <= 0:
+        return None
+    return time.monotonic() + max(1, timeout_seconds)
 
 
 def ensure_default_restic_executable_available(server: PluginServerInterface, restic_cfg: Dict[str, Any]):
@@ -2699,7 +4047,7 @@ def mask_download_url(url: str) -> str:
     return re.sub(r'([?&](?:token|access_token)=)[^&]+', r'\1***', url)
 
 
-def ensure_restic_repository_initialized(server: PluginServerInterface, restic_cfg: Dict[str, Any], deadline: float) -> bool:
+def ensure_restic_repository_initialized(server: PluginServerInterface, restic_cfg: Dict[str, Any], deadline: Optional[float]) -> bool:
     if not bool(restic_cfg.get('auto_init_local_repository', True)):
         return False
     env = build_restic_environment(restic_cfg)
@@ -2721,6 +4069,7 @@ def ensure_restic_repository_initialized(server: PluginServerInterface, restic_c
     server.logger.info('本地 restic 仓库不存在或未初始化，正在执行 restic init: {}'.format(repository_path))
     result = run_restic_command(restic_cfg, ['init'], 'init', deadline)
     assert_restic_success(restic_cfg, result)
+    invalidate_snapshot_cache(server, restic_cfg, 'repository initialized')
     return True
 
 
@@ -2903,17 +4252,17 @@ def path_contains_or_equals(parent: str, child: str) -> bool:
     return os.path.normcase(common) == os.path.normcase(parent_path)
 
 
-def run_restic_command(restic_cfg: Dict[str, Any], configured_args: Any, phase: str, deadline: float) -> ResticCommandResult:
+def run_restic_command(restic_cfg: Dict[str, Any], configured_args: Any, phase: str, deadline: Optional[float]) -> ResticCommandResult:
     global CURRENT_PROCESS
-    args = normalize_command_args(configured_args)
+    args = prepare_restic_args_for_phase(normalize_command_args(configured_args), phase)
     if not args:
         raise BackupProblem('restic {} 命令为空'.format(phase))
     executable = str(restic_cfg.get('executable', 'restic'))
-    command = [executable] + args
     env = build_restic_environment(restic_cfg)
     cwd = restic_cfg.get('working_directory') or None
-    remaining = deadline - time.monotonic()
-    if remaining <= 0:
+    command = [resolve_popen_executable(executable, cwd)] + args
+    remaining = get_deadline_remaining(deadline)
+    if remaining is not None and remaining <= 0:
         raise BackupProblem('备份总超时已耗尽，未执行 restic {}'.format(phase))
 
     popen_kwargs: Dict[str, Any] = {
@@ -2940,35 +4289,351 @@ def run_restic_command(restic_cfg: Dict[str, Any], configured_args: Any, phase: 
         raise BackupProblem('启动 restic {} 失败: {}'.format(phase, exc))
 
     CURRENT_PROCESS = process
+    stdout_lines: List[str] = []
+    stderr_lines: List[str] = []
+    output_queue: 'queue.Queue[Tuple[str, Optional[str]]]' = queue.Queue()
+    reader_threads = start_restic_reader_threads(process, output_queue)
+    language = get_mcdr_language(SERVER)
+    progress = ResticProgressState(
+        phase=phase,
+        language=language,
+        json_errors=[],
+        started_at=started,
+        last_emit_at=started
+    )
+    progress_interval = get_restic_progress_interval(restic_cfg)
+    active_streams = len(reader_threads)
+    timed_out = False
     try:
-        stdout, stderr = process.communicate(timeout=max(1, int(remaining)))
-    except subprocess.TimeoutExpired:
-        terminate_process(process)
-        stdout, stderr = process.communicate()
-        raise BackupProblem('restic {} 超时（{} 秒），进程已终止\n{}'.format(
-            phase,
-            int(time.monotonic() - started),
-            tail_text((stdout or '') + '\n' + (stderr or ''), int(restic_cfg.get('max_output_chars_in_notification', 1800)))
-        ))
+        while active_streams > 0:
+            if BACKUP_CANCEL.is_set():
+                terminate_process(process)
+                raise BackupCanceled('收到停止请求')
+
+            remaining = get_deadline_remaining(deadline)
+            if remaining is not None and remaining <= 0:
+                timed_out = True
+                terminate_process(process)
+                break
+
+            wait = compute_restic_queue_wait(progress, progress_interval, remaining)
+            try:
+                stream_name, line = output_queue.get(timeout=wait)
+            except queue.Empty:
+                maybe_emit_restic_progress(SERVER, progress, progress_interval)
+                continue
+
+            if line is None:
+                active_streams -= 1
+                continue
+
+            if stream_name == 'stdout':
+                stdout_lines.append(line)
+            else:
+                stderr_lines.append(line)
+            handle_restic_stream_line(SERVER, progress, stream_name, line)
+            maybe_emit_restic_progress(SERVER, progress, progress_interval)
+
+        return_code = process.wait(timeout=5)
     finally:
         CURRENT_PROCESS = None
+        for thread in reader_threads:
+            thread.join(timeout=2)
 
     if BACKUP_CANCEL.is_set():
         raise BackupCanceled('收到停止请求')
 
+    stdout = ''.join(stdout_lines)
+    stderr = ''.join(stderr_lines)
+    if timed_out:
+        raise BackupProblem('restic {} 超时（{} 秒），进程已终止\n{}'.format(
+            phase,
+            int(time.monotonic() - started),
+            tail_text(stdout + '\n' + stderr, int(restic_cfg.get('max_output_chars_in_notification', 1800)))
+        ))
+
+    maybe_emit_restic_progress(SERVER, progress, progress_interval, force=True)
+    summary = progress.summary or {}
+    json_errors = progress.json_errors or []
     return ResticCommandResult(
         phase=phase,
         args=args,
-        return_code=int(process.returncode),
-        stdout=stdout or '',
-        stderr=stderr or '',
-        duration_seconds=time.monotonic() - started
+        return_code=int(return_code),
+        stdout=stdout,
+        stderr=stderr,
+        duration_seconds=time.monotonic() - started,
+        summary=summary,
+        json_errors=json_errors,
+        snapshot_id=str(summary.get('snapshot_id') or '')
     )
+
+
+def prepare_restic_args_for_phase(args: List[str], phase: str) -> List[str]:
+    if phase not in ('backup', 'restore', 'rollback'):
+        return args
+    command_name = 'restore' if phase == 'rollback' else phase
+    if command_name not in args:
+        return args
+    if any(item == '--json' or item.startswith('--json=') for item in args):
+        return args
+    insert_at = args.index('--') if '--' in args else len(args)
+    return args[:insert_at] + ['--json'] + args[insert_at:]
+
+
+def get_deadline_remaining(deadline: Optional[float]) -> Optional[float]:
+    if deadline is None:
+        return None
+    return deadline - time.monotonic()
+
+
+def start_restic_reader_threads(process: subprocess.Popen, output_queue: 'queue.Queue[Tuple[str, Optional[str]]]') -> List[threading.Thread]:
+    threads: List[threading.Thread] = []
+    for stream_name, stream in [('stdout', process.stdout), ('stderr', process.stderr)]:
+        if stream is None:
+            continue
+        thread = threading.Thread(
+            target=read_restic_stream,
+            args=(stream_name, stream, output_queue),
+            name='MCDR2Restic-{}-Reader'.format(stream_name),
+            daemon=True
+        )
+        thread.start()
+        threads.append(thread)
+    return threads
+
+
+def read_restic_stream(stream_name: str, stream: Any, output_queue: 'queue.Queue[Tuple[str, Optional[str]]]'):
+    try:
+        for line in iter(stream.readline, ''):
+            output_queue.put((stream_name, line))
+    finally:
+        output_queue.put((stream_name, None))
+
+
+def get_restic_progress_interval(restic_cfg: Dict[str, Any]) -> float:
+    try:
+        value = float(restic_cfg.get('progress_interval_seconds', RESTIC_PROGRESS_INTERVAL_SECONDS))
+    except Exception:
+        value = RESTIC_PROGRESS_INTERVAL_SECONDS
+    return max(1.0, value)
+
+
+def compute_restic_queue_wait(progress: ResticProgressState, interval: float, remaining: Optional[float]) -> float:
+    until_progress = max(0.1, interval - (time.monotonic() - progress.last_emit_at))
+    if remaining is not None:
+        until_progress = min(until_progress, max(0.1, remaining))
+    return min(1.0, until_progress)
+
+
+def handle_restic_stream_line(
+    server: Optional[PluginServerInterface],
+    progress: ResticProgressState,
+    stream_name: str,
+    line: str
+):
+    text = str(line or '').strip()
+    if not text:
+        return
+    progress.last_text = text
+    if not text.startswith('{'):
+        return
+
+    try:
+        payload = json.loads(text)
+    except Exception:
+        return
+    if not isinstance(payload, dict):
+        return
+
+    progress.seen_json = True
+    message_type = str(payload.get('message_type') or '').strip()
+    if message_type == 'status':
+        progress.status = payload
+    elif message_type == 'summary':
+        progress.summary = payload
+    elif message_type in ('error', 'exit_error'):
+        if progress.json_errors is None:
+            progress.json_errors = []
+        progress.json_errors.append(format_restic_json_error(payload))
+    elif server is not None:
+        server.logger.debug('restic {} JSON: {}'.format(progress.phase, tail_text(text, 500)))
+
+
+def maybe_emit_restic_progress(
+    server: Optional[PluginServerInterface],
+    progress: ResticProgressState,
+    interval: float,
+    force: bool = False
+):
+    if server is None:
+        return
+    now = time.monotonic()
+    if not force and now - progress.last_emit_at < interval:
+        return
+    text = format_restic_progress(progress, force)
+    if not text:
+        return
+    if force and text == progress.last_emit_text:
+        return
+    server.logger.info(text)
+    progress.last_emit_at = now
+    progress.last_emit_text = text
+
+
+def format_restic_progress(progress: ResticProgressState, force: bool = False) -> str:
+    if force and progress.summary:
+        return format_restic_summary(progress)
+    if progress.status:
+        return format_restic_status(progress)
+    elapsed = int(time.monotonic() - progress.started_at)
+    if is_zh_language(progress.language):
+        return 'restic {} 仍在执行，用时 {} 秒'.format(progress.phase, elapsed)
+    return 'restic {} is still running, elapsed {}s'.format(progress.phase, elapsed)
+
+
+def format_restic_status(progress: ResticProgressState) -> str:
+    status = progress.status or {}
+    percent = get_restic_percent(status)
+    files_done = first_int(status, ['files_done', 'files_restored'])
+    total_files = first_int(status, ['total_files'])
+    bytes_done = first_int(status, ['bytes_done', 'bytes_restored'])
+    total_bytes = first_int(status, ['total_bytes'])
+    current_files = status.get('current_files', [])
+    if not isinstance(current_files, list):
+        current_files = []
+    current_text = ', '.join(str(item) for item in current_files[-2:])
+
+    if is_zh_language(progress.language):
+        parts = ['restic {} 进度: {}'.format(progress.phase, percent)]
+        if total_files > 0:
+            parts.append('文件 {}/{}'.format(files_done, total_files))
+        if total_bytes > 0:
+            parts.append('数据 {}/{}'.format(format_bytes(bytes_done), format_bytes(total_bytes)))
+        if current_text:
+            parts.append('当前: {}'.format(current_text))
+        return '，'.join(parts)
+
+    parts = ['restic {} progress: {}'.format(progress.phase, percent)]
+    if total_files > 0:
+        parts.append('files {}/{}'.format(files_done, total_files))
+    if total_bytes > 0:
+        parts.append('data {}/{}'.format(format_bytes(bytes_done), format_bytes(total_bytes)))
+    if current_text:
+        parts.append('current: {}'.format(current_text))
+    return ', '.join(parts)
+
+
+def format_restic_summary(progress: ResticProgressState) -> str:
+    summary = progress.summary or {}
+    snapshot_id = str(summary.get('snapshot_id') or '').strip()
+    total_files = first_int(summary, ['total_files_processed', 'total_files'])
+    done_files = first_int(summary, ['files_restored', 'total_files_processed', 'total_files'])
+    total_bytes = first_int(summary, ['total_bytes_processed', 'total_bytes'])
+    done_bytes = first_int(summary, ['bytes_restored', 'total_bytes_processed', 'total_bytes'])
+    duration = first_float(summary, ['total_duration'])
+
+    if is_zh_language(progress.language):
+        parts = ['restic {} 摘要'.format(progress.phase)]
+        if total_files > 0:
+            if done_files > total_files and progress.phase in ('restore', 'rollback'):
+                parts.append('恢复项目 {}，匹配文件 {}'.format(done_files, total_files))
+            else:
+                parts.append('文件 {}/{}'.format(done_files, total_files))
+        if total_bytes > 0:
+            parts.append('数据 {}/{}'.format(format_bytes(done_bytes), format_bytes(total_bytes)))
+        if duration > 0:
+            parts.append('restic 用时 {:.1f} 秒'.format(duration))
+        if snapshot_id:
+            parts.append('快照 {}'.format(snapshot_id[:8]))
+        return '，'.join(parts)
+
+    parts = ['restic {} summary'.format(progress.phase)]
+    if total_files > 0:
+        if done_files > total_files and progress.phase in ('restore', 'rollback'):
+            parts.append('restored items {}, matched files {}'.format(done_files, total_files))
+        else:
+            parts.append('files {}/{}'.format(done_files, total_files))
+    if total_bytes > 0:
+        parts.append('data {}/{}'.format(format_bytes(done_bytes), format_bytes(total_bytes)))
+    if duration > 0:
+        parts.append('restic duration {:.1f}s'.format(duration))
+    if snapshot_id:
+        parts.append('snapshot {}'.format(snapshot_id[:8]))
+    return ', '.join(parts)
+
+
+def format_restic_json_error(payload: Dict[str, Any]) -> str:
+    message_type = str(payload.get('message_type') or 'error')
+    error_value = payload.get('error')
+    if isinstance(error_value, dict):
+        message = str(error_value.get('message') or error_value)
+    else:
+        message = str(payload.get('message') or error_value or '')
+    during = str(payload.get('during') or '').strip()
+    item = str(payload.get('item') or '').strip()
+    parts = [message_type]
+    if during:
+        parts.append(during)
+    if item:
+        parts.append(item)
+    if message:
+        parts.append(message)
+    return ': '.join(parts)
+
+
+def get_restic_percent(payload: Dict[str, Any]) -> str:
+    try:
+        value = float(payload.get('percent_done'))
+    except Exception:
+        return '?'
+    if value <= 1.0:
+        value *= 100.0
+    return '{:.1f}%'.format(max(0.0, min(100.0, value)))
+
+
+def first_int(payload: Dict[str, Any], names: Sequence[str]) -> int:
+    for name in names:
+        try:
+            value = payload.get(name)
+            if value is not None:
+                return max(0, int(value))
+        except Exception:
+            continue
+    return 0
+
+
+def first_float(payload: Dict[str, Any], names: Sequence[str]) -> float:
+    for name in names:
+        try:
+            value = payload.get(name)
+            if value is not None:
+                return max(0.0, float(value))
+        except Exception:
+            continue
+    return 0.0
+
+
+def format_bytes(value: int) -> str:
+    size = float(max(0, int(value)))
+    units = ['B', 'KiB', 'MiB', 'GiB', 'TiB']
+    for unit in units:
+        if size < 1024.0 or unit == units[-1]:
+            if unit == 'B':
+                return '{} {}'.format(int(size), unit)
+            return '{:.1f} {}'.format(size, unit)
+        size /= 1024.0
 
 
 def assert_restic_success(restic_cfg: Dict[str, Any], result: ResticCommandResult):
     success_codes = set(int(code) for code in restic_cfg.get('success_exit_codes', [0]))
     combined = '{}\n{}'.format(result.stdout, result.stderr)
+    if result.json_errors:
+        raise BackupProblem(
+            'restic {} JSON 输出包含错误：\n{}'.format(
+                result.phase,
+                tail_text('\n'.join(result.json_errors), int(restic_cfg.get('max_output_chars_in_notification', 1800)))
+            )
+        )
     suspicious_lines = detect_error_lines(
         combined,
         restic_cfg.get('error_regexes', []),
@@ -3220,6 +4885,13 @@ def runtime_player_set(runtime: Dict[str, Any]) -> Set[str]:
 def non_negative_int(value: Any, default: int = 0) -> int:
     try:
         return max(0, int(value))
+    except Exception:
+        return default
+
+
+def safe_int(value: Any, default: int = 0) -> int:
+    try:
+        return int(value)
     except Exception:
         return default
 
