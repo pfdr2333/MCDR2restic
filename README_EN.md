@@ -113,8 +113,6 @@ restic:
   backup_command:
     - "backup"
     - "./server/world"
-    - "./server/world_nether"
-    - "./server/world_the_end"
     - "--tag"
     - "minecraft"
     - "--host"
@@ -122,7 +120,7 @@ restic:
 
 ```
 
-This setup allows the plugin to automatically download restic on Linux/Windows amd64 even if it is not present in the MCDR working directory. If your world directories are located at `./server/world`, `./server/world_nether`, and `./server/world_the_end`, it can directly initialize the local repository and perform backups. On Windows, the configuration automatically uses `.\restic.exe` and backslash paths upon its initial generation. The example password `123456` is provided solely to lower the initial configuration barrier; please replace it with your own strong password for production use.
+This setup allows the plugin to automatically download restic on Linux/Windows amd64 even if it is not present in the MCDR working directory. A newly generated config backs up only `./server/world` by default; if `./server/world`, `./server/world_nether`, and `./server/world_the_end` all exist when the file is generated, the three world directories are written automatically. On Windows, the initial config automatically uses `.\restic.exe` and backslash paths, and excludes `session.lock` by default to avoid restic exit code 3 caused by Minecraft file locks. The example password `123456` is provided solely to lower the initial configuration barrier; please replace it with your own strong password for production use.
 
 The automatic download first requests the GitHub latest release API. If `api.github.com` fails, it falls back to a built-in `v0.19.1` download link. During downloading, it will first attempt the official GitHub address, then try the proxies listed in `download_proxy_prefixes` sequentially.
 

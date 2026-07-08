@@ -113,15 +113,13 @@ restic:
   backup_command:
     - "backup"
     - "./server/world"
-    - "./server/world_nether"
-    - "./server/world_the_end"
     - "--tag"
     - "minecraft"
     - "--host"
     - "mcdr2Restic"
 ```
 
-这样在 Linux/Windows amd64 上，即使 MCDR 工作目录下还没有默认路径的 restic，插件也会尝试自动下载；世界目录位于 `./server/world`、`./server/world_nether`、`./server/world_the_end` 时可直接初始化本地仓库并备份。Windows 首次生成配置时会自动使用 `.\restic.exe` 和反斜杠路径。示例密码 `123456` 只用于降低首次配置门槛，正式使用请改成自己的强密码。
+这样在 Linux/Windows amd64 上，即使 MCDR 工作目录下还没有默认路径的 restic，插件也会尝试自动下载。首次生成配置时默认只备份 `./server/world`；如果生成时检测到 `./server/world`、`./server/world_nether`、`./server/world_the_end` 三个目录都存在，会自动写入三世界目录。Windows 首次生成配置时会自动使用 `.\restic.exe` 和反斜杠路径，并默认排除 `session.lock`，避免 Minecraft 文件锁导致 restic 返回 3。示例密码 `123456` 只用于降低首次配置门槛，正式使用请改成自己的强密码。
 
 自动下载会先请求 GitHub latest release API；如果 `api.github.com` 失败，会退回到内置的 `v0.19.1` 下载链接。下载时先试官方 GitHub 地址，再按 `download_proxy_prefixes` 顺序尝试代理。
 

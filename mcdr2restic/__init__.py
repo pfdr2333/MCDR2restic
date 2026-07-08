@@ -188,8 +188,6 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         'backup_command': [
             'backup',
             './server/world',
-            './server/world_nether',
-            './server/world_the_end',
             '--tag',
             'minecraft',
             '--host',
@@ -266,6 +264,13 @@ DEFAULT_RUNTIME: Dict[str, Any] = {
     'last_backup_message': ''
 }
 
+DEFAULT_BACKUP_WORLD_PATHS = (
+    './server/world',
+    './server/world_nether',
+    './server/world_the_end'
+)
+DEFAULT_BACKUP_SOURCE_MARKER = '    __MCDR2RESTIC_DEFAULT_BACKUP_SOURCES__\n'
+
 DEFAULT_MESSAGES_EN: Dict[str, str] = {
     'backup_start': '{prefix} Backup started\nTrigger: {label}\nTime: {start_time}',
     'backup_success': '{prefix} Backup completed\nTrigger: {label}\nDuration: {duration_seconds}s\nEnd time: {end_time}',
@@ -314,20 +319,50 @@ def get_mcdr_language(server: Optional[PluginServerInterface]) -> str:
         return 'zh_cn'
 
 
-def get_default_config_template(language: str) -> str:
+def get_default_config_template(language: str, base_directory: Optional[str] = None) -> str:
     if is_zh_language(language):
         template = DEFAULT_CONFIG_TEMPLATE_ZH
     else:
         template = DEFAULT_CONFIG_TEMPLATE_EN
-    return adapt_default_config_template_for_platform(template)
+    template = render_default_backup_sources(template, base_directory or os.getcwd())
+    return adapt_default_config_template_for_platform(template, language)
 
 
-def adapt_default_config_template_for_platform(template: str) -> str:
+def render_default_backup_sources(template: str, base_directory: str) -> str:
+    lines = [
+        '    - "{}"\n'.format(path)
+        for path in get_default_backup_source_paths(base_directory)
+    ]
+    return template.replace(DEFAULT_BACKUP_SOURCE_MARKER, ''.join(lines))
+
+
+def get_default_backup_source_paths(base_directory: str) -> List[str]:
+    paths = [DEFAULT_BACKUP_WORLD_PATHS[0]]
+    if all(is_generation_path_directory(base_directory, path) for path in DEFAULT_BACKUP_WORLD_PATHS):
+        paths.extend(DEFAULT_BACKUP_WORLD_PATHS[1:])
+    return paths
+
+
+def is_generation_path_directory(base_directory: str, relative_path: str) -> bool:
+    return os.path.isdir(resolve_generation_relative_path(base_directory, relative_path))
+
+
+def resolve_generation_relative_path(base_directory: str, relative_path: str) -> str:
+    path = str(relative_path).strip()
+    if path.startswith('./') or path.startswith('.\\'):
+        path = path[2:]
+    parts = [part for part in re.split(r'[\\/]+', path) if part and part != '.']
+    return os.path.join(base_directory, *parts)
+
+
+def adapt_default_config_template_for_platform(template: str, language: str) -> str:
     if os.name != 'nt':
         return template
     replacements = [
         ('# Linux Java 版示例。若服务端不支持 save-all flush，可改为 save-all。', '# Windows Java 版示例。若服务端不支持 save-all flush，可改为 save-all。'),
         ('# Linux Java Edition example. If your server does not support save-all flush, use save-all instead.', '# Windows Java Edition example. If your server does not support save-all flush, use save-all instead.'),
+        ('  # 新生成配置默认只写入 ./server/world；如果生成配置时检测到三世界目录全部存在，会自动加入 world_nether 和 world_the_end。', '  # 新生成配置默认只写入 .\\server\\world；如果生成配置时检测到三世界目录全部存在，会自动加入 world_nether 和 world_the_end。'),
+        ('  # Newly generated configs include only ./server/world by default. If all three world directories exist when the file is generated, world_nether and world_the_end are added automatically.', '  # Newly generated configs include only .\\server\\world by default. If all three world directories exist when the file is generated, world_nether and world_the_end are added automatically.'),
         ('executable: "./restic"', "executable: '.\\restic.exe'"),
         ('repository: "./restic-repo"', "repository: '.\\restic-repo'"),
         ('    - "./server/world"', "    - '.\\server\\world'"),
@@ -336,7 +371,19 @@ def adapt_default_config_template_for_platform(template: str) -> str:
     ]
     for old, new in replacements:
         template = template.replace(old, new)
-    return template
+    return add_windows_session_lock_exclude(template, language)
+
+
+def add_windows_session_lock_exclude(template: str, language: str) -> str:
+    marker = '    - "--tag"\n'
+    if marker not in template:
+        return template
+    if is_zh_language(language):
+        comment = '    # Windows 下 Minecraft 会锁定 session.lock，默认排除以避免 restic 返回 3。\n'
+    else:
+        comment = '    # On Windows, Minecraft locks session.lock; exclude it by default to avoid restic exit code 3.\n'
+    block = comment + '    - "--exclude"\n    - "session.lock"\n'
+    return template.replace(marker, block + marker, 1)
 
 
 DEFAULT_CONFIG_TEMPLATE_ZH = r"""# MCDR2Restic 配置文件
@@ -430,11 +477,10 @@ restic:
         "--prune"
       ]
   # 备份命令。同样会自动在前面加 executable，例如 restic backup ...
+  # 新生成配置默认只写入 ./server/world；如果生成配置时检测到三世界目录全部存在，会自动加入 world_nether 和 world_the_end。
   backup_command:
     - "backup"
-    - "./server/world"
-    - "./server/world_nether"
-    - "./server/world_the_end"
+    __MCDR2RESTIC_DEFAULT_BACKUP_SOURCES__
     - "--tag"
     - "minecraft"
     - "--host"
@@ -630,11 +676,10 @@ restic:
   # Backup command.
   # executable is prepended automatically, e.g.:
   # restic backup ...
+  # Newly generated configs include only ./server/world by default. If all three world directories exist when the file is generated, world_nether and world_the_end are added automatically.
   backup_command:
     - "backup"
-    - "./server/world"
-    - "./server/world_nether"
-    - "./server/world_the_end"
+    __MCDR2RESTIC_DEFAULT_BACKUP_SOURCES__
     - "--tag"
     - "minecraft"
     - "--host"
