@@ -1,0 +1,16 @@
+{
+  "id": "mcdr2restic",
+  "version": "0.1.7",
+  "name": "MCDR2Restic",
+  "description": {
+    "en_us": "Schedule periodic restic backups",
+    "zh_cn": "定时调用 restic 备份。"
+  },
+  "author": [
+    "pfdr2333"
+  ],
+  "dependencies": {
+    "mcdreforged": ">=2.12.0"
+  },
+  "entrypoint": "mcdr2restic"
+}
