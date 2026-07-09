@@ -10,6 +10,8 @@ from typing import Any, Dict, Optional, Tuple
 
 from mcdreforged.api.all import PluginServerInterface
 
+from mcdr2restic.core.i18n import server_tr
+
 
 class OneBotClient:
     def __init__(self, server: PluginServerInterface, cfg: Dict[str, Any], websocket_module: Any = None):
@@ -27,10 +29,7 @@ class OneBotClient:
         if not self.enabled:
             return
         if self.websocket_client is None:
-            self.server.logger.warning(
-                'OneBot 通知已启用，但 websocket-client 不可用；'
-                '请从 MCDR Python 环境移除错误的 websocket 包，并通过 requirements.txt 安装 websocket-client'
-            )
+            self.server.logger.warning(server_tr(self.server, 'warn.onebot.websocket_unavailable'))
             return
         self.thread = threading.Thread(target=self._thread_main, name='MCDR2Restic-OneBot', daemon=True)
         self.thread.start()
@@ -57,7 +56,7 @@ class OneBotClient:
         try:
             self.ws.close()
         except Exception as exc:
-            self.server.logger.debug('OneBot WS 关闭异常: {}'.format(exc))
+            self.server.logger.debug(server_tr(self.server, 'debug.onebot.close_error', error=exc))
 
     def _thread_main(self):
         while not self.stop_event.is_set():
@@ -81,7 +80,7 @@ class OneBotClient:
             app.run_forever(ping_interval=0)
         except Exception as exc:
             if not self.stop_event.is_set():
-                self.server.logger.warning('OneBot WS 连接异常: {}'.format(exc))
+                self.server.logger.warning(server_tr(self.server, 'warn.onebot.connection_error', error=exc))
         finally:
             self.connected_event.clear()
             if self.ws is app:
@@ -91,13 +90,13 @@ class OneBotClient:
         def on_open(ws):
             self.ws = ws
             self.connected_event.set()
-            self.server.logger.info('OneBot WS 已连接: {}'.format(self._safe_url(url)))
+            self.server.logger.info(server_tr(self.server, 'info.onebot.connected', url=self._safe_url(url)))
 
         return on_open
 
     def _handle_connection_error(self, _ws, error):
         if not self.stop_event.is_set():
-            self.server.logger.warning('OneBot WS 连接异常: {}'.format(error))
+            self.server.logger.warning(server_tr(self.server, 'warn.onebot.connection_error', error=error))
 
     def _handle_connection_closed(self, _ws, _close_status_code, _close_msg):
         self.connected_event.clear()
@@ -106,17 +105,17 @@ class OneBotClient:
     def _send_private_msg(self, user_id: int, text: str):
         timeout = float(self.cfg.get('send_timeout_seconds', 10))
         if not self.connected_event.wait(timeout=timeout):
-            self.server.logger.warning('OneBot 发送 QQ {} 失败: OneBot WS 未连接'.format(user_id))
+            self.server.logger.warning(server_tr(self.server, 'warn.onebot.send_not_connected', user_id=user_id))
             return
         ws = self.ws
         if ws is None:
-            self.server.logger.warning('OneBot 发送 QQ {} 失败: OneBot WS 未连接'.format(user_id))
+            self.server.logger.warning(server_tr(self.server, 'warn.onebot.send_not_connected', user_id=user_id))
             return
         try:
             with self.send_lock:
                 ws.send(json.dumps(build_private_message_action(user_id, text), ensure_ascii=False))
         except Exception as exc:
-            self.server.logger.warning('OneBot 发送 QQ {} 失败: {}'.format(user_id, exc))
+            self.server.logger.warning(server_tr(self.server, 'warn.onebot.send_failed', user_id=user_id, error=exc))
 
     def _sleep(self, seconds: float):
         end = time.monotonic() + max(0.0, seconds)

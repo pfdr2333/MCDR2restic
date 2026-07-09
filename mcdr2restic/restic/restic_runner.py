@@ -9,6 +9,7 @@ import time
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from mcdr2restic.defaults.default_constants import RESTIC_PROGRESS_INTERVAL_SECONDS
+from mcdr2restic.core.i18n import tr
 from mcdr2restic.core.language import get_mcdr_language
 from mcdr2restic.core.models import BackupCanceled, BackupProblem, ResticCommandResult, ResticProgressState
 from mcdr2restic.restic.restic_config import build_restic_environment, normalize_command_args
@@ -92,7 +93,7 @@ def assert_restic_process_completed(
     timed_out: bool,
 ):
     if app_runtime.backup.cancel.is_set():
-        raise BackupCanceled('收到停止请求')
+        raise BackupCanceled(i18n_key='error.backup.cancel_requested')
     if timed_out:
         raise_restic_timeout(restic_cfg, phase, started, stdout, stderr)
 
@@ -101,7 +102,7 @@ def normalize_restic_phase_args(configured_args: Any, phase: str) -> List[str]:
     args = prepare_restic_args_for_phase(normalize_command_args(configured_args), phase)
     if args:
         return args
-    raise BackupProblem('restic {} 命令为空'.format(phase))
+    raise BackupProblem(i18n_key='error.restic.command_empty', phase=phase)
 
 
 def build_restic_process_command(
@@ -119,7 +120,7 @@ def ensure_restic_deadline_available(deadline: Optional[float], phase: str):
     remaining = get_deadline_remaining(deadline)
     if remaining is None or remaining > 0:
         return
-    raise BackupProblem('备份总超时已耗尽，未执行 restic {}'.format(phase))
+    raise BackupProblem(i18n_key='error.restic.deadline_exhausted', phase=phase)
 
 
 def start_restic_process(
@@ -132,9 +133,9 @@ def start_restic_process(
     try:
         return subprocess.Popen(command, **build_restic_popen_kwargs(cwd, env))
     except FileNotFoundError:
-        raise BackupProblem('找不到 restic 可执行文件: {}'.format(executable))
+        raise BackupProblem(i18n_key='error.restic.executable_not_found', executable=executable)
     except Exception as exc:
-        raise BackupProblem('启动 restic {} 失败: {}'.format(phase, exc))
+        raise BackupProblem(i18n_key='error.restic.start_failed', phase=phase, error=exc)
 
 
 def build_restic_popen_kwargs(cwd: Optional[str], env: Dict[str, str]) -> Dict[str, Any]:
@@ -174,7 +175,7 @@ def read_restic_process_output(
             output_queue,
             len(reader_threads)
         )
-        return_code = wait_for_restic_exit(process)
+        return_code = wait_for_restic_exit(process, get_runtime_language(app_runtime))
         return ''.join(stdout_lines), ''.join(stderr_lines), return_code, timed_out
     finally:
         join_restic_reader_threads(reader_threads)
@@ -214,15 +215,26 @@ def ensure_restic_process_can_continue(
     process: subprocess.Popen,
     deadline: Optional[float],
 ) -> bool:
+    language = get_runtime_language(app_runtime)
     if app_runtime.backup.cancel.is_set():
         result = terminate_process(process)
-        warn_if_termination_failed(get_runtime_logger(app_runtime), '取消 restic 进程', result)
-        raise BackupCanceled('收到停止请求{}'.format(termination_failure_suffix(result)))
+        warn_if_termination_failed(
+            get_runtime_logger(app_runtime),
+            tr(language, 'action.restic.cancel_process'),
+            result,
+            language
+        )
+        raise_backup_canceled_with_termination_result(result, language)
     remaining = get_deadline_remaining(deadline)
     if remaining is None or remaining > 0:
         return False
     result = terminate_process(process)
-    warn_if_termination_failed(get_runtime_logger(app_runtime), 'restic 超时后终止进程', result)
+    warn_if_termination_failed(
+        get_runtime_logger(app_runtime),
+        tr(language, 'action.restic.timeout_terminate_process'),
+        result,
+        language
+    )
     return True
 
 
@@ -267,14 +279,15 @@ def append_restic_output_line(
     stderr_lines.append(line)
 
 
-def wait_for_restic_exit(process: subprocess.Popen) -> int:
+def wait_for_restic_exit(process: subprocess.Popen, language: str) -> int:
     try:
         return int(process.wait(timeout=RESTIC_PROCESS_WAIT_TIMEOUT_SECONDS))
     except subprocess.TimeoutExpired:
         result = terminate_process(process)
-        raise BackupProblem('restic 进程输出结束后仍未退出，已终止{}'.format(
-            termination_failure_suffix(result)
-        ))
+        raise BackupProblem(
+            i18n_key='error.restic.process_still_running_after_output',
+            detail=termination_failure_suffix(result, language)
+        )
 
 
 def join_restic_reader_threads(reader_threads: Sequence[threading.Thread]):
@@ -289,11 +302,12 @@ def raise_restic_timeout(
     stdout: str,
     stderr: str,
 ):
-    raise BackupProblem('restic {} 超时（{} 秒），进程已终止\n{}'.format(
-        phase,
-        int(time.monotonic() - started),
-        tail_text(stdout + '\n' + stderr, int(restic_cfg.get(RESTIC_CFG_MAX_OUTPUT_CHARS, 1800)))
-    ))
+    raise BackupProblem(
+        i18n_key='error.restic.timeout',
+        phase=phase,
+        seconds=int(time.monotonic() - started),
+        output=tail_text(stdout + '\n' + stderr, int(restic_cfg.get(RESTIC_CFG_MAX_OUTPUT_CHARS, 1800)))
+    )
 
 
 def build_restic_command_result(
@@ -377,3 +391,14 @@ def compute_restic_queue_wait(progress: ResticProgressState, interval: float, re
     if remaining is not None:
         until_progress = min(until_progress, max(0.1, remaining))
     return min(1.0, until_progress)
+
+
+def get_runtime_language(app_runtime: PluginRuntime) -> str:
+    return get_mcdr_language(app_runtime.service.server)
+
+
+def raise_backup_canceled_with_termination_result(result, language: str):
+    suffix = termination_failure_suffix(result, language)
+    if suffix:
+        raise BackupCanceled(i18n_key='error.backup.cancel_requested_with_failure', detail=suffix)
+    raise BackupCanceled(i18n_key='error.backup.cancel_requested')

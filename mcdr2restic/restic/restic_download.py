@@ -18,6 +18,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 from mcdreforged.api.all import PluginServerInterface
 
+from mcdr2restic.core.i18n import server_tr
 from mcdr2restic.defaults.default_constants import PLUGIN_ID
 from mcdr2restic.defaults.restic_release_defaults import build_restic_fallback_release
 from mcdr2restic.core.models import BackupProblem
@@ -50,10 +51,15 @@ def install_default_restic_for_platform(
 ):
     platform_info = get_restic_download_platform()
     if platform_info is None:
-        server.logger.warning('当前系统或架构不支持自动下载 restic，请手动放置可执行文件: {}'.format(target_path))
+        server.logger.warning(server_tr(server, 'warn.restic.auto_download.unsupported', target_path=target_path))
         return
     system_name, asset_keyword, output_name = platform_info
-    server.logger.info('默认 restic 可执行文件不存在，准备自动下载 {} amd64 版本: {}'.format(system_name, target_path))
+    server.logger.info(server_tr(
+        server,
+        'info.restic.auto_download.start',
+        system_name=system_name,
+        target_path=target_path
+    ))
     download_and_install_restic(server, restic_cfg, asset_keyword, output_name, target_path)
 
 
@@ -95,7 +101,10 @@ def download_and_install_restic(
     asset_url = str(asset.get('browser_download_url', '') or '')
     asset_name = str(asset.get('name', '') or '')
     if not asset_url:
-        raise BackupProblem('restic release 资产缺少下载地址: {}'.format(asset_name or asset_keyword))
+        raise BackupProblem(
+            i18n_key='error.restic.release_missing_download_url',
+            asset_name=asset_name or asset_keyword
+        )
     install_restic_from_urls(server, restic_cfg, asset_url, asset_name, asset_keyword, output_name, target_path, timeout)
 
 
@@ -116,15 +125,15 @@ def install_restic_from_urls(
         archive_path = os.path.join(temp_dir, asset_name or 'restic-download')
         for url in urls:
             try:
-                server.logger.info('正在下载 restic: {}'.format(mask_download_url(url)))
+                server.logger.info(server_tr(server, 'info.restic.downloading', url=mask_download_url(url)))
                 download_file(url, archive_path, timeout)
                 install_restic_archive(archive_path, asset_keyword, output_name, target_path)
-                server.logger.info('restic 自动下载并安装完成: {}'.format(target_path))
+                server.logger.info(server_tr(server, 'info.restic.auto_download.completed', target_path=target_path))
                 return
             except Exception as exc:
                 last_error = str(exc)
-                server.logger.warning('restic 下载或安装失败，尝试下一个地址: {}'.format(last_error))
-    raise BackupProblem('自动下载 restic 失败: {}'.format(last_error or asset_url))
+                server.logger.warning(server_tr(server, 'warn.restic.auto_download_retry', error=last_error))
+    raise BackupProblem(i18n_key='error.restic.auto_download_failed', error=last_error or asset_url)
 
 
 def fetch_restic_release_metadata(version: str, timeout: int) -> Dict[str, Any]:
@@ -148,9 +157,9 @@ def parse_restic_release_metadata(data: bytes) -> Dict[str, Any]:
     try:
         metadata = json.loads(data.decode('utf-8'))
     except Exception as exc:
-        raise BackupProblem('解析 restic release 信息失败: {}'.format(exc))
+        raise BackupProblem(i18n_key='error.restic.release_parse_failed', error=exc)
     if not isinstance(metadata, dict) or not isinstance(metadata.get('assets'), list):
-        raise BackupProblem('restic release 信息格式异常')
+        raise BackupProblem(i18n_key='error.restic.release_invalid')
     return metadata
 
 
@@ -159,7 +168,7 @@ def select_restic_release_asset(release: Dict[str, Any], asset_keyword: str) -> 
         name = str(asset.get('name', '') or '')
         if asset_keyword in name:
             return asset
-    raise BackupProblem('未找到匹配的 restic release 资产: {}'.format(asset_keyword))
+    raise BackupProblem(i18n_key='error.restic.release_asset_not_found', asset_keyword=asset_keyword)
 
 
 def build_download_urls(asset_url: str, proxy_prefixes: Any) -> List[str]:
@@ -209,7 +218,11 @@ def download_bytes(url: str, timeout: int) -> bytes:
         with urllib.request.urlopen(request, timeout=timeout) as response:
             return response.read()
     except urllib.error.URLError as exc:
-        raise BackupProblem('下载失败 {}: {}'.format(mask_download_url(url), exc))
+        raise BackupProblem(
+            i18n_key='error.restic.download_failed',
+            url=mask_download_url(url),
+            error=exc
+        )
 
 
 def install_restic_archive(archive_path: str, asset_keyword: str, output_name: str, target_path: str):
@@ -218,7 +231,7 @@ def install_restic_archive(archive_path: str, asset_keyword: str, output_name: s
     elif asset_keyword.endswith('.bz2'):
         install_restic_bz2(archive_path, target_path)
     else:
-        raise BackupProblem('不支持的 restic 压缩包类型: {}'.format(asset_keyword))
+        raise BackupProblem(i18n_key='error.restic.archive_unsupported', asset_keyword=asset_keyword)
     make_executable_on_posix(target_path)
 
 
@@ -233,7 +246,7 @@ def install_restic_bz2(archive_path: str, target_path: str):
     with open(archive_path, 'rb') as source:
         data = bz2.decompress(source.read())
     if not data:
-        raise BackupProblem('bz2 解压后内容为空')
+        raise BackupProblem(i18n_key='error.restic.bz2_empty')
     with open(target_path, 'wb') as target:
         target.write(data)
 
@@ -256,7 +269,10 @@ def find_zip_member(archive: zipfile.ZipFile, output_name: str) -> str:
     candidate = find_executable_zip_member(members)
     if candidate:
         return candidate
-    raise BackupProblem('zip 中未找到可识别的 restic 可执行文件，包含文件: {}'.format(', '.join(members[:10])))
+    raise BackupProblem(
+        i18n_key='error.restic.zip_executable_not_found',
+        members=', '.join(members[:10])
+    )
 
 
 def find_exact_zip_member(members: List[str], output_name: str) -> str:

@@ -4,8 +4,12 @@ from __future__ import annotations
 import time
 from typing import Any, Dict, Sequence
 
-from mcdr2restic.core.language import is_zh_language
+from mcdr2restic.core.i18n import tr
 from mcdr2restic.core.models import ResticProgressState
+from mcdr2restic.restic.restic_constants import RESTIC_COMMAND_RESTORE, RESTIC_COMMAND_ROLLBACK
+
+
+RESTORE_ITEM_COUNT_PHASES = frozenset({RESTIC_COMMAND_RESTORE, RESTIC_COMMAND_ROLLBACK})
 
 
 def format_restic_progress(progress: ResticProgressState, force: bool = False) -> str:
@@ -14,18 +18,14 @@ def format_restic_progress(progress: ResticProgressState, force: bool = False) -
     if progress.status:
         return format_restic_status(progress)
     elapsed = int(time.monotonic() - progress.started_at)
-    if is_zh_language(progress.language):
-        return 'restic {} 仍在执行，用时 {} 秒'.format(progress.phase, elapsed)
-    return 'restic {} is still running, elapsed {}s'.format(progress.phase, elapsed)
+    return tr(progress.language, 'restic.running', phase=progress.phase, elapsed=elapsed)
 
 
 def format_restic_status(progress: ResticProgressState) -> str:
     status = progress.status or {}
     values = build_restic_status_values(status)
     current_text = current_files_text(status.get('current_files', []))
-    if is_zh_language(progress.language):
-        return format_restic_status_zh(progress.phase, values, current_text)
-    return format_restic_status_en(progress.phase, values, current_text)
+    return format_restic_status_text(progress.language, progress.phase, values, current_text)
 
 
 def build_restic_status_values(status: Dict[str, Any]) -> Dict[str, Any]:
@@ -44,41 +44,34 @@ def current_files_text(current_files: Any) -> str:
     return ', '.join(str(item) for item in current_files[-2:])
 
 
-def format_restic_status_zh(phase: str, values: Dict[str, Any], current_text: str) -> str:
-    parts = ['restic {} 进度: {}'.format(phase, values['percent'])]
-    append_status_details_zh(parts, values, current_text)
-    return '，'.join(parts)
+def format_restic_status_text(language: str, phase: str, values: Dict[str, Any], current_text: str) -> str:
+    parts = [tr(language, 'restic.progress.title', phase=phase, percent=values['percent'])]
+    append_status_details(parts, language, values, current_text)
+    return progress_joiner(language).join(parts)
 
 
-def append_status_details_zh(parts: list, values: Dict[str, Any], current_text: str):
+def append_status_details(parts: list, language: str, values: Dict[str, Any], current_text: str):
     if values['total_files'] > 0:
-        parts.append('文件 {}/{}'.format(values['files_done'], values['total_files']))
+        parts.append(tr(
+            language,
+            'restic.progress.files',
+            done=values['files_done'],
+            total=values['total_files'],
+        ))
     if values['total_bytes'] > 0:
-        parts.append('数据 {}/{}'.format(format_bytes(values['bytes_done']), format_bytes(values['total_bytes'])))
+        parts.append(tr(
+            language,
+            'restic.progress.data',
+            done=format_bytes(values['bytes_done']),
+            total=format_bytes(values['total_bytes']),
+        ))
     if current_text:
-        parts.append('当前: {}'.format(current_text))
-
-
-def format_restic_status_en(phase: str, values: Dict[str, Any], current_text: str) -> str:
-    parts = ['restic {} progress: {}'.format(phase, values['percent'])]
-    append_status_details_en(parts, values, current_text)
-    return ', '.join(parts)
-
-
-def append_status_details_en(parts: list, values: Dict[str, Any], current_text: str):
-    if values['total_files'] > 0:
-        parts.append('files {}/{}'.format(values['files_done'], values['total_files']))
-    if values['total_bytes'] > 0:
-        parts.append('data {}/{}'.format(format_bytes(values['bytes_done']), format_bytes(values['total_bytes'])))
-    if current_text:
-        parts.append('current: {}'.format(current_text))
+        parts.append(tr(language, 'restic.progress.current', current=current_text))
 
 
 def format_restic_summary(progress: ResticProgressState) -> str:
     values = build_restic_summary_values(progress)
-    if is_zh_language(progress.language):
-        return format_restic_summary_zh(progress.phase, values)
-    return format_restic_summary_en(progress.phase, values)
+    return format_restic_summary_text(progress.language, progress.phase, values)
 
 
 def build_restic_summary_values(progress: ResticProgressState) -> Dict[str, Any]:
@@ -93,54 +86,48 @@ def build_restic_summary_values(progress: ResticProgressState) -> Dict[str, Any]
     }
 
 
-def format_restic_summary_zh(phase: str, values: Dict[str, Any]) -> str:
-    parts = ['restic {} 摘要'.format(phase)]
-    append_summary_file_part_zh(parts, phase, values)
-    append_common_summary_parts_zh(parts, values)
-    return '，'.join(parts)
+def format_restic_summary_text(language: str, phase: str, values: Dict[str, Any]) -> str:
+    parts = [tr(language, 'restic.summary.title', phase=phase)]
+    append_summary_file_part(parts, language, phase, values)
+    append_common_summary_parts(parts, language, values)
+    return progress_joiner(language).join(parts)
 
 
-def append_summary_file_part_zh(parts: list, phase: str, values: Dict[str, Any]):
+def append_summary_file_part(parts: list, language: str, phase: str, values: Dict[str, Any]):
     if values['total_files'] <= 0:
         return
-    if values['done_files'] > values['total_files'] and phase in ('restore', 'rollback'):
-        parts.append('恢复项目 {}，匹配文件 {}'.format(values['done_files'], values['total_files']))
+    if values['done_files'] > values['total_files'] and phase in RESTORE_ITEM_COUNT_PHASES:
+        parts.append(tr(
+            language,
+            'restic.summary.restored_items',
+            done=values['done_files'],
+            total=values['total_files'],
+        ))
         return
-    parts.append('文件 {}/{}'.format(values['done_files'], values['total_files']))
+    parts.append(tr(
+        language,
+        'restic.summary.files',
+        done=values['done_files'],
+        total=values['total_files'],
+    ))
 
 
-def append_common_summary_parts_zh(parts: list, values: Dict[str, Any]):
+def append_common_summary_parts(parts: list, language: str, values: Dict[str, Any]):
     if values['total_bytes'] > 0:
-        parts.append('数据 {}/{}'.format(format_bytes(values['done_bytes']), format_bytes(values['total_bytes'])))
+        parts.append(tr(
+            language,
+            'restic.summary.data',
+            done=format_bytes(values['done_bytes']),
+            total=format_bytes(values['total_bytes']),
+        ))
     if values['duration'] > 0:
-        parts.append('restic 用时 {:.1f} 秒'.format(values['duration']))
+        parts.append(tr(language, 'restic.summary.duration', seconds='{:.1f}'.format(values['duration'])))
     if values['snapshot_id']:
-        parts.append('快照 {}'.format(values['snapshot_id'][:8]))
+        parts.append(tr(language, 'restic.summary.snapshot', snapshot_id=values['snapshot_id'][:8]))
 
 
-def format_restic_summary_en(phase: str, values: Dict[str, Any]) -> str:
-    parts = ['restic {} summary'.format(phase)]
-    append_summary_file_part_en(parts, phase, values)
-    append_common_summary_parts_en(parts, values)
-    return ', '.join(parts)
-
-
-def append_summary_file_part_en(parts: list, phase: str, values: Dict[str, Any]):
-    if values['total_files'] <= 0:
-        return
-    if values['done_files'] > values['total_files'] and phase in ('restore', 'rollback'):
-        parts.append('restored items {}, matched files {}'.format(values['done_files'], values['total_files']))
-        return
-    parts.append('files {}/{}'.format(values['done_files'], values['total_files']))
-
-
-def append_common_summary_parts_en(parts: list, values: Dict[str, Any]):
-    if values['total_bytes'] > 0:
-        parts.append('data {}/{}'.format(format_bytes(values['done_bytes']), format_bytes(values['total_bytes'])))
-    if values['duration'] > 0:
-        parts.append('restic duration {:.1f}s'.format(values['duration']))
-    if values['snapshot_id']:
-        parts.append('snapshot {}'.format(values['snapshot_id'][:8]))
+def progress_joiner(language: str) -> str:
+    return '，' if str(language or '').lower().replace('-', '_').startswith('zh') else ', '
 
 
 def format_restic_json_error(payload: Dict[str, Any]) -> str:

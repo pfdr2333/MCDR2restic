@@ -24,6 +24,7 @@ from mcdr2restic.minecraft.minecraft_service import (
 )
 from mcdr2restic.core.bootstrap import BootstrapResult
 from mcdr2restic.config.config_loader import load_config
+from mcdr2restic.core.i18n import server_tr
 from mcdr2restic.config.state_store import ensure_runtime, get_config_snapshot, save_config_unlocked
 from mcdr2restic.notifications import DiscordWebhookClient, NotificationDispatcher, OneBotClient
 from mcdr2restic.minecraft.player_activity_service import (
@@ -52,31 +53,35 @@ class PluginEntrypoint:
         self.restart_discord(server)
         self.start_scheduler(server)
         self.restart_update_checker(server, startup_check=True)
-        server.logger.info('MCDR2Restic 已加载')
+        server.logger.info(server_tr(server, 'log.plugin.loaded'))
 
     def shutdown_previous_module(self, server: PluginServerInterface, prev_module):
         if prev_module is None or not hasattr(prev_module, '_shutdown_runtime'):
             return
         try:
-            prev_module._shutdown_runtime(server, 'plugin reload')
+            prev_module._shutdown_runtime(server, server_tr(server, 'reason.plugin_reload'))
         except Exception:
-            server.logger.warning('清理上一插件实例时发生异常:\n{}'.format(traceback.format_exc()))
+            server.logger.warning(server_tr(
+                server,
+                'warn.plugin.previous_shutdown_failed',
+                error=traceback.format_exc()
+            ))
 
     def prepare_runtime(self, server: PluginServerInterface):
         self.runtime.service.server = server
-        for message in self.bootstrap_result.logs:
-            server.logger.info('[bootstrap] {}'.format(message))
+        for entry in self.bootstrap_result.logs:
+            server.logger.info('[bootstrap] {}'.format(server_tr(server, entry.i18n_key, **entry.params)))
         self.bootstrap_result.logs.clear()
         self.runtime.service.stopping.clear()
         self.runtime.backup.cancel.clear()
         self.runtime.service.server_ready = server_is_running(self.runtime, server)
 
     def on_unload(self, server: PluginServerInterface):
-        self.shutdown_runtime(server, 'plugin unload')
+        self.shutdown_runtime(server, server_tr(server, 'reason.plugin_unload'))
 
     def on_server_startup(self, server: PluginServerInterface):
         self.runtime.service.server_ready = True
-        server.logger.info('检测到 Minecraft 服务端启动完成，允许备份')
+        server.logger.info(server_tr(server, 'log.plugin.server_started'))
         handle_restore_server_startup(self.runtime, server)
 
     def on_server_stop(self, server: PluginServerInterface, server_return_code: int):
@@ -85,8 +90,8 @@ class PluginEntrypoint:
         if handle_restore_server_stop(self.runtime, server, server_return_code, clear_restore_tasks):
             return
         if is_backup_running(self.runtime):
-            server.logger.warning('Minecraft 服务端已停止，正在请求中止当前备份')
-            request_cancel_current_backup(self.runtime, 'server stopped')
+            server.logger.warning(server_tr(server, 'warn.plugin.server_stopped_cancel_backup'))
+            request_cancel_current_backup(self.runtime, server_tr(server, 'reason.server_stopped'))
 
     def record_server_stopped(self, server: PluginServerInterface):
         with self.runtime.config_state.lock:
@@ -100,7 +105,7 @@ class PluginEntrypoint:
             save_config_unlocked(self.runtime, server)
 
     def on_mcdr_stop(self, server: PluginServerInterface):
-        self.shutdown_runtime(server, 'MCDR stop')
+        self.shutdown_runtime(server, server_tr(server, 'reason.mcdr_stop'))
 
     def on_player_joined(self, server: PluginServerInterface, player: str, info: Info):
         handle_player_joined(self.runtime, server, player)
@@ -117,7 +122,7 @@ class PluginEntrypoint:
         self.stop_onebot()
         self.runtime.service.discord = None
         if self.runtime.service.server is not None:
-            server.logger.info('MCDR2Restic 已停止: {}'.format(reason))
+            server.logger.info(server_tr(server, 'log.plugin.stopped', reason=reason))
 
     def stop_update_checker(self):
         if self.runtime.service.update_checker is None:
@@ -173,12 +178,16 @@ class PluginEntrypoint:
         self,
         server: Optional[PluginServerInterface] = None,
         restic_cfg: Optional[Dict[str, Any]] = None,
-        reason: str = 'repository changed'
+        reason: str = ''
     ):
+        resolved_server = server or self.runtime.service.server
+        reason_text = str(reason or '').strip()
+        if not reason_text and resolved_server is not None:
+            reason_text = server_tr(resolved_server, 'snapshot.cache.reason.repository_changed')
         invalidate_snapshot_cache_impl(
             server,
             restic_cfg,
-            reason,
+            reason_text,
             default_server=self.runtime.service.server,
             config_snapshot_provider=lambda: get_config_snapshot(self.runtime)
         )
@@ -199,7 +208,7 @@ class PluginEntrypoint:
         self.stop_update_checker()
         update_cfg = get_config_snapshot(self.runtime).get('update_check', {})
         if not isinstance(update_cfg, dict) or not bool(update_cfg.get('enabled', True)):
-            server.logger.info('MCDR2Restic 版本更新检查已关闭')
+            server.logger.info(server_tr(server, 'log.update.disabled'))
             return
         self.runtime.service.update_checker = UpdateChecker(
             server,

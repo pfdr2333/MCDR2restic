@@ -7,8 +7,7 @@ import subprocess
 from dataclasses import dataclass
 from typing import Any, Optional
 
-
-UNKNOWN_TERMINATION_ERROR = '未知错误'
+from mcdr2restic.core.i18n import tr
 
 
 @dataclass
@@ -56,21 +55,25 @@ def try_force_kill(process: subprocess.Popen) -> str:
         return str(exc)
 
 
-def termination_failure_suffix(result: Optional[TerminateResult]) -> str:
+def termination_failure_suffix(result: Optional[TerminateResult], language: str = 'zh_cn') -> str:
     if result is None or result.terminated:
         return ''
-    return '；终止失败：{}'.format(result.error or UNKNOWN_TERMINATION_ERROR)
+    return tr(
+        language,
+        'error.process.termination_failed_suffix',
+        error=result.error or tr(language, 'error.process.termination_unknown')
+    )
 
 
-def termination_failure_message(action: str, result: Optional[TerminateResult]) -> str:
-    suffix = termination_failure_suffix(result)
+def termination_failure_message(action: str, result: Optional[TerminateResult], language: str = 'zh_cn') -> str:
+    suffix = termination_failure_suffix(result, language)
     if not suffix:
         return ''
     return '{}{}'.format(action, suffix)
 
 
-def warn_if_termination_failed(logger: Any, action: str, result: Optional[TerminateResult]):
-    message = termination_failure_message(action, result)
+def warn_if_termination_failed(logger: Any, action: str, result: Optional[TerminateResult], language: str = 'zh_cn'):
+    message = termination_failure_message(action, result, language)
     warning = getattr(logger, 'warning', None)
     if message and callable(warning):
         warning(message)

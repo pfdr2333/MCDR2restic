@@ -9,6 +9,7 @@ from typing import Any, Dict, List
 
 from mcdreforged.api.all import PluginServerInterface
 
+from mcdr2restic.core.i18n import server_tr
 from mcdr2restic.defaults.default_constants import PLUGIN_ID
 
 
@@ -31,7 +32,7 @@ class DiscordWebhookClient:
     def _send_message(self, text: str):
         webhook_url = str(self.cfg.get('webhook_url', '') or '').strip()
         if not webhook_url:
-            self.server.logger.warning('Discord 通知已启用，但 webhook_url 为空')
+            self.server.logger.warning(server_tr(self.server, 'warn.discord.webhook_url_empty'))
             return
         request = build_discord_request(webhook_url, self._build_payload(text))
         timeout = max(1, int(self.cfg.get('send_timeout_seconds', 10)))
@@ -39,9 +40,9 @@ class DiscordWebhookClient:
             with urllib.request.urlopen(request, timeout=timeout) as response:
                 status = getattr(response, 'status', 204)
                 if status < 200 or status >= 300:
-                    self.server.logger.warning('Discord Webhook 返回异常状态码: {}'.format(status))
+                    self.server.logger.warning(server_tr(self.server, 'warn.discord.status_error', status=status))
         except Exception as exc:
-            self.server.logger.warning('Discord Webhook 发送失败: {}'.format(exc))
+            self.server.logger.warning(server_tr(self.server, 'warn.discord.send_failed', error=exc))
 
     def _build_payload(self, text: str) -> Dict[str, Any]:
         content = self._with_mentions(text)

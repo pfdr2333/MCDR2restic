@@ -8,10 +8,13 @@ from typing import Any, Callable, Dict, Optional, Tuple
 from mcdreforged.api.all import PluginServerInterface
 
 from mcdr2restic.backup.scheduling import compute_force_wait_seconds, compute_wait_seconds
+from mcdr2restic.core.i18n import tr, tr_error
+from mcdr2restic.core.language import get_mcdr_language
+from mcdr2restic.core.models import BackupTrigger
 
 
 ConfigProvider = Callable[[], Dict[str, Any]]
-BackupRunner = Callable[[PluginServerInterface, str], bool]
+BackupRunner = Callable[[PluginServerInterface, BackupTrigger], bool]
 McReadyProvider = Callable[[PluginServerInterface], bool]
 SkipPredicate = Callable[[Dict[str, Any]], bool]
 AdminNotifier = Callable[[str, Optional[Dict[str, Any]], Optional[Dict[str, Any]], bool], None]
@@ -56,37 +59,45 @@ class BackupScheduler:
         self.wakeup_event.set()
 
     def _normal_main(self):
-        self._run_schedule_loop('正常', self._next_normal_schedule, self._trigger_normal_backup)
+        self._run_schedule_loop('schedule.normal', self._next_normal_schedule, self._trigger_normal_backup)
 
     def _force_main(self):
-        self._run_schedule_loop('强制', self._next_force_schedule, self._trigger_forced_backup)
+        self._run_schedule_loop('schedule.forced', self._next_force_schedule, self._trigger_forced_backup)
 
     def _run_schedule_loop(
         self,
-        label: str,
+        label_key: str,
         schedule_provider: ScheduleProvider,
         schedule_trigger: ScheduleTrigger,
     ):
-        self.server.logger.info('MCDR2Restic {}调度线程已启动'.format(label))
+        language = get_mcdr_language(self.server)
+        label = tr(language, label_key)
+        self.server.logger.info(tr(language, 'log.scheduler.started', label=label))
         while not self.stop_event.is_set():
             schedule = schedule_provider()
             if schedule is None:
                 continue
             wait_seconds, due_text = schedule
-            self.server.logger.info('下次{}备份等待 {} 秒（{}）'.format(label, int(wait_seconds), due_text))
+            self.server.logger.info(tr(
+                language,
+                'log.scheduler.next_backup',
+                label=label,
+                seconds=int(wait_seconds),
+                due_text=due_text,
+            ))
             if self._wait(wait_seconds) or self.stop_event.is_set():
                 continue
             schedule_trigger()
-        self.server.logger.info('MCDR2Restic {}调度线程已停止'.format(label))
+        self.server.logger.info(tr(language, 'log.scheduler.stopped', label=label))
 
     def _next_normal_schedule(self) -> Optional[Tuple[float, str]]:
         cfg = self.config_provider()
         if not self._enabled_or_sleep(cfg):
             return None
         try:
-            return compute_wait_seconds(cfg)
+            return compute_wait_seconds(cfg, get_mcdr_language(self.server))
         except Exception as exc:
-            self._handle_schedule_error(cfg, exc, '计算下次备份时间失败')
+            self._handle_schedule_error(cfg, exc, 'error.schedule.compute_next')
             return None
 
     def _next_force_schedule(self) -> Optional[Tuple[float, str]]:
@@ -94,9 +105,9 @@ class BackupScheduler:
         if not self._enabled_or_sleep(cfg):
             return None
         try:
-            schedule = compute_force_wait_seconds(cfg)
+            schedule = compute_force_wait_seconds(cfg, get_mcdr_language(self.server))
         except Exception as exc:
-            self._handle_schedule_error(cfg, exc, '计算下次强制备份时间失败')
+            self._handle_schedule_error(cfg, exc, 'error.schedule.compute_forced_next')
             return None
         if schedule is None:
             self._wait(60)
@@ -108,37 +119,41 @@ class BackupScheduler:
         self._wait(5)
         return False
 
-    def _handle_schedule_error(self, cfg: Dict[str, Any], exc: Exception, message: str):
-        self.server.logger.error('{}: {}'.format(message, exc))
-        self.admin_notifier('schedule_config_error', {'error': str(exc)}, cfg, True)
+    def _handle_schedule_error(self, cfg: Dict[str, Any], exc: Exception, message_key: str):
+        language = get_mcdr_language(self.server)
+        message = tr(language, message_key)
+        detail = tr_error(language, exc)
+        self.server.logger.error('{}: {}'.format(message, detail))
+        self.admin_notifier('schedule_config_error', {'error': detail}, cfg, True)
         self._wait(60)
 
     def _trigger_normal_backup(self):
         cfg = self.config_provider()
-        if not self._can_start_backup(cfg, '到达备份时间，但 Minecraft 服务端尚未确认正常运行，跳过本次备份'):
+        if not self._can_start_backup(cfg, 'warn.backup.not_ready.scheduled'):
             return
         if self.skip_predicate(cfg):
             self._handle_no_player_activity_skip(cfg)
             return
-        self.backup_runner(self.server, 'scheduled')
+        self.backup_runner(self.server, BackupTrigger.SCHEDULED)
 
     def _trigger_forced_backup(self):
         cfg = self.config_provider()
-        if not self._can_start_backup(cfg, '到达强制备份时间，但 Minecraft 服务端尚未确认正常运行，跳过本次备份'):
+        if not self._can_start_backup(cfg, 'warn.backup.not_ready.forced'):
             return
-        self.backup_runner(self.server, 'forced')
+        self.backup_runner(self.server, BackupTrigger.FORCED)
 
-    def _can_start_backup(self, cfg: Dict[str, Any], not_ready_message: str) -> bool:
+    def _can_start_backup(self, cfg: Dict[str, Any], not_ready_key: str) -> bool:
         if not bool(cfg.get('enabled', True)):
             return False
         if self.mc_ready_provider(self.server):
             return True
+        not_ready_message = tr(get_mcdr_language(self.server), not_ready_key)
         self.server.logger.warning(not_ready_message)
         self.admin_notifier('backup_not_ready', {'message': not_ready_message}, cfg, True)
         return False
 
     def _handle_no_player_activity_skip(self, cfg: Dict[str, Any]):
-        message = '本周期没有玩家加入或退出，触发检查时也没有玩家在线，跳过本次正常备份'
+        message = tr(get_mcdr_language(self.server), 'info.backup.skip_no_player_activity')
         self.server.logger.info(message)
         if cfg.get('notification', {}).get('notify_on_skip', False):
             self.admin_notifier('backup_skip_no_player', {'message': message}, cfg, False)

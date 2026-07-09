@@ -11,14 +11,16 @@ from mcdr2restic.config.config_migration import migrate_config_file, migrate_leg
 from mcdr2restic.config.config_paths import ensure_config_file_exists, get_data_file_path
 from mcdr2restic.defaults.default_config import default_config_for_language
 from mcdr2restic.defaults.default_constants import CONFIG_NAME
+from mcdr2restic.core.i18n import reply_tr, server_tr
 from mcdr2restic.core.language import get_mcdr_language
 from mcdr2restic.core.runtime import PluginRuntime
 from mcdr2restic.config.state_store import (
     ensure_runtime,
     get_config_snapshot,
     load_state_file,
-    load_yaml_mapping,
+    load_yaml_mapping_with_text_repair,
     merge_defaults,
+    repair_inconsistent_block_scalar_indentation,
     save_config_unlocked,
 )
 
@@ -39,19 +41,32 @@ def load_config(
         save_config_unlocked(app_runtime, server)
     migrate_config_file(server, language, get_config_snapshot(app_runtime))
     if source is not None:
-        source.reply('MCDR2Restic 已从 {} 重载配置'.format(CONFIG_NAME))
+        reply_tr(source, server, 'info.config.reloaded', name=CONFIG_NAME)
 
 
 def load_config_mapping(server: PluginServerInterface, language: str) -> Dict[str, Any]:
     defaults = default_config_for_language(language)
     ensure_config_file_exists(server, language)
-    loaded = load_yaml_mapping(get_data_file_path(server, CONFIG_NAME))
+    loaded = load_config_file_mapping(server)
     if not isinstance(loaded, dict):
         loaded = copy.deepcopy(defaults)
     loaded = strip_comment_keys(loaded)
     loaded.pop('runtime', None)
     migrate_legacy_config(loaded)
     return loaded
+
+
+def load_config_file_mapping(server: PluginServerInterface) -> Dict[str, Any]:
+    path = get_data_file_path(server, CONFIG_NAME)
+    load_result = load_yaml_mapping_with_text_repair(path, repair_inconsistent_block_scalar_indentation)
+    if load_result.repaired_text is not None:
+        write_text_file(path, load_result.repaired_text)
+        server.logger.warning(server_tr(
+            server,
+            'warn.config.auto_repaired_block_scalar_indentation',
+            path=path,
+        ))
+    return load_result.mapping
 
 
 def strip_comment_keys(value: Any) -> Any:
@@ -83,6 +98,11 @@ def save_enabled_unlocked(
 def read_config_lines(path: str):
     with open(path, 'r', encoding='utf8') as file:
         return file.readlines()
+
+
+def write_text_file(path: str, text: str):
+    with open(path, 'w', encoding='utf8') as file:
+        file.write(text)
 
 
 def replace_or_append_enabled_line(lines: list, enabled: bool) -> list:

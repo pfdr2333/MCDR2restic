@@ -4,6 +4,7 @@ from __future__ import annotations
 import copy
 from typing import Any, Dict
 
+from mcdr2restic.core.models import BackupRunStatus
 from mcdr2restic.defaults.default_freeze import freeze_default
 
 
@@ -21,7 +22,7 @@ _DEFAULT_RUNTIME: Dict[str, Any] = {
     'last_player_left': None,
     'last_backup_start_time': None,
     'last_backup_end_time': None,
-    'last_backup_status': 'never',
+    'last_backup_status': BackupRunStatus.NEVER.value,
     'last_backup_message': '',
 }
 

@@ -8,6 +8,7 @@ from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 from mcdreforged.api.all import PluginServerInterface
 
 from mcdr2restic.config.config_paths import get_data_file_path
+from mcdr2restic.core.i18n import server_tr, tr
 from mcdr2restic.config.config_template import (
     get_discord_block_lines,
     get_force_schedule_lines,
@@ -29,7 +30,6 @@ from mcdr2restic.config.config_template import (
     yaml_scalar,
 )
 from mcdr2restic.defaults.default_constants import CONFIG_NAME, CONFIG_VERSION
-from mcdr2restic.core.language import is_zh_language
 from mcdr2restic.core.utils import safe_int
 
 
@@ -94,7 +94,7 @@ def migrate_config_file(server: PluginServerInterface, language: str, cfg: Dict[
     try:
         migrate_config_file_or_raise(server, path, language, cfg)
     except Exception as exc:
-        server.logger.warning('迁移配置文件 {} 失败: {}'.format(CONFIG_NAME, exc))
+        server.logger.warning(server_tr(server, 'warn.config.migration_failed', name=CONFIG_NAME, error=exc))
 
 
 def migrate_config_file_or_raise(
@@ -112,7 +112,7 @@ def migrate_config_file_or_raise(
 
     with open(path, 'w', encoding='utf8') as file:
         file.write(updated)
-    server.logger.info('已迁移并补全配置文件 {}'.format(CONFIG_NAME))
+    server.logger.info(server_tr(server, 'info.config.migrated', name=CONFIG_NAME))
 
 
 def apply_config_file_migrations(
@@ -257,9 +257,7 @@ def ensure_config_version_tail(lines: List[str], language: str) -> List[str]:
 
 
 def config_version_marker_comment(language: str) -> str:
-    if is_zh_language(language):
-        return '# 配置文件版本标识。请保留在文件尾部，方便后续迁移。\n'
-    return '# Config file version marker. Keep it at the end for future migrations.\n'
+    return '{}\n'.format(tr(language, 'template.snippet.config_version_marker_comment'))
 
 
 def remove_config_version_lines(lines: List[str]) -> List[str]:
@@ -275,10 +273,11 @@ def remove_config_version_lines(lines: List[str]) -> List[str]:
 
 def is_config_version_comment(line: str) -> bool:
     stripped = line.strip().lower()
-    return stripped.startswith('#') and (
-        '配置文件版本标识' in stripped or
-        'config file version marker' in stripped
-    )
+    comments = {
+        tr('zh_cn', 'template.snippet.config_version_marker_comment').strip().lower(),
+        tr('en_us', 'template.snippet.config_version_marker_comment').strip().lower(),
+    }
+    return stripped in comments
 
 
 def remove_deprecated_schedule_lines(lines: List[str]) -> List[str]:

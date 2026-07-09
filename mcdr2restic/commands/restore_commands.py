@@ -7,9 +7,9 @@ from mcdreforged.api.all import CommandSource, PluginServerInterface
 
 from mcdr2restic.commands.command_context import CommandContext
 from mcdr2restic.config.config_loader import get_command_root
-from mcdr2restic.core.language import get_mcdr_language, is_zh_language
+from mcdr2restic.core.i18n import make_source_translate, reply_tr, source_error_text
+from mcdr2restic.core.language import get_source_language
 from mcdr2restic.minecraft.minecraft_service import is_backup_running, is_mc_ready
-from mcdr2restic.core.presentation import localized_text
 from mcdr2restic.restore.restore_task_repository import (
     add_restore_task as add_restore_task_to_repository,
     clear_restore_tasks,
@@ -47,13 +47,13 @@ class RestoreCommands:
             return
         server = self.context.server_from_source(source)
         cfg = get_config_snapshot(self.context.app_runtime)
-        language = get_mcdr_language(server)
+        translate = make_source_translate(source, server)
         try:
             task_id = self.add_restore_task(server, cfg, context, item_type)
         except Exception as exc:
-            source.reply(localized_text(language, '添加恢复任务失败: {}'.format(exc), 'Failed to add restore task: {}'.format(exc)))
+            reply_tr(source, server, 'error.restore.add_failed', error=source_error_text(source, server, exc))
             return
-        source.reply(self.restore_add_reply(server, cfg, language, task_id))
+        source.reply(self.restore_add_reply(server, cfg, translate, task_id))
 
     def add_restore_task(
         self,
@@ -86,27 +86,25 @@ class RestoreCommands:
         self,
         server: PluginServerInterface,
         cfg: Dict[str, Any],
-        language: str,
+        translate,
         task_id: int,
     ) -> str:
-        output = self.restore_tasks_output(server, cfg, language)
-        if is_zh_language(language):
-            return '已添加恢复任务 #{}\n{}'.format(task_id, output)
-        return 'Added restore task #{}\n{}'.format(task_id, output)
+        output = self.restore_tasks_output(server, cfg, translate)
+        return '{}\n{}'.format(translate('info.restore.task_added', task_id=task_id), output)
 
     def command_restore_list(self, source: CommandSource):
         if not self.context.check_command_permission(source):
             return
         server = self.context.server_from_source(source)
         cfg = get_config_snapshot(self.context.app_runtime)
-        source.reply(self.restore_tasks_output(server, cfg, get_mcdr_language(server)))
+        source.reply(self.restore_tasks_output(server, cfg, make_source_translate(source, server)))
 
     def command_unrestore_task(self, source: CommandSource, context: Dict[str, Any]):
         if not self.context.check_command_permission(source):
             return
         server = self.context.server_from_source(source)
         cfg = get_config_snapshot(self.context.app_runtime)
-        language = get_mcdr_language(server)
+        translate = make_source_translate(source, server)
         task_id = int(context.get('task_id'))
         deleted = delete_restore_task(
             server,
@@ -115,28 +113,27 @@ class RestoreCommands:
             task_id
         )
         source.reply('{}\n{}'.format(
-            self.delete_task_prefix(language, task_id, deleted),
-            self.restore_tasks_output(server, cfg, language)
+            self.delete_task_prefix(translate, task_id, deleted),
+            self.restore_tasks_output(server, cfg, translate)
         ))
 
-    def delete_task_prefix(self, language: str, task_id: int, deleted: bool) -> str:
-        if is_zh_language(language):
-            return '已删除恢复任务 #{}'.format(task_id) if deleted else '未找到恢复任务 #{}'.format(task_id)
-        return 'Deleted restore task #{}'.format(task_id) if deleted else 'Restore task #{} was not found'.format(task_id)
+    def delete_task_prefix(self, translate, task_id: int, deleted: bool) -> str:
+        key = 'info.restore.task_deleted' if deleted else 'info.restore.task_not_found'
+        return translate(key, task_id=task_id)
 
     def command_unrestore_all(self, source: CommandSource):
         if not self.context.check_command_permission(source):
             return
         server = self.context.server_from_source(source)
         cfg = get_config_snapshot(self.context.app_runtime)
-        language = get_mcdr_language(server)
+        translate = make_source_translate(source, server)
         count = clear_restore_tasks(
             server,
             self.current_snapshot_cache_config(cfg),
             self.current_restore_cache_key(cfg)
         )
-        prefix = '已删除 {} 个恢复任务'.format(count) if is_zh_language(language) else 'Deleted {} restore task(s)'.format(count)
-        source.reply('{}\n{}'.format(prefix, self.restore_tasks_output(server, cfg, language)))
+        prefix = translate('info.restore.tasks_cleared', count=count)
+        source.reply('{}\n{}'.format(prefix, self.restore_tasks_output(server, cfg, translate)))
 
     def command_restore_apply(self, source: CommandSource):
         if not self.context.check_command_permission(source):
@@ -145,16 +142,13 @@ class RestoreCommands:
         cfg = get_config_snapshot(self.context.app_runtime)
         snapshot_cfg = self.current_snapshot_cache_config(cfg)
         cache_key = self.current_restore_cache_key(cfg)
-        language = get_mcdr_language(server)
+        language = get_source_language(source, server)
+        translate = make_source_translate(source, server)
         tasks = [dict(task) for task in list_restore_tasks(server, snapshot_cfg, cache_key)]
-        if self.reject_restore_apply(source, server, language, tasks):
+        if self.reject_restore_apply(source, server, translate, tasks):
             return
         self.start_restore_apply(server, cfg, snapshot_cfg, cache_key, language, tasks)
-        source.reply(localized_text(
-            language,
-            '恢复流程已开始：先创建保护快照，然后通过 MCDR 停止 MC，停机 hook 将继续执行恢复',
-            'Restore workflow started: creating a safety snapshot, then stopping Minecraft via MCDR; the stop hook will continue the restore'
-        ))
+        reply_tr(source, server, 'info.restore.apply_started')
 
     def start_restore_apply(
         self,
@@ -178,13 +172,13 @@ class RestoreCommands:
         self,
         source: CommandSource,
         server: PluginServerInterface,
-        language: str,
+        translate,
         tasks: list,
     ) -> bool:
         rejection = get_restore_apply_rejection(
             self.context.app_runtime,
             server,
-            language,
+            translate,
             tasks,
             is_backup_running,
             is_mc_ready
@@ -194,7 +188,7 @@ class RestoreCommands:
             return True
         if self.context.app_runtime.restore.lock.acquire(blocking=False):
             return False
-        source.reply(localized_text(language, '当前已有恢复流程在执行', 'A restore workflow is already running'))
+        reply_tr(source, server, 'error.restore.already_running')
         return True
 
     def current_snapshot_cache_config(self, cfg: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
@@ -208,11 +202,11 @@ class RestoreCommands:
         restic_cfg = cfg.get('restic', {}) if isinstance(cfg.get('restic'), dict) else {}
         return build_snapshot_cache_key(restic_cfg)
 
-    def restore_tasks_output(self, server: PluginServerInterface, cfg: Dict[str, Any], language: str) -> str:
+    def restore_tasks_output(self, server: PluginServerInterface, cfg: Dict[str, Any], translate_or_language: Any) -> str:
         return render_restore_tasks_output(
             server,
             self.current_snapshot_cache_config(cfg),
             self.current_restore_cache_key(cfg),
-            language,
+            translate_or_language,
             self.context.get_command_root()
         )

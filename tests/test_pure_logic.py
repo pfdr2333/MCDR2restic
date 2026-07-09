@@ -9,9 +9,11 @@ import io
 import json
 import tempfile
 import threading
-from contextlib import closing
+from contextlib import closing, nullcontext
 from datetime import datetime
 from unittest import mock
+
+import yaml
 
 
 def install_mcdr_stub():
@@ -46,11 +48,19 @@ import mcdr2restic.restore.restore_workflow as restore_workflow
 from mcdr2restic.restore.restore_task_repository import add_restore_task, restore_tasks_output
 from mcdr2restic.restore.restore_task_repository import clear_restore_tasks, list_restore_tasks
 from mcdr2restic.core.runtime import create_runtime
+from mcdr2restic.core.presentation import render_status_output, schedule_status_text
 from mcdr2restic.backup.scheduling import parse_daily_time
 from mcdr2restic.config.config_loader import replace_or_append_enabled_line
 from mcdr2restic.config.config_migration import apply_config_file_migrations, migrate_legacy_config
+from mcdr2restic.config.state_store import (
+    load_yaml_mapping_with_text_repair,
+    repair_inconsistent_block_scalar_indentation,
+)
 import mcdr2restic.core.bootstrap as bootstrap
+from mcdr2restic.core.i18n import make_source_translate, normalize_language, tr, tr_error
 from mcdr2restic.defaults.default_config import DEFAULT_CONFIG, build_default_config
+from mcdr2restic.defaults.default_config_templates import get_default_config_template
+from mcdr2restic.defaults.message_defaults import get_default_message_template
 from mcdr2restic.snapshots.snapshot_cache import build_snapshot_cache_key
 from mcdr2restic.snapshots.snapshot_db import insert_snapshot_row, open_snapshot_db, read_snapshot_page
 from mcdr2restic.snapshots.snapshot_importer import (
@@ -108,8 +118,27 @@ class ProbeServer:
 
 
 class FakePluginServer:
-    def __init__(self):
+    def __init__(self, language='zh_cn'):
         self.logger = FakeLogger()
+        self.language = language
+
+    def get_mcdr_language(self):
+        return self.language
+
+
+class FakeCommandSource:
+    def __init__(self, language=''):
+        self.language = language
+        self.replies = []
+
+    def get_preference(self):
+        return types.SimpleNamespace(language=self.language)
+
+    def preferred_language_context(self):
+        return nullcontext()
+
+    def reply(self, text):
+        self.replies.append(str(text))
 
 
 class CommandServer(FakePluginServer):
@@ -219,6 +248,85 @@ class CronTests(unittest.TestCase):
             datetime(2024, 1, 7, 0, 0, 0)
         )
 
+    def test_cron_error_carries_i18n_key(self):
+        with self.assertRaises(Exception) as error:
+            CronExpression('* * *')
+
+        self.assertEqual(error.exception.i18n_key, 'error.cron.fields')
+        self.assertIn('Cron expression must have 6 fields', tr_error('en_us', error.exception))
+
+
+class I18nTests(unittest.TestCase):
+    def test_make_source_translate_prefers_source_language_over_server_default(self):
+        server = FakePluginServer(language='en_us')
+        source = FakeCommandSource(language='zh_cn')
+
+        translate = make_source_translate(source, server)
+
+        self.assertEqual(translate('info.backup.enabled'), 'MCDR2Restic 定时备份已启用')
+
+    def test_normalize_language_uses_supported_fallbacks(self):
+        self.assertEqual(normalize_language('zh-TW'), 'zh_cn')
+        self.assertEqual(normalize_language('fr_fr'), 'en_us')
+
+    def test_translation_formats_named_parameters(self):
+        self.assertEqual(
+            tr('en_us', 'info.backup.success', label='manual', duration_seconds=3),
+            'manual backup completed in 3s'
+        )
+
+    def test_translation_accepts_prefixed_mcdr_key(self):
+        self.assertEqual(
+            tr('en_us', 'mcdr2restic.info.backup.success', label='manual', duration_seconds=3),
+            'manual backup completed in 3s'
+        )
+
+    def test_translation_keeps_missing_placeholders_visible(self):
+        self.assertIn('{level}', tr('zh_cn', 'error.permission.denied'))
+
+    def test_root_lang_files_match_prefixed_package_lang_files(self):
+        for name in ('zh_cn', 'en_us'):
+            with open(os.path.join('mcdr2restic', 'lang', '{}.json'.format(name)), 'r', encoding='utf8') as file:
+                package_lang = json.load(file)
+            with open(os.path.join('lang', '{}.json'.format(name)), 'r', encoding='utf8') as file:
+                root_lang = json.load(file)
+
+            expected = {'mcdr2restic.{}'.format(key): value for key, value in package_lang.items()}
+            self.assertEqual(root_lang, expected)
+
+    def test_default_message_templates_come_from_language_resources(self):
+        self.assertIn('Backup started', get_default_message_template('backup_start', 'en_us'))
+        self.assertIn('备份开始', get_default_message_template('backup_start', 'zh_cn'))
+
+    def test_default_config_template_renders_placeholders(self):
+        for language in ('zh_cn', 'en_us'):
+            template = get_default_config_template(language, os.getcwd())
+
+            self.assertIn('messages:', template)
+            self.assertNotIn('__MCDR2RESTIC_', template)
+            self.assertIsInstance(yaml.safe_load(template), dict)
+
+    def test_load_yaml_mapping_repairs_inconsistent_block_scalar_indentation(self):
+        broken_config = (
+            'messages:\n'
+            '  backup_start: |-\n'
+            '        first line\n'
+            '    second line\n'
+            'config_version: 9\n'
+        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config_path = os.path.join(temp_dir, 'config.yml')
+            with open(config_path, 'w', encoding='utf8') as file:
+                file.write(broken_config)
+
+            load_result = load_yaml_mapping_with_text_repair(
+                config_path,
+                repair_inconsistent_block_scalar_indentation,
+            )
+
+        self.assertEqual(load_result.mapping['messages']['backup_start'], 'first line\nsecond line')
+        self.assertIsNotNone(load_result.repaired_text)
+
 
 class UtilsTests(unittest.TestCase):
     def test_safe_int_uses_default_on_bad_input(self):
@@ -229,6 +337,50 @@ class UtilsTests(unittest.TestCase):
 
     def test_tail_text_keeps_short_text(self):
         self.assertEqual(tail_text('abc', 10), 'abc')
+
+    def test_schedule_status_text_uses_schedule_helpers(self):
+        cfg = {
+            'schedule': {'interval_seconds': 60, 'cron_expression': '0'},
+            'force_schedule': {'interval_seconds': 0, 'cron_expression': '0'},
+        }
+
+        self.assertEqual(
+            schedule_status_text(cfg, False, 'zh_cn'),
+            '60 秒后（固定间隔 60 秒）'
+        )
+        self.assertEqual(
+            schedule_status_text(cfg, True, 'zh_cn'),
+            '关闭'
+        )
+
+    def test_render_status_output_uses_source_translate(self):
+        source = FakeCommandSource(language='zh_cn')
+        server = FakePluginServer(language='en_us')
+        cfg = {
+            'enabled': True,
+            'runtime': {
+                'current_online_players': 0,
+                'last_backup_status': 'never',
+            },
+            'schedule': {'interval_seconds': 60, 'cron_expression': '0'},
+            'force_schedule': {'interval_seconds': 0, 'cron_expression': '0'},
+            'snapshot_cache': {'enabled': False},
+        }
+
+        output = render_status_output(
+            threading.Lock(),
+            cfg,
+            'zh_cn',
+            server,
+            1,
+            backup_running_provider=lambda: False,
+            restore_running_provider=lambda: False,
+            mc_ready_provider=lambda _: True,
+            translate=make_source_translate(source, server),
+        )
+
+        self.assertIn('MCDR2Restic 状态', output)
+        self.assertIn('正常备份: 60 秒后（固定间隔 60 秒）', output)
 
 
 class UpdateCheckTests(unittest.TestCase):
@@ -659,6 +811,25 @@ class SnapshotDatabaseTests(unittest.TestCase):
 
             self.assertIn('MCDR2Restic Restore Tasks', output)
             self.assertIn('{}. [file] abcdef12 -> /world/level.dat'.format(task_id), output)
+
+    def test_restore_tasks_output_accepts_source_translate(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            server = FakeServer(temp_dir)
+            snapshot_cfg = {'database': 'snapshots.sqlite3'}
+            source = FakeCommandSource(language='zh_cn')
+            plugin_server = FakePluginServer(language='en_us')
+
+            task_id = add_restore_task(server, snapshot_cfg, 'cache-a', 'abcdef12', 'file', '/world/level.dat')
+            output = restore_tasks_output(
+                server,
+                snapshot_cfg,
+                'cache-a',
+                make_source_translate(source, plugin_server),
+                '!!restic',
+            )
+
+            self.assertIn('MCDR2Restic 恢复任务列表', output)
+            self.assertIn('{}. [文件] abcdef12 -> /world/level.dat'.format(task_id), output)
 
     def test_restore_tasks_are_isolated_by_cache_key(self):
         with tempfile.TemporaryDirectory() as temp_dir:

@@ -12,7 +12,7 @@ class CronExpression:
         self.expression = expression.strip()
         fields = self.expression.split()
         if len(fields) != 6:
-            raise CronError('cron 表达式必须是 6 字段：秒 分 时 日 月 周')
+            raise CronError('error.cron.fields')
 
         self.seconds, _ = self._parse_field(fields[0], 0, 59)
         self.minutes, _ = self._parse_field(fields[1], 0, 59)
@@ -36,7 +36,7 @@ class CronExpression:
         start = after.replace(microsecond=0) + timedelta(seconds=1)
         for candidate in self.iter_candidate_datetimes(start):
             return candidate
-        raise CronError('5 年内找不到下一次 cron 执行时间')
+        raise CronError('error.cron.timeout')
 
     def iter_candidate_datetimes(self, start: datetime) -> Iterator[datetime]:
         for day in self.iter_candidate_days(start):
@@ -118,11 +118,11 @@ class FieldPart:
 def parse_field_part(text: str, minimum: int, maximum: int) -> FieldPart:
     part = text.strip()
     if not part:
-        raise CronError('cron 字段包含空片段')
+        raise CronError('error.cron.empty_part')
     base, step = split_step(part)
     start, end, wildcard = parse_range(base, minimum, maximum)
     if start > end:
-        raise CronError('cron 范围起点大于终点: {}'.format(base))
+        raise CronError('error.cron.range_order', value=base)
     return FieldPart(start, end, step, wildcard)
 
 
@@ -133,9 +133,9 @@ def split_step(part: str) -> Tuple[str, int]:
     try:
         step = int(step_text)
     except ValueError:
-        raise CronError('cron 步长不是整数: {}'.format(step_text))
+        raise CronError('error.cron.step_not_integer', value=step_text)
     if step <= 0:
-        raise CronError('cron 步长必须大于 0')
+        raise CronError('error.cron.step_positive')
     return base, step
 
 
@@ -152,5 +152,5 @@ def parse_range(base: str, minimum: int, maximum: int) -> Tuple[int, int, bool]:
 def iter_field_values(part: FieldPart, minimum: int, maximum: int, sunday_7: bool) -> Iterator[int]:
     for value in range(part.start, part.end + 1, part.step):
         if value < minimum or value > maximum:
-            raise CronError('cron 值越界: {}'.format(value))
+            raise CronError('error.cron.value_out_of_bounds', value=value)
         yield 0 if sunday_7 and value == 7 else value

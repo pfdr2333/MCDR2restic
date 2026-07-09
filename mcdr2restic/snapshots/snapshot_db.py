@@ -179,10 +179,10 @@ def record_snapshot_refresh_failure(
     conn: sqlite3.Connection,
     cache_key: str,
     temp_key: str,
-    exc: Exception,
+    error_text: str,
     duration_seconds: float,
 ) -> str:
-    error = tail_text(str(exc), SNAPSHOT_REFRESH_ERROR_TAIL_CHARS)
+    error = tail_text(str(error_text), SNAPSHOT_REFRESH_ERROR_TAIL_CHARS)
     existing = read_snapshot_meta(conn, cache_key)
     with conn:
         conn.execute('DELETE FROM snapshots WHERE cache_key = ?', (temp_key,))
@@ -212,7 +212,7 @@ def build_snapshot_refresh_failure_row(
         existing['updated_at_text'] if existing is not None else None,
         int(existing['snapshot_count'] or 0) if existing is not None else 0,
         error,
-        existing['invalidation_reason'] if existing is not None else 'refresh failed',
+        existing['invalidation_reason'] if existing is not None else '',
         duration_seconds
     )
 

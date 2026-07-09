@@ -27,10 +27,9 @@ def assert_restic_success(restic_cfg: Dict[str, Any], result: ResticCommandResul
 def assert_no_json_errors(result: ResticCommandResult, max_output_chars: int):
     if result.json_errors:
         raise BackupProblem(
-            'restic {} JSON 输出包含错误：\n{}'.format(
-                result.phase,
-                tail_text('\n'.join(result.json_errors), max_output_chars)
-            )
+            i18n_key='error.restic.json_output_error',
+            phase=result.phase,
+            output=tail_text('\n'.join(result.json_errors), max_output_chars)
         )
 
 
@@ -43,12 +42,11 @@ def assert_return_code_success(
     if result.return_code in success_codes:
         return
     raise BackupProblem(
-        'restic {} 退出码异常：{}，用时 {} 秒\n{}'.format(
-            result.phase,
-            result.return_code,
-            int(result.duration_seconds),
-            tail_text(combined_output, max_output_chars)
-        )
+        i18n_key='error.restic.return_code',
+        phase=result.phase,
+        return_code=result.return_code,
+        duration_seconds=int(result.duration_seconds),
+        output=tail_text(combined_output, max_output_chars)
     )
 
 
@@ -66,10 +64,9 @@ def assert_no_suspicious_output(
     if not suspicious_lines:
         return
     raise BackupProblem(
-        'restic {} 输出疑似包含文件/运行错误：\n{}'.format(
-            result.phase,
-            tail_text('\n'.join(suspicious_lines), max_output_chars)
-        )
+        i18n_key='error.restic.suspicious_output',
+        phase=result.phase,
+        output=tail_text('\n'.join(suspicious_lines), max_output_chars)
     )
 
 

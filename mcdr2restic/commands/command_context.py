@@ -8,6 +8,7 @@ from mcdreforged.api.all import CommandSource, PluginServerInterface
 
 from mcdr2restic.backup.backup_runner import BackupRunner
 from mcdr2restic.config.config_loader import get_command_root
+from mcdr2restic.core.i18n import reply_tr
 from mcdr2restic.core.runtime import PluginRuntime
 from mcdr2restic.config.state_store import get_config_snapshot
 from mcdr2restic.core.utils import safe_int
@@ -37,7 +38,8 @@ class CommandContext:
         except Exception:
             allowed = False
         if not allowed:
-            source.reply('权限不足，需要 MCDR 权限等级 >= {}'.format(level))
+            server = self.server_from_source(source)
+            reply_tr(source, server, 'error.permission.denied', level=level)
         return allowed
 
     def get_command_permission_level(self) -> int:

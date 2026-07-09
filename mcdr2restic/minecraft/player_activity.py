@@ -7,6 +7,24 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 from mcdr2restic.core.utils import non_negative_int, now_text
 
 
+MC_COLOR_CODE_PATTERN = re.compile(r'§.')
+MC_LIST_PLAYER_COUNT_EN = re.compile(
+    r'\bThere are\s+(\d+)\s+of\s+a\s+max\s+of\s+\d+\s+players?\s+online\b',
+    re.IGNORECASE
+)
+MC_LIST_PLAYER_RATIO_EN = re.compile(r'\b(\d+)\s*/\s*\d+\s+players?\s+online\b', re.IGNORECASE)
+MC_LIST_PLAYER_RATIO_BRACKET = re.compile(r'\((\d+)\s*/\s*\d+\)')
+MC_LIST_PLAYER_COUNT_SHORT_EN = re.compile(r'\b(\d+)\s+players?\s+online\b', re.IGNORECASE)
+MC_LIST_PLAYER_COUNT_CN = re.compile(r'(?:当前)?(?:有)?\s*(\d+)\s*(?:个)?玩家在线')
+MC_LIST_PLAYER_COUNT_PATTERNS = (
+    MC_LIST_PLAYER_COUNT_EN,
+    MC_LIST_PLAYER_RATIO_EN,
+    MC_LIST_PLAYER_RATIO_BRACKET,
+    MC_LIST_PLAYER_COUNT_SHORT_EN,
+    MC_LIST_PLAYER_COUNT_CN,
+)
+
+
 def player_activity_required(cfg: Dict[str, Any]) -> bool:
     schedule = cfg.get('schedule', {})
     if 'require_player_activity_in_wait_period' in schedule:
@@ -47,7 +65,7 @@ def reset_player_activity_period_unlocked(runtime_state: Dict[str, Any]):
 
 
 def parse_online_list_output(output: str) -> Tuple[Optional[int], List[str]]:
-    text = re.sub(r'§.', '', str(output or '')).strip()
+    text = MC_COLOR_CODE_PATTERN.sub('', str(output or '')).strip()
     count = parse_online_count(text)
     names = parse_online_names(text)
     if count is None and names:
@@ -56,15 +74,8 @@ def parse_online_list_output(output: str) -> Tuple[Optional[int], List[str]]:
 
 
 def parse_online_count(text: str) -> Optional[int]:
-    patterns = [
-        r'\bThere are\s+(\d+)\s+of\s+a\s+max\s+of\s+\d+\s+players?\s+online\b',
-        r'\b(\d+)\s*/\s*\d+\s+players?\s+online\b',
-        r'\((\d+)\s*/\s*\d+\)',
-        r'\b(\d+)\s+players?\s+online\b',
-        r'(?:当前)?(?:有)?\s*(\d+)\s*(?:个)?玩家在线'
-    ]
-    for pattern in patterns:
-        match = re.search(pattern, text, flags=re.IGNORECASE)
+    for pattern in MC_LIST_PLAYER_COUNT_PATTERNS:
+        match = pattern.search(text)
         if match:
             return non_negative_int(match.group(1))
     return None

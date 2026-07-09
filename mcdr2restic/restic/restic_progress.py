@@ -7,6 +7,7 @@ from typing import Optional
 
 from mcdreforged.api.all import PluginServerInterface
 
+from mcdr2restic.core.i18n import server_tr
 from mcdr2restic.core.models import ResticProgressState
 from mcdr2restic.restic.restic_progress_text import format_restic_json_error, format_restic_progress
 from mcdr2restic.core.utils import tail_text
@@ -69,7 +70,12 @@ def apply_restic_json_payload(
             progress.json_errors = []
         progress.json_errors.append(format_restic_json_error(payload))
     elif server is not None:
-        server.logger.debug('restic {} JSON: {}'.format(progress.phase, tail_text(text, 500)))
+        server.logger.debug(server_tr(
+            server,
+            'debug.restic.unhandled_json',
+            phase=progress.phase,
+            payload=tail_text(text, 500)
+        ))
 
 
 def maybe_emit_restic_progress(

@@ -33,7 +33,8 @@ def _build_hooks():
     entrypoint = _create_entrypoint()
     return tuple(_make_entrypoint_hook(entrypoint, method_name) for _, method_name in _HOOK_METHODS)
 
-# MCDR 只能发现模块级 hook 名称；运行时对象留在闭包内，避免被其它模块当作全局状态引用。
+# MCDR only discovers module-level hook names. Keep the runtime object in a closure so
+# other modules do not treat it as shared global state.
 (
     _shutdown_runtime,
     on_load,

@@ -20,6 +20,7 @@ from mcdr2restic.commands.command_context import (
     WakeScheduler,
 )
 from mcdr2restic.commands.restore_commands import RestoreCommands
+from mcdr2restic.core.i18n import server_rtr
 from mcdr2restic.core.runtime import PluginRuntime
 from mcdr2restic.config.state_store import get_config_snapshot
 from mcdr2restic.commands.status_commands import StatusCommands
@@ -59,10 +60,7 @@ class CommandHandlers:
     def register_help_messages(self, server: PluginServerInterface):
         server.register_help_message(
             self.context.get_command_root(),
-            {
-                'zh_cn': 'Restic 备份、快照列表与恢复队列管理',
-                'en_us': 'Restic backup, snapshot list, and restore queue management'
-            },
+            server_rtr(server, 'help.command_description'),
             permission=self.context.get_command_permission_level()
         )
 

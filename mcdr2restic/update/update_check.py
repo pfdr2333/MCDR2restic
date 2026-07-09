@@ -10,6 +10,7 @@ from typing import Any, Callable, Dict, Optional, Tuple
 
 from mcdreforged.api.all import PluginServerInterface
 
+from mcdr2restic.core.i18n import server_tr
 from mcdr2restic.defaults.default_constants import DEFAULT_PROXY_PREFIXES, DEFAULT_UPDATE_API_URL, PLUGIN_REPOSITORY_URL
 from mcdr2restic.core.models import BackupProblem
 from mcdr2restic.restic.restic_download import build_download_urls, download_bytes, mask_download_url
@@ -44,21 +45,26 @@ class UpdateChecker:
             self.thread.join(timeout=5)
 
     def _main(self):
-        self.server.logger.info('MCDR2Restic 版本更新检查线程已启动')
+        self.server.logger.info(server_tr(self.server, 'log.update.thread_started'))
         if self.check_on_startup:
             self.check_now('startup')
         while not self.stop_event.is_set():
             try:
                 wait_seconds, due_text = compute_update_check_wait_seconds(self.config_provider())
             except Exception as exc:
-                self.server.logger.warning('计算下次版本更新检查时间失败: {}'.format(exc))
+                self.server.logger.warning(server_tr(self.server, 'warn.update.compute_next_failed', error=exc))
                 self._wait(60)
                 continue
-            self.server.logger.debug('下次版本更新检查等待 {} 秒（{}）'.format(int(wait_seconds), due_text))
+            self.server.logger.debug(server_tr(
+                self.server,
+                'debug.update.next_wait',
+                seconds=int(wait_seconds),
+                due_text=due_text
+            ))
             if self._wait(wait_seconds) or self.stop_event.is_set():
                 continue
             self.check_now('daily')
-        self.server.logger.info('MCDR2Restic 版本更新检查线程已停止')
+        self.server.logger.info(server_tr(self.server, 'log.update.thread_stopped'))
 
     def check_now(self, reason: str):
         cfg = self.config_provider()
@@ -72,25 +78,25 @@ class UpdateChecker:
             latest_url = str(latest.get('html_url') or update_cfg.get('release_page_url') or PLUGIN_REPOSITORY_URL)
             self._log_check_result(reason, current_version, latest_version, latest_url)
         except Exception as exc:
-            self.server.logger.warning('MCDR2Restic 版本更新检查失败（{}）: {}'.format(reason, exc))
+            self.server.logger.warning(server_tr(self.server, 'warn.update.check_failed', reason=reason, error=exc))
 
     def _log_check_result(self, reason: str, current_version: str, latest_version: str, latest_url: str):
         if is_newer_version(latest_version, current_version):
-            self.server.logger.warning(
-                '检测到 MCDR2Restic 新版本：{}（当前 {}），发布页: {}'.format(
-                    latest_version,
-                    current_version,
-                    latest_url
-                )
-            )
+            self.server.logger.warning(server_tr(
+                self.server,
+                'warn.update.new_version',
+                latest_version=latest_version,
+                current_version=current_version,
+                latest_url=latest_url
+            ))
             return
-        self.server.logger.info(
-            'MCDR2Restic 版本检查完成：当前 {}，最新 {}（{}）'.format(
-                current_version,
-                latest_version,
-                reason
-            )
-        )
+        self.server.logger.info(server_tr(
+            self.server,
+            'info.update.up_to_date',
+            current_version=current_version,
+            latest_version=latest_version,
+            reason=reason
+        ))
 
     def _wait(self, seconds: float) -> bool:
         end = time.monotonic() + max(0.0, seconds)
@@ -150,16 +156,16 @@ def fetch_latest_plugin_release(update_cfg: Dict[str, Any]) -> Dict[str, Any]:
             payload = json.loads(download_bytes(url, timeout).decode('utf-8'))
             if isinstance(payload, dict) and (payload.get('tag_name') or payload.get('name')):
                 return payload
-            raise BackupProblem('release API 返回格式异常')
+            raise BackupProblem(i18n_key='error.update.release_payload_invalid')
         except Exception as exc:
             last_error = '{}: {}'.format(mask_download_url(url), exc)
-    raise BackupProblem(last_error or '无法获取最新版本信息')
+    raise BackupProblem(i18n_key='error.update.latest_release_fetch_failed', error=last_error or '')
 
 
 def release_version_from_payload(payload: Dict[str, Any]) -> str:
     version = normalize_release_version(str(payload.get('tag_name') or payload.get('name') or ''))
     if not version:
-        raise BackupProblem('latest release 未包含 tag_name/name')
+        raise BackupProblem(i18n_key='error.update.latest_release_missing_version')
     return version
 
 

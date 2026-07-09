@@ -11,8 +11,16 @@ from typing import Any, Callable, Dict, List, Optional
 
 from mcdreforged.api.all import PluginServerInterface
 
-from mcdr2restic.core.models import BackupProblem, RestoreSession, RestoreStageResult
-from mcdr2restic.core.presentation import localized_text
+from mcdr2restic.core.i18n import normalize_translate, server_tr, tr
+from mcdr2restic.core.language import get_mcdr_language
+from mcdr2restic.core.models import (
+    BackupProblem,
+    BackupTrigger,
+    RestorePhase,
+    RestoreSession,
+    RestoreStageResult,
+    normalize_restore_phase,
+)
 from mcdr2restic.core.runtime import PluginRuntime
 from mcdr2restic.restic.restic_config import (
     normalize_command_args,
@@ -37,23 +45,27 @@ from mcdr2restic.restic.restic_service import make_restic_deadline, run_backup_b
 from mcdr2restic.core.utils import now_text
 
 
+RESTORE_SNAPSHOT_WHITESPACE_PATTERN = re.compile(r'\s')
+WINDOWS_ABSOLUTE_PATH_PATTERN = re.compile(r'^[A-Za-z]:[\\/]')
+
+
 def normalize_restore_snapshot(value: Any) -> str:
     text = str(value or '').strip()
     if not text:
-        raise BackupProblem('snapshot 不能为空')
-    if re.search(r'\s', text):
-        raise BackupProblem('snapshot 不能包含空白字符')
+        raise BackupProblem(i18n_key='error.restore.snapshot_empty')
+    if RESTORE_SNAPSHOT_WHITESPACE_PATTERN.search(text):
+        raise BackupProblem(i18n_key='error.restore.snapshot_whitespace')
     return text
 
 def normalize_restore_include_path(value: Any, restic_cfg: Dict[str, Any], command_root: str) -> str:
     raw = str(value or '').strip().strip('"\'')
     if not raw:
-        raise BackupProblem('恢复路径不能为空')
+        raise BackupProblem(i18n_key='error.restore.path_empty')
 
     relative = resolve_restore_relative_path(raw, restic_cfg)
     parts = normalize_restore_path_parts(relative)
     if not parts:
-        raise BackupProblem('请使用 {} restore <snapshot> 恢复整份快照'.format(command_root))
+        raise BackupProblem(i18n_key='error.restore.use_full_snapshot_command', command_root=command_root)
     return '/' + '/'.join(parts)
 
 def resolve_restore_relative_path(raw: str, restic_cfg: Dict[str, Any]) -> str:
@@ -63,7 +75,7 @@ def resolve_restore_relative_path(raw: str, restic_cfg: Dict[str, Any]) -> str:
         absolute = normalize_filesystem_path(expanded)
         return os.path.relpath(absolute, workdir)
     if is_strict_filesystem_absolute_path(expanded):
-        raise BackupProblem('恢复路径必须位于 restic 工作目录内: {}'.format(raw))
+        raise BackupProblem(i18n_key='error.restore.path_outside_workdir', path=raw)
     return raw
 
 def normalize_restore_path_parts(relative_path: str) -> List[str]:
@@ -80,7 +92,7 @@ def normalize_restore_path_parts(relative_path: str) -> List[str]:
         if not part or part == '.':
             continue
         if part == '..':
-            raise BackupProblem('恢复路径不能包含 ..')
+            raise BackupProblem(i18n_key='error.restore.path_parent_reference')
         parts.append(part)
     return parts
 
@@ -89,7 +101,7 @@ def get_restic_working_directory(restic_cfg: Dict[str, Any]) -> str:
 
 def is_strict_filesystem_absolute_path(path: str) -> bool:
     text = str(path or '')
-    if re.match(r'^[A-Za-z]:[\\/]', text):
+    if WINDOWS_ABSOLUTE_PATH_PATTERN.match(text):
         return True
     if text.startswith('\\\\') or text.startswith('//'):
         return True
@@ -98,17 +110,18 @@ def is_strict_filesystem_absolute_path(path: str) -> bool:
 def get_restore_apply_rejection(
     app_runtime: PluginRuntime,
     server: PluginServerInterface,
-    language: str,
+    translate_or_language: Any,
     tasks: List[Dict[str, Any]],
     backup_running_provider: Callable[[PluginRuntime], bool],
     mc_ready_provider: Callable[[PluginRuntime, PluginServerInterface], bool],
 ) -> str:
+    translate = normalize_translate(translate_or_language)
     if not tasks:
-        return localized_text(language, '暂无恢复任务', 'No restore tasks')
+        return translate('error.restore.no_tasks')
     if backup_running_provider(app_runtime):
-        return localized_text(language, '当前已有备份在执行，暂不能开始恢复', 'A backup is running; restore cannot start now')
+        return translate('error.restore.backup_running')
     if not mc_ready_provider(app_runtime, server):
-        return localized_text(language, 'Minecraft 服务端尚未确认正常运行，拒绝恢复', 'Minecraft is not ready; restore refused')
+        return translate('error.restore.minecraft_not_ready')
     return ''
 
 def create_restore_session(
@@ -124,7 +137,7 @@ def create_restore_session(
         snapshot_cfg=snapshot_cfg,
         cache_key=cache_key,
         language=language,
-        phase='pre_backup',
+        phase=RestorePhase.PRE_BACKUP,
         started_at=now_text()
     )
 
@@ -151,10 +164,10 @@ def get_restore_session(app_runtime: PluginRuntime) -> Optional[RestoreSession]:
     with app_runtime.restore.state_lock:
         return app_runtime.restore.session
 
-def update_restore_phase(app_runtime: PluginRuntime, phase: str):
+def update_restore_phase(app_runtime: PluginRuntime, phase: RestorePhase):
     with app_runtime.restore.state_lock:
         if app_runtime.restore.session is not None:
-            app_runtime.restore.session.phase = phase
+            app_runtime.restore.session.phase = normalize_restore_phase(phase)
 
 def mark_restore_safety_snapshot(app_runtime: PluginRuntime, safety_snapshot_id: str):
     with app_runtime.restore.state_lock:
@@ -164,18 +177,18 @@ def mark_restore_safety_snapshot(app_runtime: PluginRuntime, safety_snapshot_id:
 def mark_restore_stopping(app_runtime: PluginRuntime, safety_snapshot_id: str):
     with app_runtime.restore.state_lock:
         if app_runtime.restore.session is not None:
-            app_runtime.restore.session.phase = 'stopping'
+            app_runtime.restore.session.phase = RestorePhase.STOPPING
             app_runtime.restore.session.safety_snapshot_id = safety_snapshot_id
 
 def mark_restore_starting(app_runtime: PluginRuntime, result: RestoreStageResult):
     with app_runtime.restore.state_lock:
         if app_runtime.restore.session is not None:
-            app_runtime.restore.session.phase = 'starting'
+            app_runtime.restore.session.phase = RestorePhase.STARTING
             app_runtime.restore.session.error = result.restore_error
             app_runtime.restore.session.rollback_error = result.rollback_error
 
 def mark_restore_rollback_started(app_runtime: PluginRuntime):
-    update_restore_phase(app_runtime, 'rollback')
+    update_restore_phase(app_runtime, RestorePhase.ROLLBACK)
 
 def is_restore_running(app_runtime: PluginRuntime) -> bool:
     return app_runtime.restore.lock.locked()
@@ -218,13 +231,13 @@ def run_restore_pre_stop_stage(
 ):
     session = get_restore_session(app_runtime)
     if session is None:
-        finish_restore_workflow(app_runtime, server, '恢复流程状态丢失', failure=True)
+        finish_restore_workflow(app_runtime, server, server_tr(server, 'error.restore.state_missing'), failure=True)
         return
     if not acquire_restore_pre_backup_slot(app_runtime):
         finish_restore_workflow(
             app_runtime,
             server,
-            '恢复流程无法创建保护快照：当前已有备份在执行',
+            server_tr(server, 'error.restore.pre_backup_slot_busy'),
             failure=True,
             expected_session=session,
         )
@@ -241,7 +254,7 @@ def run_restore_pre_stop_stage(
 def acquire_restore_pre_backup_slot(app_runtime: PluginRuntime) -> bool:
     if not app_runtime.backup.lock.acquire(blocking=False):
         return False
-    app_runtime.backup.label = 'restore-pre-backup'
+    app_runtime.backup.label = BackupTrigger.RESTORE_PRE_BACKUP.value
     app_runtime.backup.cancel.clear()
     return True
 
@@ -252,13 +265,13 @@ def create_restore_safety_snapshot(
     invalidate_snapshot_cache_func: Callable[[PluginServerInterface, Dict[str, Any], str], None]
 ) -> str:
     cfg = build_pre_restore_backup_config(session.cfg)
-    server.logger.info('恢复流程开始：创建恢复前保护快照，共 {} 个恢复任务'.format(len(session.tasks)))
+    server.logger.info(server_tr(server, 'log.restore.pre_backup_started', count=len(session.tasks)))
     safety_snapshot_id = run_backup_body(app_runtime, server, cfg, 'pre-restore', invalidate_snapshot_cache_func)
     if safety_snapshot_id:
         mark_restore_safety_snapshot(app_runtime, safety_snapshot_id)
-        server.logger.info('恢复前保护快照已创建: {}'.format(safety_snapshot_id[:8]))
+        server.logger.info(server_tr(server, 'info.restore.safety_snapshot_created', snapshot_id=safety_snapshot_id[:8]))
         return safety_snapshot_id
-    raise BackupProblem('保护快照已完成，但 restic --json 未返回 snapshot_id，已拒绝继续恢复')
+    raise BackupProblem(i18n_key='error.restore.safety_snapshot_missing_id')
 
 def build_pre_restore_backup_config(cfg: Dict[str, Any]) -> Dict[str, Any]:
     backup_cfg = copy.deepcopy(cfg)
@@ -277,14 +290,14 @@ def request_minecraft_stop_for_restore(
 ):
     mark_restore_stopping(app_runtime, safety_snapshot_id)
     set_mcdr_exit_after_stop(server, False)
-    server.logger.info('保护快照完成，正在通过 MCDR 停止 Minecraft 服务端')
+    server.logger.info(server_tr(server, 'log.restore.stop_server'))
     if server.stop():
         return
     try_force_save_on(app_runtime, server, 'restore stop failed', config_snapshot_provider)
     finish_restore_workflow(
         app_runtime,
         server,
-        '恢复流程无法停止 Minecraft 服务端',
+        server_tr(server, 'error.restore.stop_server_failed'),
         failure=True,
         expected_session=session,
     )
@@ -299,11 +312,11 @@ def handle_restore_pre_stop_failure(
     try:
         try_force_save_on(app_runtime, server, 'restore pre-backup failed', config_snapshot_provider)
     except Exception as save_exc:
-        server.logger.warning('恢复流程失败后恢复 save-on 也失败: {}'.format(save_exc))
+        server.logger.warning(server_tr(server, 'warn.restore.save_on_recovery_failed', error=save_exc))
     finish_restore_workflow(
         app_runtime,
         server,
-        '恢复流程在保护快照阶段失败: {}'.format(exc),
+        server_tr(server, 'error.restore.pre_backup_failed', error=exc),
         failure=True,
         expected_session=session,
     )
@@ -327,7 +340,7 @@ def set_mcdr_exit_after_stop(server: PluginServerInterface, value: bool):
         try:
             setter(bool(value))
         except Exception as exc:
-            server.logger.debug('设置 MCDR exit-after-stop 标志失败: {}'.format(exc))
+            server.logger.debug(server_tr(server, 'debug.restore.exit_after_stop_flag_failed', error=exc))
 
 def handle_restore_server_stop(
     app_runtime: PluginRuntime,
@@ -338,20 +351,20 @@ def handle_restore_server_stop(
     session = get_restore_session(app_runtime)
     if session is None:
         return False
-    if session.phase == 'starting':
+    if session.phase == RestorePhase.STARTING:
         finish_restore_workflow(
             app_runtime,
             server,
-            build_restore_start_stopped_message(server_return_code),
+            build_restore_start_stopped_message(get_mcdr_language(server), server_return_code),
             failure=True,
             expected_session=session,
         )
         return True
-    if session.phase != 'stopping':
+    if session.phase != RestorePhase.STOPPING:
         return False
     if server_return_code != 0:
-        server.logger.warning('恢复流程检测到 Minecraft 停止返回码非 0: {}'.format(server_return_code))
-    update_restore_phase(app_runtime, 'restoring')
+        server.logger.warning(server_tr(server, 'warn.restore.stop_return_code', code=server_return_code))
+    update_restore_phase(app_runtime, RestorePhase.RESTORING)
     thread = threading.Thread(
         target=run_restore_after_stop_stage,
         args=(app_runtime, server, clear_restore_tasks_func),
@@ -369,7 +382,7 @@ def run_restore_after_stop_stage(
 ):
     session = get_restore_session(app_runtime)
     if session is None:
-        finish_restore_workflow(app_runtime, server, '恢复流程状态丢失，无法执行 restore', failure=True)
+        finish_restore_workflow(app_runtime, server, server_tr(server, 'error.restore.state_missing_after_stop'), failure=True)
         return
 
     result = execute_restore_after_stop(app_runtime, server, session)
@@ -413,8 +426,14 @@ def execute_restore_tasks(
             deadline
         )
         assert_restic_success(restic_cfg, result)
-        server.logger.info('恢复任务 #{} 完成: {} -> {}'.format(task.get('id'), task.get('snapshot'), task.get('include_path')))
-    server.logger.info('恢复任务全部完成，正在启动 Minecraft 服务端')
+        server.logger.info(server_tr(
+            server,
+            'info.restore.task_completed',
+            task_id=task.get('id'),
+            snapshot=task.get('snapshot'),
+            include_path=task.get('include_path')
+        ))
+    server.logger.info(server_tr(server, 'info.restore.tasks_completed_starting_server'))
 
 def try_rollback_after_restore_failure(
     app_runtime: PluginRuntime,
@@ -423,7 +442,7 @@ def try_rollback_after_restore_failure(
     session: RestoreSession,
     restore_error: str
 ) -> str:
-    server.logger.warning('恢复流程执行 restore 阶段失败，将立即恢复到保护快照: {}'.format(restore_error))
+    server.logger.warning(server_tr(server, 'warn.restore.restore_stage_failed_rollback', error=restore_error))
     return rollback_to_safety_snapshot(app_runtime, server, restic_cfg, session)
 
 def clear_completed_restore_tasks(
@@ -434,7 +453,7 @@ def clear_completed_restore_tasks(
     try:
         clear_restore_tasks_func(server, session.snapshot_cfg, session.cache_key)
     except Exception as exc:
-        server.logger.warning('恢复任务已完成，但清空任务队列失败，请手动检查 restore list: {}'.format(exc))
+        server.logger.warning(server_tr(server, 'warn.restore.clear_tasks_failed', error=exc))
 
 def start_server_after_restore(
     app_runtime: PluginRuntime,
@@ -446,7 +465,7 @@ def start_server_after_restore(
         finish_restore_workflow(
             app_runtime,
             server,
-            build_restore_start_failure_message(result),
+            build_restore_start_failure_message(get_mcdr_language(server), result),
             failure=True,
             expected_session=session,
         )
@@ -496,11 +515,11 @@ def finish_restore_start_timeout_if_still_starting(
     expected_session: Optional[RestoreSession] = None,
 ) -> bool:
     session = get_restore_session(app_runtime)
-    if session is None or session.phase != 'starting':
+    if session is None or session.phase != RestorePhase.STARTING:
         return False
     if expected_session is not None and session is not expected_session:
         return False
-    message = build_restore_start_timeout_message(result, timeout_seconds)
+    message = build_restore_start_timeout_message(get_mcdr_language(server), result, timeout_seconds)
     return finish_restore_workflow(
         app_runtime,
         server,
@@ -519,26 +538,24 @@ def get_restore_start_timeout_seconds(session: Optional[RestoreSession]) -> int:
     except Exception:
         return 120
 
-def build_restore_start_failure_message(result: RestoreStageResult) -> str:
-    message = '恢复流程已结束，但启动 Minecraft 服务端失败'
-    if result.restore_error:
-        message = '{}；restore 阶段错误: {}'.format(message, result.restore_error)
-    if result.rollback_error:
-        message = '{}；保护快照回滚错误: {}'.format(message, result.rollback_error)
-    return message
+def build_restore_start_failure_message(language: str, result: RestoreStageResult) -> str:
+    return append_restore_result_details(
+        language,
+        tr(language, 'error.restore.start_failed'),
+        result
+    )
 
 
-def build_restore_start_timeout_message(result: RestoreStageResult, timeout_seconds: int) -> str:
-    message = '恢复流程已结束，但 Minecraft 启动在 {} 秒内未完成'.format(timeout_seconds)
-    if result.restore_error:
-        message = '{}；restore 阶段错误: {}'.format(message, result.restore_error)
-    if result.rollback_error:
-        message = '{}；保护快照回滚错误: {}'.format(message, result.rollback_error)
-    return message
+def build_restore_start_timeout_message(language: str, result: RestoreStageResult, timeout_seconds: int) -> str:
+    return append_restore_result_details(
+        language,
+        tr(language, 'error.restore.start_timeout', timeout_seconds=timeout_seconds),
+        result
+    )
 
 
-def build_restore_start_stopped_message(server_return_code: int) -> str:
-    return '恢复流程等待 Minecraft 启动时服务端再次停止，返回码: {}'.format(server_return_code)
+def build_restore_start_stopped_message(language: str, server_return_code: int) -> str:
+    return tr(language, 'error.restore.start_stopped', server_return_code=server_return_code)
 
 def rollback_to_safety_snapshot(
     app_runtime: PluginRuntime,
@@ -548,7 +565,7 @@ def rollback_to_safety_snapshot(
 ) -> str:
     snapshot_id = str(session.safety_snapshot_id or '').strip()
     if not snapshot_id:
-        message = '恢复失败后无法回滚：保护快照 ID 丢失'
+        message = server_tr(server, 'error.restore.rollback_snapshot_missing')
         server.logger.error(message)
         return message
     mark_restore_rollback_started(app_runtime)
@@ -562,11 +579,11 @@ def rollback_to_safety_snapshot(
             deadline
         )
         assert_restic_success(restic_cfg, result)
-        server.logger.info('已恢复到恢复前保护快照: {}'.format(snapshot_id[:8]))
+        server.logger.info(server_tr(server, 'info.restore.rollback_completed', snapshot_id=snapshot_id[:8]))
         return ''
     except Exception as exc:
         message = str(exc)
-        server.logger.error('恢复到保护快照失败: {}\n{}'.format(message, traceback.format_exc()))
+        server.logger.error(server_tr(server, 'error.restore.rollback_failed', error=message) + '\n' + traceback.format_exc())
         return message
 
 def build_restore_command(restic_cfg: Dict[str, Any], task: Dict[str, Any]) -> List[str]:
@@ -577,7 +594,7 @@ def build_restore_command(restic_cfg: Dict[str, Any], task: Dict[str, Any]) -> L
     if item_type in ('file', 'folder'):
         args.extend([RESTIC_OPTION_INCLUDE, include_path])
     elif item_type != 'full':
-        raise BackupProblem('未知恢复任务类型: {}'.format(item_type))
+        raise BackupProblem(i18n_key='error.restore.unknown_task_type', item_type=item_type)
     return args
 
 def build_full_restore_command(restic_cfg: Dict[str, Any], snapshot: str) -> List[str]:
@@ -586,15 +603,33 @@ def build_full_restore_command(restic_cfg: Dict[str, Any], snapshot: str) -> Lis
 
 def handle_restore_server_startup(app_runtime: PluginRuntime, server: PluginServerInterface):
     session = get_restore_session(app_runtime)
-    if session is None or session.phase != 'starting':
+    if session is None or session.phase != RestorePhase.STARTING:
         return
     error = str(session.error or '')
     rollback_error = str(session.rollback_error or '')
     if error:
         if rollback_error:
-            message = '恢复流程结束，Minecraft 已重新启动；restore 阶段曾失败: {}；保护快照回滚也失败: {}'.format(error, rollback_error)
+            message = server_tr(
+                server,
+                'warn.restore.completed_with_restart_and_failed_rollback',
+                restore_error=error,
+                rollback_error=rollback_error
+            )
         else:
-            message = '恢复流程结束，Minecraft 已重新启动；restore 阶段曾失败，已回滚到恢复前保护快照: {}'.format(error)
+            message = server_tr(
+                server,
+                'warn.restore.completed_with_restart_after_rollback',
+                restore_error=error
+            )
         finish_restore_workflow(app_runtime, server, message, failure=True, expected_session=session)
     else:
-        finish_restore_workflow(app_runtime, server, '恢复流程完成，Minecraft 已重新启动', expected_session=session)
+        finish_restore_workflow(app_runtime, server, server_tr(server, 'info.restore.completed'), expected_session=session)
+
+
+def append_restore_result_details(language: str, message: str, result: RestoreStageResult) -> str:
+    text = str(message)
+    if result.restore_error:
+        text = '{}; {}'.format(text, tr(language, 'detail.restore.restore_error', error=result.restore_error))
+    if result.rollback_error:
+        text = '{}; {}'.format(text, tr(language, 'detail.restore.rollback_error', error=result.rollback_error))
+    return text

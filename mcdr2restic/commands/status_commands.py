@@ -6,7 +6,8 @@ from typing import Any, Dict
 from mcdreforged.api.all import CommandSource
 
 from mcdr2restic.commands.command_context import CommandContext
-from mcdr2restic.core.language import get_mcdr_language
+from mcdr2restic.core.i18n import make_source_translate
+from mcdr2restic.core.language import get_source_language
 from mcdr2restic.minecraft.minecraft_service import is_backup_running, is_mc_ready
 from mcdr2restic.core.presentation import render_status_output
 from mcdr2restic.restore.restore_workflow import is_restore_running
@@ -31,13 +32,15 @@ class StatusCommands:
         app_runtime = self.context.app_runtime
         cfg = get_config_snapshot(app_runtime)
         server = self.context.server_from_source(source)
+        language = get_source_language(source, server)
         source.reply(render_status_output(
             app_runtime.service.snapshot_query_lock,
             cfg,
-            get_mcdr_language(server),
+            language,
             server,
             page,
             backup_running_provider=lambda: is_backup_running(app_runtime),
             restore_running_provider=lambda: is_restore_running(app_runtime),
             mc_ready_provider=lambda target: is_mc_ready(app_runtime, target),
+            translate=make_source_translate(source, server),
         ))

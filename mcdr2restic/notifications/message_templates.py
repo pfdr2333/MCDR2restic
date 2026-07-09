@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
+from mcdr2restic.core.i18n import tr
 from mcdr2restic.defaults.default_config import build_default_config
 from mcdr2restic.defaults.message_defaults import get_default_message_template
 
@@ -17,7 +18,8 @@ def render_message(
     values: Optional[Dict[str, Any]] = None,
     cfg: Optional[Dict[str, Any]] = None,
     prefix: Optional[str] = None,
-    logger: Optional[Any] = None
+    logger: Optional[Any] = None,
+    language: str = 'zh_cn'
 ) -> str:
     cfg = cfg or build_default_config()
     onebot_cfg = cfg.get('onebot', {})
@@ -27,7 +29,7 @@ def render_message(
         return template.format_map(data)
     except Exception as exc:
         if logger is not None:
-            logger.warning('消息模板 {} 格式化失败: {}'.format(template_key, exc))
+            logger.warning(tr(language, 'warn.notify.message_template_format_failed', template_key=template_key, error=exc))
         return '{} {}'.format(data['prefix'], template_key)
 
 

@@ -6,6 +6,7 @@ from typing import Any, Dict, Optional
 from mcdreforged.api.all import PluginServerInterface
 
 from mcdr2restic.config.state_store import ensure_runtime, save_config_unlocked
+from mcdr2restic.core.i18n import server_tr
 from mcdr2restic.minecraft.player_activity import (
     mark_player_activity_unlocked,
     parse_online_list_output,
@@ -34,7 +35,7 @@ def handle_player_joined(app_runtime: PluginRuntime, server: PluginServerInterfa
         runtime_state['player_activity_since_last_backup'] = True
         runtime_state['last_player_joined'] = '{} @ {}'.format(player, now_text())
         save_config_unlocked(app_runtime, server)
-    server.logger.debug('记录玩家进入，允许本等待周期触发备份: {}'.format(player))
+    server.logger.debug(server_tr(server, 'debug.player.joined_recorded', player=player))
 
 
 def handle_player_left(app_runtime: PluginRuntime, server: PluginServerInterface, player: str):
@@ -49,7 +50,12 @@ def handle_player_left(app_runtime: PluginRuntime, server: PluginServerInterface
         runtime_state['known_online_players'] = sorted(known_players)
         record_player_left_unlocked(runtime_state, player, current_online)
         save_config_unlocked(app_runtime, server)
-    server.logger.debug('记录玩家离开，当前估计在线人数: {} -> {}'.format(player, current_online))
+    server.logger.debug(server_tr(
+        server,
+        'debug.player.left_recorded',
+        player=player,
+        current_online=current_online
+    ))
 
 
 def record_player_left_unlocked(runtime_state: Dict[str, Any], player: str, current_online: int):
@@ -77,7 +83,7 @@ def sample_online_players(
         return None
     rcon_query = getattr(server, 'rcon_query', None)
     if not callable(rcon_query):
-        server.logger.debug('无法执行在线人数采样：当前 MCDR 不支持 rcon_query')
+        server.logger.debug(server_tr(server, 'debug.player.sample_unsupported'))
         return None
     return query_online_players(app_runtime, server, rcon_query, command, reason)
 
@@ -97,14 +103,19 @@ def query_online_players(
     try:
         result = rcon_query(command)
     except Exception as exc:
-        server.logger.debug('在线人数采样失败（{}）：{}'.format(reason, exc))
+        server.logger.debug(server_tr(server, 'debug.player.sample_failed', reason=reason, error=exc))
         return None
     if result is None:
-        server.logger.debug('在线人数采样未返回结果（{}），请确认 MCDR RCON 已启用'.format(reason))
+        server.logger.debug(server_tr(server, 'debug.player.sample_missing_result', reason=reason))
         return None
     count, names = parse_online_list_output(str(result))
     if count is None:
-        server.logger.debug('无法解析在线人数采样输出（{}）：{}'.format(reason, tail_text(str(result), 300)))
+        server.logger.debug(server_tr(
+            server,
+            'debug.player.sample_unparseable',
+            reason=reason,
+            output=tail_text(str(result), 300)
+        ))
         return None
     record_online_sample(app_runtime, server, command, result, count, names)
     return count

@@ -99,13 +99,9 @@ def find_repository_source_conflicts(restic_cfg: Dict[str, Any], repository_path
 
 def raise_repository_source_conflict(repository_path: str, conflicts: List[str]):
     raise BackupProblem(
-        '配置安全检查失败：备份源目录包含 restic 本地存储库，已终止备份。\n'
-        'restic 仓库: {}\n'
-        '冲突备份源: {}\n'
-        '请把 repository 移到备份源目录之外，或调整 backup_command。'.format(
-            repository_path,
-            ', '.join(conflicts)
-        )
+        i18n_key='error.restic.repository_inside_backup_sources',
+        repository_path=repository_path,
+        conflicts=', '.join(conflicts)
     )
 
 
@@ -202,4 +198,4 @@ def normalize_command_args(value: Any) -> List[str]:
         return shlex.split(value)
     if isinstance(value, Sequence):
         return [str(item) for item in value]
-    raise BackupProblem('命令参数必须是字符串或数组: {}'.format(value))
+    raise BackupProblem(i18n_key='error.restic.command_args_invalid', value=value)

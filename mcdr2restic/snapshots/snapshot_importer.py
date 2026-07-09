@@ -27,7 +27,6 @@ from mcdr2restic.restic.restic_runner import (
 from mcdr2restic.restic.restic_termination import (
     TerminateResult,
     terminate_process,
-    termination_failure_suffix,
 )
 from mcdr2restic.snapshots.snapshot_db import insert_snapshot_row
 from mcdr2restic.core.utils import tail_text
@@ -123,7 +122,7 @@ def import_snapshot_stdout(
     cache_key: str,
 ) -> int:
     if process.stdout is None:
-        raise BackupProblem('restic snapshots 未返回 stdout')
+        raise BackupProblem(i18n_key='error.snapshot.stdout_missing')
     count = 0
     for snapshot in iter_json_array_stream(process.stdout):
         if not isinstance(snapshot, dict):
@@ -142,16 +141,20 @@ def assert_snapshot_import_finished(
     stderr_tail: str,
 ):
     if timeout_state.timed_out.is_set():
-        raise BackupProblem('restic snapshots --json 超时（{} 秒）{}'.format(
-            timeout_seconds,
-            termination_failure_suffix(timeout_state.termination_result)
-        ))
+        if timeout_state.termination_result is not None and not timeout_state.termination_result.terminated:
+            raise BackupProblem(
+                i18n_key='error.snapshot.timeout_termination_failed',
+                timeout_seconds=timeout_seconds,
+                error=timeout_state.termination_result.error or ''
+            )
+        raise BackupProblem(i18n_key='error.snapshot.timeout', timeout_seconds=timeout_seconds)
     if return_code == 0:
         return
-    raise BackupProblem('restic snapshots --json 退出码异常：{}\n{}'.format(
-        return_code,
-        tail_text(stderr_tail, SNAPSHOT_ERROR_TAIL_CHARS)
-    ))
+    raise BackupProblem(
+        i18n_key='error.snapshot.return_code',
+        return_code=return_code,
+        output=tail_text(stderr_tail, SNAPSHOT_ERROR_TAIL_CHARS)
+    )
 
 
 def start_restic_snapshot_process(restic_cfg: Dict[str, Any]) -> subprocess.Popen:
@@ -162,9 +165,9 @@ def start_restic_snapshot_process(restic_cfg: Dict[str, Any]) -> subprocess.Pope
     try:
         return subprocess.Popen(command, **build_restic_popen_kwargs(cwd, env))
     except FileNotFoundError:
-        raise BackupProblem('找不到 restic 可执行文件: {}'.format(executable))
+        raise BackupProblem(i18n_key='error.restic.executable_not_found', executable=executable)
     except Exception as exc:
-        raise BackupProblem('启动 restic snapshots 失败: {}'.format(exc))
+        raise BackupProblem(i18n_key='error.snapshot.start_failed', error=exc)
 
 
 def build_snapshot_restic_environment(restic_cfg: Dict[str, Any]) -> Dict[str, str]:
@@ -192,7 +195,7 @@ def iter_json_array_stream(stream):
             return
         if eof:
             break
-    raise BackupProblem('restic snapshots --json 输出提前结束')
+    raise BackupProblem(i18n_key='error.snapshot.output_ended_early')
 
 
 def read_json_stream_chunk(stream, buffer: str, eof: bool) -> Tuple[str, bool]:
@@ -228,7 +231,7 @@ def decode_json_array_buffer(
             item, index = decoder.raw_decode(buffer)
         except json.JSONDecodeError:
             if eof:
-                raise BackupProblem('解析 restic snapshots --json 输出失败')
+                raise BackupProblem(i18n_key='error.snapshot.parse_failed')
             return buffer, in_array, items, False
         buffer = buffer[index:]
         items.append(item)
@@ -238,5 +241,5 @@ def enter_json_array(buffer: str) -> Tuple[str, bool]:
     if not buffer:
         return buffer, False
     if buffer[0] != '[':
-        raise BackupProblem('restic snapshots --json 输出不是 JSON 数组')
+        raise BackupProblem(i18n_key='error.snapshot.not_json_array')
     return buffer[1:], True

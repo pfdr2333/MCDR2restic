@@ -1,11 +1,16 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+import re
+import sqlite3
 import threading
 from typing import Any, Callable, Dict, List, Optional
 
 from mcdreforged.api.all import PluginServerInterface
 
+from mcdr2restic.backup.scheduling import compute_force_wait_seconds, compute_wait_seconds
+from mcdr2restic.core.i18n import DEFAULT_LANGUAGE, normalize_translate, tr_error
+from mcdr2restic.core.models import BackupRunStatus
 from mcdr2restic.snapshots.snapshot_cache import (
     build_snapshot_cache_key,
     ensure_snapshot_cache_fresh,
@@ -18,6 +23,9 @@ from mcdr2restic.snapshots.snapshot_db import (
 from mcdr2restic.core.utils import non_negative_int
 
 
+RESTIC_TIME_DISPLAY_PATTERN = re.compile(r'^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2}:\d{2})')
+
+
 def render_status_output(
     snapshot_query_lock: threading.Lock,
     cfg: Dict[str, Any],
@@ -27,13 +35,16 @@ def render_status_output(
     backup_running_provider: Callable[[], bool],
     restore_running_provider: Callable[[], bool],
     mc_ready_provider: Callable[[Optional[PluginServerInterface]], bool],
+    translate: Optional[Callable[..., str]] = None,
 ) -> str:
-    status_view = build_status_view(cfg, language, server, backup_running_provider, restore_running_provider, mc_ready_provider)
-    snapshot_lines = render_snapshot_status_lines(snapshot_query_lock, cfg, language, server, snapshot_page)
-    return '\n'.join(format_status_view(status_view, language) + snapshot_lines)
+    translate = normalize_translate(translate or language)
+    status_view = build_status_view(cfg, translate, language, server, backup_running_provider, restore_running_provider, mc_ready_provider)
+    snapshot_lines = render_snapshot_status_lines(snapshot_query_lock, cfg, translate, language, server, snapshot_page)
+    return '\n'.join(format_status_view(status_view, translate) + snapshot_lines)
 
 def build_status_view(
     cfg: Dict[str, Any],
+    translate: Callable[..., str],
     language: str,
     server: Optional[PluginServerInterface],
     backup_running_provider: Callable[[], bool],
@@ -41,109 +52,86 @@ def build_status_view(
     mc_ready_provider: Callable[[Optional[PluginServerInterface]], bool],
 ) -> Dict[str, Any]:
     running = backup_running_provider()
-    activity = build_player_activity_view(cfg.get('runtime', {}), language)
-    schedules = build_schedule_status_view(cfg, language)
+    activity = build_player_activity_view(cfg.get('runtime', {}), translate)
+    schedules = build_schedule_status_view(cfg, translate, language)
     last_backup_status_raw = activity.pop('last_backup_status_raw')
     return {
-        'enabled': localized_bool(bool(cfg.get('enabled', True)), language),
-        'backup_running': localized_bool(running, language),
-        'restore_running': localized_bool(restore_running_provider(), language),
-        'mc_ready': localized_bool(mc_ready_provider(server), language),
+        'enabled': localized_bool(bool(cfg.get('enabled', True)), translate),
+        'backup_running': localized_bool(running, translate),
+        'restore_running': localized_bool(restore_running_provider(), translate),
+        'mc_ready': localized_bool(mc_ready_provider(server), translate),
         **activity,
         **schedules,
-        'last_backup_status': localized_backup_status(last_backup_status_raw, language)
+        'last_backup_status': localized_backup_status(last_backup_status_raw, translate)
     }
 
 
-def build_player_activity_view(runtime_state: Dict[str, Any], language: str) -> Dict[str, Any]:
+def build_player_activity_view(runtime_state: Dict[str, Any], translate: Callable[..., str]) -> Dict[str, Any]:
     joined = bool(runtime_state.get('player_joined_since_last_check', False))
     joined = joined or bool(runtime_state.get('player_joined_since_last_backup', False))
     return {
         'current_online': non_negative_int(runtime_state.get('current_online_players', 0)),
-        'joined': localized_bool(joined, language),
-        'left': localized_bool(bool(runtime_state.get('player_left_since_last_check', False)), language),
-        'last_online_check': runtime_state.get('last_online_check') or localized_never(language),
-        'last_online_source': localized_online_source(runtime_state.get('last_online_check_source'), language),
-        'last_backup_status_raw': runtime_state.get('last_backup_status', 'never')
+        'joined': localized_bool(joined, translate),
+        'left': localized_bool(bool(runtime_state.get('player_left_since_last_check', False)), translate),
+        'last_online_check': runtime_state.get('last_online_check') or localized_never(translate),
+        'last_online_source': localized_online_source(runtime_state.get('last_online_check_source'), translate),
+        'last_backup_status_raw': runtime_state.get('last_backup_status', BackupRunStatus.NEVER.value)
     }
 
 
-def build_schedule_status_view(cfg: Dict[str, Any], language: str) -> Dict[str, str]:
+def build_schedule_status_view(cfg: Dict[str, Any], translate: Callable[..., str], language: str) -> Dict[str, str]:
     return {
-        'normal_next_text': schedule_status_text(cfg, False, language),
-        'force_next_text': schedule_status_text(cfg, True, language)
+        'normal_next_text': schedule_status_text(cfg, False, translate, language),
+        'force_next_text': schedule_status_text(cfg, True, translate, language)
     }
 
 
-def format_status_view(status_view: Dict[str, Any], language: str) -> List[str]:
-    if is_zh_language(language):
-        return format_status_view_zh(status_view)
-    return format_status_view_en(status_view)
-
-def format_status_view_zh(status_view: Dict[str, Any]) -> List[str]:
+def format_status_view(status_view: Dict[str, Any], translate: Callable[..., str]) -> List[str]:
     return [
-        'MCDR2Restic 状态',
-        '启用: {}'.format(status_view['enabled']),
-        '备份中: {}'.format(status_view['backup_running']),
-        '恢复中: {}'.format(status_view['restore_running']),
-        'MC 就绪: {}'.format(status_view['mc_ready']),
-        '玩家活动:',
-        '  当前在线: {}'.format(status_view['current_online']),
-        '  本周期有人加入: {}'.format(status_view['joined']),
-        '  本周期有人退出: {}'.format(status_view['left']),
-        '  最近在线检查: {}'.format(status_view['last_online_check']),
-        '  检查来源: {}'.format(status_view['last_online_source']),
-        '调度:',
-        '  正常备份: {}'.format(status_view['normal_next_text']),
-        '  强制备份: {}'.format(status_view['force_next_text']),
-        '最近备份状态: {}'.format(status_view['last_backup_status'])
-    ]
-
-def format_status_view_en(status_view: Dict[str, Any]) -> List[str]:
-    return [
-        'MCDR2Restic Status',
-        'Enabled: {}'.format(status_view['enabled']),
-        'Backup running: {}'.format(status_view['backup_running']),
-        'Restore running: {}'.format(status_view['restore_running']),
-        'Minecraft ready: {}'.format(status_view['mc_ready']),
-        'Player activity:',
-        '  Current online: {}'.format(status_view['current_online']),
-        '  Joined this period: {}'.format(status_view['joined']),
-        '  Left this period: {}'.format(status_view['left']),
-        '  Last online check: {}'.format(status_view['last_online_check']),
-        '  Check source: {}'.format(status_view['last_online_source']),
-        'Schedules:',
-        '  Normal backup: {}'.format(status_view['normal_next_text']),
-        '  Forced backup: {}'.format(status_view['force_next_text']),
-        'Last backup status: {}'.format(status_view['last_backup_status'])
+        translate('status.title'),
+        translate('status.enabled', value=status_view['enabled']),
+        translate('status.backup_running', value=status_view['backup_running']),
+        translate('status.restore_running', value=status_view['restore_running']),
+        translate('status.minecraft_ready', value=status_view['mc_ready']),
+        translate('status.player_activity'),
+        translate('status.current_online', value=status_view['current_online']),
+        translate('status.joined', value=status_view['joined']),
+        translate('status.left', value=status_view['left']),
+        translate('status.last_online_check', value=status_view['last_online_check']),
+        translate('status.check_source', value=status_view['last_online_source']),
+        translate('status.schedules'),
+        translate('status.normal_backup', value=status_view['normal_next_text']),
+        translate('status.forced_backup', value=status_view['force_next_text']),
+        translate('status.last_backup_status', value=status_view['last_backup_status'])
     ]
 
 def render_snapshot_status_lines(
     snapshot_query_lock: threading.Lock,
     cfg: Dict[str, Any],
+    translate: Callable[..., str],
     language: str,
     server: Optional[PluginServerInterface],
     page: int
 ) -> List[str]:
     page = max(1, int(page))
-    title = 'Restic 快照' if is_zh_language(language) else 'Restic Snapshots'
+    title = translate('snapshot.title')
     if server is None:
-        return render_snapshot_status_message(title, language, '无法访问 MCDR 数据目录，跳过快照列表', 'Cannot access the MCDR data folder, snapshots skipped')
+        return render_snapshot_status_message(title, translate, 'snapshot.unavailable')
 
     restic_cfg = cfg.get('restic', {}) if isinstance(cfg.get('restic'), dict) else {}
     snapshot_cfg = get_snapshot_cache_config(cfg)
     if not bool(snapshot_cfg.get('enabled', True)):
-        return render_snapshot_status_message(title, language, '快照列表缓存已在配置中关闭', 'Snapshot list cache is disabled in config')
+        return render_snapshot_status_message(title, translate, 'snapshot.cache_disabled')
 
     try:
         page_context = load_snapshot_status_page(snapshot_query_lock, server, restic_cfg, snapshot_cfg, language, page)
     except Exception as exc:
-        return render_snapshot_status_message(title, language, '查询失败: {}'.format(exc), 'Query failed: {}'.format(exc))
+        return render_snapshot_status_message(title, translate, 'snapshot.query_failed', error=tr_error(language, exc))
 
-    return format_snapshot_status_page(cfg, language, title, page_context)
+    return format_snapshot_status_page(cfg, translate, language, title, page_context)
 
-def render_snapshot_status_message(title: str, language: str, zh_message: str, en_message: str) -> List[str]:
-    return ['', '{}:'.format(title), '  {}'.format(zh_message if is_zh_language(language) else en_message)]
+def render_snapshot_status_message(title: str, translate: Callable[..., str], message_key: str, **params: Any) -> List[str]:
+    return ['', '{}:'.format(title), '  {}'.format(translate(message_key, **params))]
 
 def load_snapshot_status_page(
     snapshot_query_lock: threading.Lock,
@@ -173,6 +161,7 @@ def load_snapshot_status_page(
 
 def format_snapshot_status_page(
     cfg: Dict[str, Any],
+    translate: Callable[..., str],
     language: str,
     title: str,
     page_context: Dict[str, Any]
@@ -180,24 +169,27 @@ def format_snapshot_status_page(
     page = int(page_context['page'])
     page_data = page_context['page_data']
     lines = ['', '{}:'.format(title)]
-    append_snapshot_cache_summary(lines, language, page_context)
-    append_snapshot_cache_notes(lines, language, page_data, str(page_context.get('refresh_note') or ''))
-    append_snapshot_rows(lines, cfg, language, page, page_context)
+    append_snapshot_cache_summary(lines, translate, page_context)
+    append_snapshot_cache_notes(lines, translate, page_data, str(page_context.get('refresh_note') or ''))
+    append_snapshot_rows(lines, cfg, translate, language, page, page_context)
     return lines
 
-def append_snapshot_cache_summary(lines: List[str], language: str, page_context: Dict[str, Any]):
-    updated_at = page_context['page_data'].get('updated_at_text') or localized_never(language)
+def append_snapshot_cache_summary(lines: List[str], translate: Callable[..., str], page_context: Dict[str, Any]):
+    updated_at = page_context['page_data'].get('updated_at_text') or localized_never(translate)
     total = int(page_context['total'])
     page = int(page_context['page'])
     total_pages = int(page_context['total_pages'])
-    if is_zh_language(language):
-        lines.append('  缓存: {}，共 {} 个，第 {}/{} 页'.format(updated_at, total, page, total_pages))
-    else:
-        lines.append('  Cache: {}, total {}, page {}/{}'.format(updated_at, total, page, total_pages))
+    lines.append(translate(
+        'snapshot.cache.summary',
+        updated_at=updated_at,
+        total=total,
+        page=page,
+        total_pages=total_pages,
+    ))
 
 def append_snapshot_cache_notes(
     lines: List[str],
-    language: str,
+    translate: Callable[..., str],
     page_data: Dict[str, Any],
     refresh_note: str
 ):
@@ -207,19 +199,14 @@ def append_snapshot_cache_notes(
     if refresh_note:
         lines.append('  {}'.format(refresh_note))
     if invalidated and invalidation_reason:
-        if is_zh_language(language):
-            lines.append('  缓存已失效: {}'.format(invalidation_reason))
-        else:
-            lines.append('  Cache invalidated: {}'.format(invalidation_reason))
+        lines.append(translate('snapshot.cache.invalidated', reason=invalidation_reason))
     if error:
-        if is_zh_language(language):
-            lines.append('  最近刷新失败，正在显示旧缓存: {}'.format(error))
-        else:
-            lines.append('  Last refresh failed; showing stale cache: {}'.format(error))
+        lines.append(translate('snapshot.cache.stale_error', error=error))
 
 def append_snapshot_rows(
     lines: List[str],
     cfg: Dict[str, Any],
+    translate: Callable[..., str],
     language: str,
     page: int,
     page_context: Dict[str, Any]
@@ -227,30 +214,27 @@ def append_snapshot_rows(
     page_data = page_context['page_data']
     rows = page_data.get('rows', [])
     if not rows:
-        lines.append('  {}'.format('暂无快照' if is_zh_language(language) else 'No snapshots'))
+        lines.append('  {}'.format(translate('snapshot.no_snapshots')))
         return
 
     page_size = int(page_context['page_size'])
     for index, row in enumerate(rows, start=(page - 1) * page_size + 1):
-        lines.append(format_snapshot_line(index, row, language))
-    append_snapshot_next_page_hint(lines, cfg, language, page, int(page_context['total_pages']))
+        lines.append(format_snapshot_line(index, row, translate))
+    append_snapshot_next_page_hint(lines, cfg, translate, page, int(page_context['total_pages']))
 
 def append_snapshot_next_page_hint(
     lines: List[str],
     cfg: Dict[str, Any],
-    language: str,
+    translate: Callable[..., str],
     page: int,
     total_pages: int
 ):
     if page >= total_pages:
         return
     root = str(cfg.get('command', {}).get('root', '!!restic'))
-    if is_zh_language(language):
-        lines.append('  下一页: {} status p {}'.format(root, page + 1))
-    else:
-        lines.append('  Next page: {} status p {}'.format(root, page + 1))
+    lines.append(translate('snapshot.next_page', root=root, page=page + 1))
 
-def format_snapshot_line(index: int, row: sqlite3.Row, language: str) -> str:
+def format_snapshot_line(index: int, row: sqlite3.Row, translate: Callable[..., str]) -> str:
     short_id = str(row['short_id'] or row['id'] or '')[:8]
     time_text = format_restic_time_for_display(str(row['time_text'] or ''))
     host = str(row['hostname'] or '')
@@ -274,73 +258,73 @@ def format_restic_time_for_display(value: str) -> str:
     text = str(value or '').strip()
     if not text:
         return '-'
-    match = re.match(r'^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2}:\d{2})', text)
+    match = RESTIC_TIME_DISPLAY_PATTERN.match(text)
     if match:
         return '{} {}'.format(match.group(1), match.group(2))
     return text
 
-def schedule_status_text(cfg: Dict[str, Any], forced: bool, language: str) -> str:
+def schedule_status_text(
+    cfg: Dict[str, Any],
+    forced: bool,
+    translate_or_language: Any,
+    language: Optional[str] = None,
+) -> str:
+    translate = normalize_translate(translate_or_language)
+    if language is None:
+        language = translate_or_language if isinstance(translate_or_language, str) else DEFAULT_LANGUAGE
     try:
-        result = compute_force_wait_seconds(cfg) if forced else compute_wait_seconds(cfg)
+        result = compute_force_wait_seconds(cfg, language) if forced else compute_wait_seconds(cfg, language)
         if result is None:
-            return '关闭' if is_zh_language(language) else 'disabled'
+            return translate('status.schedule.disabled')
         wait_seconds, due_text = result
         schedule = cfg.get('force_schedule' if forced else 'schedule', {})
-        detail = localized_schedule_detail(schedule, due_text, language)
-        if is_zh_language(language):
-            return '{} 秒后（{}）'.format(int(wait_seconds), detail)
-        return 'in {}s ({})'.format(int(wait_seconds), detail)
+        detail = localized_schedule_detail(schedule, due_text, translate)
+        return translate('status.schedule.wait', seconds=int(wait_seconds), detail=detail)
     except Exception as exc:
-        if is_zh_language(language):
-            return '无法计算：{}'.format(exc)
-        return 'cannot calculate: {}'.format(exc)
+        return translate('status.schedule.cannot_calculate', error=tr_error(language, exc))
 
-def localized_schedule_detail(schedule: Dict[str, Any], due_text: str, language: str) -> str:
+def localized_schedule_detail(schedule: Dict[str, Any], due_text: str, translate_or_language: Any) -> str:
+    translate = normalize_translate(translate_or_language)
     try:
         interval_seconds = int(schedule.get('interval_seconds', 0)) if isinstance(schedule, dict) else 0
     except Exception:
         interval_seconds = 0
     if interval_seconds > 0:
-        if is_zh_language(language):
-            return '固定间隔 {} 秒'.format(interval_seconds)
-        return 'fixed interval {}s'.format(interval_seconds)
+        return translate('status.schedule.fixed_interval', seconds=interval_seconds)
     return due_text
 
-def localized_text(language: str, zh_text: str, en_text: str) -> str:
-    return zh_text if is_zh_language(language) else en_text
+def localized_bool(value: bool, translate_or_language: Any) -> str:
+    translate = normalize_translate(translate_or_language)
+    return translate('status.bool.yes' if value else 'status.bool.no')
 
-def localized_bool(value: bool, language: str) -> str:
-    if is_zh_language(language):
-        return '是' if value else '否'
-    return 'yes' if value else 'no'
+def localized_never(translate_or_language: Any) -> str:
+    translate = normalize_translate(translate_or_language)
+    return translate('status.never')
 
-def localized_never(language: str) -> str:
-    return '从未' if is_zh_language(language) else 'never'
-
-def localized_backup_status(status: Any, language: str) -> str:
-    text = str(status or 'never')
-    if not is_zh_language(language):
-        return text
+def localized_backup_status(status: Any, translate_or_language: Any) -> str:
+    translate = normalize_translate(translate_or_language)
+    text = str(status or BackupRunStatus.NEVER.value)
     mapping = {
-        'never': '从未',
-        'running': '运行中',
-        'success': '成功',
-        'failed': '失败',
-        'canceled': '已取消'
+        BackupRunStatus.NEVER.value: 'backup.status.never',
+        BackupRunStatus.RUNNING.value: 'backup.status.running',
+        BackupRunStatus.SUCCESS.value: 'backup.status.success',
+        BackupRunStatus.FAILED.value: 'backup.status.failed',
+        BackupRunStatus.CANCELED.value: 'backup.status.canceled',
     }
-    return mapping.get(text, text)
+    key = mapping.get(text)
+    return translate(key) if key else text
 
-def localized_online_source(source: Any, language: str) -> str:
+def localized_online_source(source: Any, translate_or_language: Any) -> str:
+    translate = normalize_translate(translate_or_language)
     if not source:
-        return localized_never(language)
+        return localized_never(translate)
     text = str(source)
-    if not is_zh_language(language):
-        return text
     mapping = {
-        'join event': '玩家加入事件',
-        'left event': '玩家退出事件',
-        'server stop': '服务端停止'
+        'join event': 'online.source.join_event',
+        'left event': 'online.source.left_event',
+        'server stop': 'online.source.server_stop',
     }
     if text.startswith('rcon '):
-        return 'RCON {}'.format(text[5:])
-    return mapping.get(text, text)
+        return translate('online.source.rcon', command=text[5:])
+    key = mapping.get(text)
+    return translate(key) if key else text

@@ -6,6 +6,8 @@ from typing import Any, Callable, Dict, Optional
 
 from mcdreforged.api.all import PluginServerInterface
 
+from mcdr2restic.core.i18n import server_tr
+from mcdr2restic.core.language import get_mcdr_language
 from mcdr2restic.core.models import BackupCanceled, BackupProblem
 from mcdr2restic.restic.restic_termination import TerminateResult, terminate_process, warn_if_termination_failed
 from mcdr2restic.core.runtime import PluginRuntime
@@ -20,12 +22,12 @@ def execute_mc_command(
     if not command:
         return
     if not server_is_running(app_runtime, server):
-        raise BackupProblem('执行 {} 前检测到 Minecraft 服务端不在运行状态'.format(label))
-    server.logger.info('执行 Minecraft 命令: {}'.format(label))
+        raise BackupProblem(i18n_key='error.minecraft.command_server_not_running', label=label)
+    server.logger.info(server_tr(server, 'log.minecraft.command_execute', label=label))
     try:
         server.execute(command)
     except Exception as exc:
-        raise BackupProblem('执行 Minecraft 命令 {} 失败: {}'.format(label, exc))
+        raise BackupProblem(i18n_key='error.minecraft.command_failed', label=label, error=exc)
 
 
 def try_force_save_on(
@@ -41,13 +43,13 @@ def try_force_save_on(
     if not command or not server_is_running(app_runtime, server):
         return
     try:
-        server.logger.info('尝试恢复自动保存 save-on ({})'.format(reason))
+        server.logger.info(server_tr(server, 'log.minecraft.restore_save_on', reason=reason))
         server.execute(command)
         wait = float(cfg.get('minecraft', {}).get('wait_after_save_on_seconds', 1))
         if wait > 0:
             time.sleep(min(wait, 5.0))
     except Exception as exc:
-        raise BackupProblem('执行 save-on 失败: {}'.format(exc))
+        raise BackupProblem(i18n_key='error.minecraft.save_on_failed', error=exc)
 
 
 def request_cancel_current_backup(app_runtime: PluginRuntime, reason: str) -> Optional[TerminateResult]:
@@ -57,12 +59,18 @@ def request_cancel_current_backup(app_runtime: PluginRuntime, reason: str) -> Op
     if process is not None and process.poll() is None:
         result = terminate_process(process)
     if app_runtime.service.server is not None:
+        language = get_mcdr_language(app_runtime.service.server)
         warn_if_termination_failed(
             app_runtime.service.server.logger,
-            '停止当前备份的 restic 进程',
-            result
+            server_tr(app_runtime.service.server, 'action.backup.terminate_restic_process'),
+            result,
+            language
         )
-        app_runtime.service.server.logger.warning('已请求停止当前备份: {}'.format(reason))
+        app_runtime.service.server.logger.warning(server_tr(
+            app_runtime.service.server,
+            'warn.backup.cancel_requested',
+            reason=reason
+        ))
     return result
 
 
@@ -72,7 +80,7 @@ def is_backup_running(app_runtime: PluginRuntime) -> bool:
 
 def check_canceled(app_runtime: PluginRuntime):
     if app_runtime.backup.cancel.is_set():
-        raise BackupCanceled('收到停止请求')
+        raise BackupCanceled(i18n_key='error.backup.cancel_requested')
 
 
 def sleep_or_cancel(app_runtime: PluginRuntime, seconds: float):
@@ -120,4 +128,4 @@ def debug_server_probe_failure(server: PluginServerInterface, label: str, exc: E
     logger = getattr(server, 'logger', None)
     debug = getattr(logger, 'debug', None)
     if callable(debug):
-        debug('MCDR 状态探测 {} 失败，已使用兼容降级: {}'.format(label, exc))
+        debug(server_tr(server, 'debug.minecraft.server_probe_failed', label=label, error=exc))

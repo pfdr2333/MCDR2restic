@@ -10,12 +10,12 @@ from typing import Any, Callable, Dict, Optional, Tuple
 
 from mcdreforged.api.all import PluginServerInterface
 
+from mcdr2restic.core.i18n import server_tr, tr, tr_error
 from mcdr2restic.defaults.default_config import build_default_config, build_default_snapshot_cache_config
 from mcdr2restic.defaults.default_constants import (
     SNAPSHOT_PAGE_SIZE,
     SNAPSHOT_QUERY_TIMEOUT_SECONDS,
 )
-from mcdr2restic.core.language import is_zh_language
 from mcdr2restic.core.models import BackupProblem
 from mcdr2restic.restic.restic_config import (
     get_effective_restic_repository,
@@ -107,7 +107,7 @@ def ensure_snapshot_cache_fresh(
     if not snapshot_query_lock.acquire(blocking=False):
         return localized_refresh_running(language)
     try:
-        refresh_snapshot_cache(server, restic_cfg, cache_key, snapshot_cfg)
+        refresh_snapshot_cache(server, restic_cfg, cache_key, snapshot_cfg, language)
     except BackupProblem:
         return ''
     finally:
@@ -126,9 +126,7 @@ def is_snapshot_cache_valid(
 
 
 def localized_refresh_running(language: str) -> str:
-    if is_zh_language(language):
-        return '快照缓存正在刷新'
-    return 'Snapshot cache refresh is running'
+    return tr(language, 'snapshot.cache.refresh_running')
 
 
 def refresh_snapshot_cache(
@@ -136,6 +134,7 @@ def refresh_snapshot_cache(
     restic_cfg: Dict[str, Any],
     cache_key: str,
     snapshot_cfg: Dict[str, Any],
+    language: str,
 ):
     temp_key = make_snapshot_refresh_temp_key(cache_key)
     started = time.monotonic()
@@ -144,7 +143,13 @@ def refresh_snapshot_cache(
             count = import_restic_snapshots_to_sql(restic_cfg, conn, temp_key, get_snapshot_query_timeout(snapshot_cfg))
             commit_refreshed_snapshot_cache(conn, cache_key, temp_key, count, time.monotonic() - started)
         except Exception as exc:
-            error = record_snapshot_refresh_failure(conn, cache_key, temp_key, exc, time.monotonic() - started)
+            error = record_snapshot_refresh_failure(
+                conn,
+                cache_key,
+                temp_key,
+                tr_error(language, exc),
+                time.monotonic() - started
+            )
             raise BackupProblem(error)
         finally:
             delete_snapshot_temp_rows(conn, temp_key)
@@ -157,7 +162,7 @@ def make_snapshot_refresh_temp_key(cache_key: str) -> str:
 def invalidate_snapshot_cache(
     server: Optional[PluginServerInterface] = None,
     restic_cfg: Optional[Dict[str, Any]] = None,
-    reason: str = 'repository changed',
+    reason: str = '',
     default_server: Optional[PluginServerInterface] = None,
     config_snapshot_provider: Optional[Callable[[], Dict[str, Any]]] = None,
 ):
@@ -172,9 +177,14 @@ def invalidate_snapshot_cache(
     if not bool(snapshot_cfg.get('enabled', True)):
         return
     try:
-        mark_snapshot_cache_invalid(target, snapshot_cfg, resolved_restic_cfg, reason)
+        mark_snapshot_cache_invalid(
+            target,
+            snapshot_cfg,
+            resolved_restic_cfg,
+            resolve_snapshot_invalidation_reason(target, reason)
+        )
     except Exception as exc:
-        target.logger.debug('标记 restic 快照缓存失效失败: {}'.format(exc))
+        target.logger.debug(server_tr(target, 'debug.snapshot.invalidate_failed', error=exc))
 
 
 def resolve_snapshot_invalidation_context(
@@ -224,3 +234,10 @@ def build_snapshot_invalidation_row(cache_key: str, existing, reason: str) -> Tu
         '{} @ {}'.format(reason, now_text()),
         float(existing['last_refresh_duration'] or 0) if existing is not None else 0
     )
+
+
+def resolve_snapshot_invalidation_reason(server: PluginServerInterface, reason: str) -> str:
+    text = str(reason or '').strip()
+    if text:
+        return text
+    return server_tr(server, 'snapshot.cache.reason.repository_changed')
