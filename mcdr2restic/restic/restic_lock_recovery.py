@@ -52,7 +52,9 @@ def run_restic_command_with_lock_recovery(
 ) -> ResticCommandResult:
     """Run a restic command and retry once after unlocking a stale local lock."""
 
-    result = run_restic_command(app_runtime, restic_cfg, configured_args, phase, deadline)
+    result = run_restic_command(
+        app_runtime, restic_cfg, configured_args, phase, deadline
+    )
     lock_info = recoverable_stale_lock_info(result)
     if lock_info is None:
         return result
@@ -95,7 +97,9 @@ def run_restic_command_with_lock_recovery(
     return run_restic_command(app_runtime, restic_cfg, configured_args, phase, deadline)
 
 
-def recoverable_stale_lock_info(result: ResticCommandResult) -> Optional[ResticLockInfo]:
+def recoverable_stale_lock_info(
+    result: ResticCommandResult,
+) -> Optional[ResticLockInfo]:
     """Return lock metadata when the error clearly points to a dead local process."""
 
     combined_output = combine_restic_output(result)

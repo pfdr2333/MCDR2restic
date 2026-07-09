@@ -12,9 +12,7 @@ MutableDefaultValue: TypeAlias = (
     FrozenScalar | dict[str, "MutableDefaultValue"] | list["MutableDefaultValue"]
 )
 FrozenDefaultValue: TypeAlias = (
-    FrozenScalar
-    | Mapping[str, "FrozenDefaultValue"]
-    | tuple["FrozenDefaultValue", ...]
+    FrozenScalar | Mapping[str, "FrozenDefaultValue"] | tuple["FrozenDefaultValue", ...]
 )
 
 
