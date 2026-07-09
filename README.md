@@ -20,7 +20,7 @@ This project supports both Chinese and English, following the MCDR language conv
 
 - 定时调用 restic 备份
 - 可中断当前备份任务
-- 自动安装依赖
+- 自动下载restic
 - 支持 OneBot QQ 通知和 Discord Webhook 通知
 - 中英文消息和配置注释
 - 无人游玩跳过正常备份：触发时执行一次 `list`，并结合 join/left 事件判断
@@ -32,25 +32,16 @@ This project supports both Chinese and English, following the MCDR language conv
 >**快速开始：将插件放入`mcdr`的`plugins`目录然后`!!MCDR reload all`即可以默认配置自动运行**
 
 1. 将 `MCDR2Restic.mcdr`放入 MCDR 的 `plugins/`。
-2. 插件加载时会自动检查并补齐 Python 依赖：
+2. Python 依赖声明在包内根目录的 `requirements.txt`，由 MCDR 处理：
 
    - `PyYAML>=6.0`
    - `websocket-client>=1.8.0`
 
-   MCDR packed plugin 会检查包内根目录的 `requirements.txt`，因此本插件把该文件保留为纯注释，避免 MCDR 在自动安装逻辑运行前拦截加载。OneBot 通知使用的依赖包名是 `websocket-client`，Python 导入名是 `websocket`。如果误装了另一个同名包导致 `websocket.WebSocketApp` 不存在，插件会尝试自动卸载错误包并重装 `websocket-client`。
+   OneBot 通知使用的依赖包名是 `websocket-client`，Python 导入名是 `websocket`。如果误装了另一个同名包导致 `websocket.WebSocketApp` 不存在，插件会给出提示
 
-   如果自动安装失败，可手动执行：
+   如果 MCDR 依赖安装失败，请修复 MCDR 使用的 Python 环境后重载；如果误装了错误的 `websocket` 包，需要从该环境中移除它。
 
-   ```bash
-   pip uninstall websocket
-   pip install PyYAML websocket-client
-   ```
-
-   在国内网络环境下，如果自动安装下载失败，可以给 MCDR 进程设置镜像环境变量后重载插件：
-
-   ```bash
-   export MCDR2RESTIC_PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
-   ```
+   在国内网络环境下，如果 MCDR 安装依赖下载失败，请给 MCDR 使用的 Python/pip 配置 PyPI 镜像或代理后重试。
 
 3. 启动/重载 MCDR 后，如果 `config/mcdr2restic/config.yml` 不存在，插件会自动生成一份适配当前系统的示例配置。注释语言会跟随 MCDR 当前语言：中文使用中文注释，其他语言使用英文注释。
 

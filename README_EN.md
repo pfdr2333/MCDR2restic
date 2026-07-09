@@ -7,7 +7,7 @@ MCDR2Restic is an MCDReforged plugin designed to regularly invoke restic to back
 > This project is responsible for invoking restic. Under the default configuration, if restic is not found in the MCDR working directory, it will automatically download the appropriate restic binary for your system. This feature will not take effect if a non-default directory is configured.
 
 > Before using this project, please familiarize yourself with the core concepts and configuration methods of restic, and ensure you can use restic independently.
-> The usage of restic is beyond the scope of this document (see the [restic手册](https://restic.readthedocs.io/en/stable/)). Most backup features require a basic understanding of restic. Restic is a fast, efficient, and secure open-source backup tool. Its deduplication capability is particularly well-suited for Minecraft servers, significantly reducing backup sizes.
+> The usage of restic is beyond the scope of this document (see the [restic](https://restic.readthedocs.io/en/stable/)). Most backup features require a basic understanding of restic. Restic is a fast, efficient, and secure open-source backup tool. Its deduplication capability is particularly well-suited for Minecraft servers, significantly reducing backup sizes.
 
 > Although the plugin's default configuration handles the installation of restic automatically, it is highly recommended to learn how to use restic and its advanced configurations—you will definitely need them. ~~Of course, you can also ask an AI; just remember to enable thinking mode.~~
 
@@ -19,7 +19,7 @@ This project supports both Chinese and English, following the MCDR language conv
 
 * Scheduled restic backups
 * Ability to interrupt the ongoing backup task
-* Automatic dependency resolution and installation
+* Automatically download Restic
 * Supports OneBot QQ notifications and Discord Webhook notifications
 * Dual-language (Chinese/English) messages and configuration comments
 * Skip scheduled backups when idle: Executes a `list` command upon trigger, combined with join/left player events for precise determination
@@ -32,25 +32,15 @@ This project supports both Chinese and English, following the MCDR language conv
 > **Quick Start: Place the plugin into MCDR's `plugins` directory and run `!!MCDR reload all` to get it running automatically with the default configuration.**
 
 1. Place `MCDR2Restic.mcdr` into the MCDR `plugins/` directory.
-2. The plugin will automatically check and install missing Python dependencies upon loading:
+2. Python dependencies are declared in the package root `requirements.txt` and handled by MCDR:
 * `PyYAML>=6.0`
 * `websocket-client>=1.8.0`
 
 
-The MCDR packed plugin mechanism checks the `requirements.txt` file in the root directory of the package. Therefore, this plugin keeps that file purely commented out to prevent MCDR from intercepting the loading process before our automatic installation logic runs. The dependency required for OneBot notifications is named `websocket-client`, while its Python import name is `websocket`. If a conflicting package with the same name is mistakenly installed (causing `websocket.WebSocketApp` to be missing), the plugin will attempt to automatically uninstall the incorrect package and reinstall `websocket-client`.
-If the automatic installation fails, you can manually execute:
-```bash
-pip uninstall websocket
-pip install PyYAML websocket-client
+The dependency required for OneBot notifications is named `websocket-client`, while its Python import name is `websocket`. If a conflicting package with the same name is mistakenly installed (causing `websocket.WebSocketApp` to be missing), the plugin only reports the problem and will not call pip to uninstall or reinstall packages.
+If MCDR fails to install its dependencies, fix the Python environment used by MCDR and reload it. If the wrong websocket package was installed accidentally, uninstall it from that environment.
 
-```
-
-
-In domestic network environments (e.g., Mainland China), if the automatic download fails, you can set a mirror environment variable for the MCDR process and then reload the plugin:
-```bash
-export MCDR2RESTIC_PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
-
-```
+In domestic network environments (e.g., Mainland China), if MCDR dependency installation fails to download packages, configure a PyPI mirror or proxy for the Python/pip environment used by MCDR, then retry.
 
 
 3. After starting or reloading MCDR, if `config/mcdr2restic/config.yml` does not exist, the plugin will automatically generate a sample configuration tailored to the current operating system. The comment language adapts to MCDR's current locale: Chinese comments for the Chinese locale, and English comments for all other locales.
