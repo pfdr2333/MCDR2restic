@@ -10,8 +10,12 @@
     "pfdr2333"
   ],
   "link": "https://github.com/pfdr2333/MCDR2restic",
+  "archive_name": "MCDR2Restic_v{version}",
   "dependencies": {
     "mcdreforged": ">=2.12.0"
   },
+  "resources": [
+    "lang"
+  ],
   "entrypoint": "mcdr2restic"
 }

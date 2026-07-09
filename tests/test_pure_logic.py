@@ -9,8 +9,10 @@ import io
 import json
 import tempfile
 import threading
+import zipfile
 from contextlib import closing, nullcontext
 from datetime import datetime
+from pathlib import Path
 from unittest import mock
 
 import yaml
@@ -132,6 +134,7 @@ from mcdr2restic.update.update_check import (
     version_number_tuple,
 )
 from mcdr2restic.core.utils import non_negative_int, safe_int, tail_text
+import tools.pack_plugin as pack_plugin
 
 
 class FakeServer:
@@ -933,6 +936,28 @@ class BootstrapTests(unittest.TestCase):
     def test_bootstrap_no_longer_exposes_pip_installer(self):
         self.assertFalse(hasattr(bootstrap, "pip_install"))
         self.assertFalse(hasattr(bootstrap, "run_pip_command"))
+
+
+class PackagingTests(unittest.TestCase):
+    def test_metadata_declares_root_lang_as_pack_resource(self):
+        with open("mcdreforged.plugin.json", "r", encoding="utf8") as file:
+            metadata = json.load(file)
+
+        self.assertIn("lang", metadata.get("resources", []))
+
+    def test_pack_plugin_builds_posix_archive_layout(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            archive_path = pack_plugin.pack_plugin(Path("."), Path(temp_dir))
+
+            with zipfile.ZipFile(archive_path, "r") as archive:
+                names = archive.namelist()
+
+        self.assertEqual(archive_path.name, "MCDR2Restic_v0.4.0.mcdr")
+        self.assertIn("mcdr2restic/__init__.py", names)
+        self.assertIn("lang/zh_cn.json", names)
+        self.assertIn("mcdreforged.plugin.json", names)
+        self.assertTrue(all("\\" not in name for name in names))
+        self.assertFalse(any("__pycache__" in name for name in names))
 
 
 class RuntimeTests(unittest.TestCase):
