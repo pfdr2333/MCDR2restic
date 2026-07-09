@@ -12,26 +12,26 @@ class TextEnum(str, Enum):
 
 
 class BackupRunStatus(TextEnum):
-    NEVER = 'never'
-    RUNNING = 'running'
-    SUCCESS = 'success'
-    FAILED = 'failed'
-    CANCELED = 'canceled'
+    NEVER = "never"
+    RUNNING = "running"
+    SUCCESS = "success"
+    FAILED = "failed"
+    CANCELED = "canceled"
 
 
 class BackupTrigger(TextEnum):
-    MANUAL = 'manual'
-    SCHEDULED = 'scheduled'
-    FORCED = 'forced'
-    RESTORE_PRE_BACKUP = 'restore-pre-backup'
+    MANUAL = "manual"
+    SCHEDULED = "scheduled"
+    FORCED = "forced"
+    RESTORE_PRE_BACKUP = "restore-pre-backup"
 
 
 class RestorePhase(TextEnum):
-    PRE_BACKUP = 'pre_backup'
-    STOPPING = 'stopping'
-    RESTORING = 'restoring'
-    STARTING = 'starting'
-    ROLLBACK = 'rollback'
+    PRE_BACKUP = "pre_backup"
+    STOPPING = "stopping"
+    RESTORING = "restoring"
+    STARTING = "starting"
+    ROLLBACK = "rollback"
 
 
 BACKUP_STATUS_NEVER = BackupRunStatus.NEVER.value
@@ -65,14 +65,15 @@ def backup_trigger_label(trigger: Any) -> str:
 class BackupProblem(Exception):
     """Raised when a backup or restic workflow cannot continue."""
 
-    def __init__(self, message: str = '', *, i18n_key: str = '', **params: Any):
+    def __init__(self, message: str = "", *, i18n_key: str = "", **params: Any):
         super().__init__(message or i18n_key)
-        self.i18n_key = str(i18n_key or '')
+        self.i18n_key = str(i18n_key or "")
         self.i18n_params = dict(params)
 
     def __str__(self) -> str:
         if self.i18n_key:
             from mcdr2restic.core.i18n import DEFAULT_LANGUAGE, tr
+
             return tr(DEFAULT_LANGUAGE, self.i18n_key, **self.i18n_params)
         return super().__str__()
 
@@ -91,6 +92,7 @@ class LocalizedValueError(ValueError):
 
     def __str__(self) -> str:
         from mcdr2restic.core.i18n import DEFAULT_LANGUAGE, tr
+
         return tr(DEFAULT_LANGUAGE, self.i18n_key, **self.i18n_params)
 
 
@@ -108,7 +110,7 @@ class ResticCommandResult:
     duration_seconds: float
     summary: Dict[str, Any] = None
     json_errors: List[str] = None
-    snapshot_id: str = ''
+    snapshot_id: str = ""
 
 
 @dataclass
@@ -118,11 +120,11 @@ class ResticProgressState:
     status: Dict[str, Any] = None
     summary: Dict[str, Any] = None
     json_errors: List[str] = None
-    last_text: str = ''
+    last_text: str = ""
     seen_json: bool = False
     started_at: float = 0.0
     last_emit_at: float = 0.0
-    last_emit_text: str = ''
+    last_emit_text: str = ""
 
 
 @dataclass
@@ -134,9 +136,9 @@ class RestoreSession:
     language: str
     phase: RestorePhase
     started_at: str
-    error: str = ''
-    safety_snapshot_id: str = ''
-    rollback_error: str = ''
+    error: str = ""
+    safety_snapshot_id: str = ""
+    rollback_error: str = ""
 
     def __post_init__(self):
         self.phase = normalize_restore_phase(self.phase)
@@ -144,8 +146,8 @@ class RestoreSession:
 
 @dataclass
 class RestoreStageResult:
-    restore_error: str = ''
-    rollback_error: str = ''
+    restore_error: str = ""
+    rollback_error: str = ""
 
 
 @dataclass

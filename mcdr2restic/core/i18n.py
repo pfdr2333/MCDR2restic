@@ -14,19 +14,19 @@ from mcdr2restic.core.language import get_mcdr_language, get_source_language
 from mcdr2restic.defaults.default_constants import PLUGIN_ID
 
 
-DEFAULT_LANGUAGE = 'zh_cn'
-FALLBACK_LANGUAGE = 'en_us'
+DEFAULT_LANGUAGE = "zh_cn"
+FALLBACK_LANGUAGE = "en_us"
 SUPPORTED_LANGUAGES = frozenset({DEFAULT_LANGUAGE, FALLBACK_LANGUAGE})
-LANG_PACKAGE = 'mcdr2restic.lang'
-TRANSLATION_KEY_PREFIX = '{}.'.format(PLUGIN_ID)
+LANG_PACKAGE = "mcdr2restic.lang"
+TRANSLATION_KEY_PREFIX = "{}.".format(PLUGIN_ID)
 TranslateFunc = Callable[..., str]
 
 
 def normalize_language(language: str) -> str:
-    text = str(language or '').lower().replace('-', '_')
+    text = str(language or "").lower().replace("-", "_")
     if text in SUPPORTED_LANGUAGES:
         return text
-    if text.startswith('zh'):
+    if text.startswith("zh"):
         return DEFAULT_LANGUAGE
     return FALLBACK_LANGUAGE
 
@@ -37,7 +37,7 @@ def tr(language: str, key: str, **params: Any) -> str:
 
 
 def server_tr(server: PluginServerInterface, key: str, **params: Any) -> str:
-    translate = getattr(server, 'tr', None)
+    translate = getattr(server, "tr", None)
     if callable(translate):
         try:
             return str(translate(plugin_translation_key(key), **params))
@@ -47,7 +47,7 @@ def server_tr(server: PluginServerInterface, key: str, **params: Any) -> str:
 
 
 def server_rtr(server: PluginServerInterface, key: str, **params: Any) -> Any:
-    translate = getattr(server, 'rtr', None)
+    translate = getattr(server, "rtr", None)
     if callable(translate):
         try:
             return translate(plugin_translation_key(key), **params)
@@ -56,12 +56,16 @@ def server_rtr(server: PluginServerInterface, key: str, **params: Any) -> Any:
     return tr(get_mcdr_language(server), key, **params)
 
 
-def reply_tr(source: CommandSource, server: PluginServerInterface, key: str, **params: Any):
+def reply_tr(
+    source: CommandSource, server: PluginServerInterface, key: str, **params: Any
+):
     source.reply(server_rtr(server, key, **params))
 
 
-def source_tr(source: CommandSource, server: PluginServerInterface, key: str, **params: Any) -> str:
-    translate = getattr(server, 'rtr', None)
+def source_tr(
+    source: CommandSource, server: PluginServerInterface, key: str, **params: Any
+) -> str:
+    translate = getattr(server, "rtr", None)
     if callable(translate):
         try:
             text = translate(plugin_translation_key(key), **params)
@@ -71,7 +75,9 @@ def source_tr(source: CommandSource, server: PluginServerInterface, key: str, **
     return tr(get_source_language(source, server), key, **params)
 
 
-def make_source_translate(source: CommandSource, server: PluginServerInterface) -> TranslateFunc:
+def make_source_translate(
+    source: CommandSource, server: PluginServerInterface
+) -> TranslateFunc:
     return lambda key, **params: source_tr(source, server, key, **params)
 
 
@@ -92,7 +98,7 @@ def render_text_for_source(source: CommandSource, text: Any) -> str:
 
 
 def preferred_language_context(source: CommandSource):
-    context_factory = getattr(source, 'preferred_language_context', None)
+    context_factory = getattr(source, "preferred_language_context", None)
     if callable(context_factory):
         try:
             return context_factory()
@@ -102,7 +108,7 @@ def preferred_language_context(source: CommandSource):
 
 
 def text_to_plain_text(text: Any) -> str:
-    to_plain_text = getattr(text, 'to_plain_text', None)
+    to_plain_text = getattr(text, "to_plain_text", None)
     if callable(to_plain_text):
         try:
             return str(to_plain_text())
@@ -111,13 +117,15 @@ def text_to_plain_text(text: Any) -> str:
     return str(text)
 
 
-def source_error_text(source: CommandSource, server: PluginServerInterface, error: Exception) -> str:
+def source_error_text(
+    source: CommandSource, server: PluginServerInterface, error: Exception
+) -> str:
     return tr_error(get_source_language(source, server), error)
 
 
 def tr_error(language: str, error: Exception) -> str:
-    key = str(getattr(error, 'i18n_key', '') or '')
-    params = getattr(error, 'i18n_params', {})
+    key = str(getattr(error, "i18n_key", "") or "")
+    params = getattr(error, "i18n_params", {})
     if key:
         return tr(language, key, **params)
     return str(error)
@@ -134,9 +142,9 @@ def translation_template(language: str, key: str) -> str:
 
 @lru_cache(maxsize=None)
 def load_language_messages(language: str) -> Dict[str, str]:
-    resource_name = '{}.json'.format(normalize_language(language))
+    resource_name = "{}.json".format(normalize_language(language))
     try:
-        with resources.open_text(LANG_PACKAGE, resource_name, encoding='utf8') as file:
+        with resources.open_text(LANG_PACKAGE, resource_name, encoding="utf8") as file:
             data = json.load(file)
     except Exception:
         return {}
@@ -150,23 +158,23 @@ def load_language_messages(language: str) -> Dict[str, str]:
 
 
 def plugin_translation_key(key: str) -> str:
-    text = str(key or '').strip()
+    text = str(key or "").strip()
     if text.startswith(TRANSLATION_KEY_PREFIX):
         return text
-    return '{}{}'.format(TRANSLATION_KEY_PREFIX, text)
+    return "{}{}".format(TRANSLATION_KEY_PREFIX, text)
 
 
 def unprefixed_translation_key(key: str) -> str:
-    text = str(key or '').strip()
+    text = str(key or "").strip()
     if text.startswith(TRANSLATION_KEY_PREFIX):
-        return text[len(TRANSLATION_KEY_PREFIX):]
+        return text[len(TRANSLATION_KEY_PREFIX) :]
     return text
 
 
 def format_translation(template: str, params: Dict[str, Any]) -> str:
     try:
         needed = formatter_field_names(template)
-        values = {name: params.get(name, '{' + name + '}') for name in needed}
+        values = {name: params.get(name, "{" + name + "}") for name in needed}
         return template.format(**values)
     except Exception:
         return template
@@ -176,5 +184,5 @@ def formatter_field_names(template: str) -> set:
     names = set()
     for _, field_name, _, _ in Formatter().parse(template):
         if field_name:
-            names.add(field_name.split('.', 1)[0].split('[', 1)[0])
+            names.add(field_name.split(".", 1)[0].split("[", 1)[0])
     return names

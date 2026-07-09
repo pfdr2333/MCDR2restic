@@ -62,7 +62,9 @@ def import_restic_snapshots_to_sql(
         timer.cancel()
         stderr_thread.join(timeout=RESTIC_READER_JOIN_TIMEOUT_SECONDS)
 
-    assert_snapshot_import_finished(timeout_seconds, timeout_state, return_code, stderr_tail.text)
+    assert_snapshot_import_finished(
+        timeout_seconds, timeout_state, return_code, stderr_tail.text
+    )
     conn.commit()
     return count
 
@@ -70,10 +72,10 @@ def import_restic_snapshots_to_sql(
 class TextTailBuffer:
     def __init__(self, max_chars: int):
         self.max_chars = max(1, int(max_chars))
-        self.text = ''
+        self.text = ""
 
     def append(self, chunk: str):
-        self.text = (self.text + str(chunk))[-self.max_chars:]
+        self.text = (self.text + str(chunk))[-self.max_chars :]
 
 
 def start_snapshot_stderr_reader(
@@ -83,8 +85,8 @@ def start_snapshot_stderr_reader(
     thread = threading.Thread(
         target=read_snapshot_stderr,
         args=(process, stderr_tail),
-        name='MCDR2Restic-SnapshotStderr',
-        daemon=True
+        name="MCDR2Restic-SnapshotStderr",
+        daemon=True,
     )
     thread.start()
     return thread
@@ -105,13 +107,17 @@ def start_process_timeout_timer(
     timeout_seconds: int,
 ) -> Tuple[ProcessTimeoutState, threading.Timer]:
     timeout_state = ProcessTimeoutState(threading.Event())
-    timer = threading.Timer(timeout_seconds, terminate_process_after_timeout, args=(process, timeout_state))
+    timer = threading.Timer(
+        timeout_seconds, terminate_process_after_timeout, args=(process, timeout_state)
+    )
     timer.daemon = True
     timer.start()
     return timeout_state, timer
 
 
-def terminate_process_after_timeout(process: subprocess.Popen, timeout_state: ProcessTimeoutState):
+def terminate_process_after_timeout(
+    process: subprocess.Popen, timeout_state: ProcessTimeoutState
+):
     timeout_state.timed_out.set()
     timeout_state.termination_result = terminate_process(process)
 
@@ -122,7 +128,7 @@ def import_snapshot_stdout(
     cache_key: str,
 ) -> int:
     if process.stdout is None:
-        raise BackupProblem(i18n_key='error.snapshot.stdout_missing')
+        raise BackupProblem(i18n_key="error.snapshot.stdout_missing")
     count = 0
     for snapshot in iter_json_array_stream(process.stdout):
         if not isinstance(snapshot, dict):
@@ -141,38 +147,49 @@ def assert_snapshot_import_finished(
     stderr_tail: str,
 ):
     if timeout_state.timed_out.is_set():
-        if timeout_state.termination_result is not None and not timeout_state.termination_result.terminated:
+        if (
+            timeout_state.termination_result is not None
+            and not timeout_state.termination_result.terminated
+        ):
             raise BackupProblem(
-                i18n_key='error.snapshot.timeout_termination_failed',
+                i18n_key="error.snapshot.timeout_termination_failed",
                 timeout_seconds=timeout_seconds,
-                error=timeout_state.termination_result.error or ''
+                error=timeout_state.termination_result.error or "",
             )
-        raise BackupProblem(i18n_key='error.snapshot.timeout', timeout_seconds=timeout_seconds)
+        raise BackupProblem(
+            i18n_key="error.snapshot.timeout", timeout_seconds=timeout_seconds
+        )
     if return_code == 0:
         return
     raise BackupProblem(
-        i18n_key='error.snapshot.return_code',
+        i18n_key="error.snapshot.return_code",
         return_code=return_code,
-        output=tail_text(stderr_tail, SNAPSHOT_ERROR_TAIL_CHARS)
+        output=tail_text(stderr_tail, SNAPSHOT_ERROR_TAIL_CHARS),
     )
 
 
 def start_restic_snapshot_process(restic_cfg: Dict[str, Any]) -> subprocess.Popen:
-    executable = str(restic_cfg.get(RESTIC_CFG_EXECUTABLE, 'restic') or 'restic')
+    executable = str(restic_cfg.get(RESTIC_CFG_EXECUTABLE, "restic") or "restic")
     env = build_snapshot_restic_environment(restic_cfg)
     cwd = restic_cfg.get(RESTIC_CFG_WORKING_DIRECTORY) or None
-    command = [resolve_popen_executable(executable, cwd), RESTIC_COMMAND_SNAPSHOTS, RESTIC_OPTION_JSON]
+    command = [
+        resolve_popen_executable(executable, cwd),
+        RESTIC_COMMAND_SNAPSHOTS,
+        RESTIC_OPTION_JSON,
+    ]
     try:
         return subprocess.Popen(command, **build_restic_popen_kwargs(cwd, env))
     except FileNotFoundError:
-        raise BackupProblem(i18n_key='error.restic.executable_not_found', executable=executable)
+        raise BackupProblem(
+            i18n_key="error.restic.executable_not_found", executable=executable
+        )
     except Exception as exc:
-        raise BackupProblem(i18n_key='error.snapshot.start_failed', error=exc)
+        raise BackupProblem(i18n_key="error.snapshot.start_failed", error=exc)
 
 
 def build_snapshot_restic_environment(restic_cfg: Dict[str, Any]) -> Dict[str, str]:
     env = build_restic_environment(restic_cfg)
-    if str(env.get(RESTIC_ENV_REPOSITORY, '') or '').strip():
+    if str(env.get(RESTIC_ENV_REPOSITORY, "") or "").strip():
         return env
 
     repository = get_effective_restic_repository(restic_cfg)
@@ -183,19 +200,21 @@ def build_snapshot_restic_environment(restic_cfg: Dict[str, Any]) -> Dict[str, s
 
 def iter_json_array_stream(stream):
     decoder = json.JSONDecoder()
-    buffer = ''
+    buffer = ""
     in_array = False
     eof = False
     while True:
         buffer, eof = read_json_stream_chunk(stream, buffer, eof)
-        buffer, in_array, items, finished = decode_json_array_buffer(decoder, buffer, in_array, eof)
+        buffer, in_array, items, finished = decode_json_array_buffer(
+            decoder, buffer, in_array, eof
+        )
         for item in items:
             yield item
         if finished:
             return
         if eof:
             break
-    raise BackupProblem(i18n_key='error.snapshot.output_ended_early')
+    raise BackupProblem(i18n_key="error.snapshot.output_ended_early")
 
 
 def read_json_stream_chunk(stream, buffer: str, eof: bool) -> Tuple[str, bool]:
@@ -222,16 +241,16 @@ def decode_json_array_buffer(
                 return buffer, in_array, items, False
         if not buffer:
             return buffer, in_array, items, False
-        if buffer[0] == ']':
+        if buffer[0] == "]":
             return buffer, in_array, items, True
-        if buffer[0] == ',':
+        if buffer[0] == ",":
             buffer = buffer[1:]
             continue
         try:
             item, index = decoder.raw_decode(buffer)
         except json.JSONDecodeError:
             if eof:
-                raise BackupProblem(i18n_key='error.snapshot.parse_failed')
+                raise BackupProblem(i18n_key="error.snapshot.parse_failed")
             return buffer, in_array, items, False
         buffer = buffer[index:]
         items.append(item)
@@ -240,6 +259,6 @@ def decode_json_array_buffer(
 def enter_json_array(buffer: str) -> Tuple[str, bool]:
     if not buffer:
         return buffer, False
-    if buffer[0] != '[':
-        raise BackupProblem(i18n_key='error.snapshot.not_json_array')
+    if buffer[0] != "[":
+        raise BackupProblem(i18n_key="error.snapshot.not_json_array")
     return buffer[1:], True

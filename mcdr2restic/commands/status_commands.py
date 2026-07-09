@@ -23,7 +23,9 @@ class StatusCommands:
         self.command_status_with_page(source, 1)
 
     def command_status_page(self, source: CommandSource, context: Dict[str, Any]):
-        self.command_status_with_page(source, max(1, non_negative_int(context.get('page', 1), 1)))
+        self.command_status_with_page(
+            source, max(1, non_negative_int(context.get("page", 1), 1))
+        )
 
     def command_status_with_page(self, source: CommandSource, page: int):
         if not self.context.check_command_permission(source):
@@ -33,14 +35,16 @@ class StatusCommands:
         cfg = get_config_snapshot(app_runtime)
         server = self.context.server_from_source(source)
         language = get_source_language(source, server)
-        source.reply(render_status_output(
-            app_runtime.service.snapshot_query_lock,
-            cfg,
-            language,
-            server,
-            page,
-            backup_running_provider=lambda: is_backup_running(app_runtime),
-            restore_running_provider=lambda: is_restore_running(app_runtime),
-            mc_ready_provider=lambda target: is_mc_ready(app_runtime, target),
-            translate=make_source_translate(source, server),
-        ))
+        source.reply(
+            render_status_output(
+                app_runtime.service.snapshot_query_lock,
+                cfg,
+                language,
+                server,
+                page,
+                backup_running_provider=lambda: is_backup_running(app_runtime),
+                restore_running_provider=lambda: is_restore_running(app_runtime),
+                mc_ready_provider=lambda target: is_mc_ready(app_runtime, target),
+                translate=make_source_translate(source, server),
+            )
+        )

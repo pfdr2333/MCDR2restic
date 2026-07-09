@@ -25,15 +25,25 @@ from mcdr2restic.minecraft.minecraft_service import (
 from mcdr2restic.core.bootstrap import BootstrapResult
 from mcdr2restic.config.config_loader import load_config
 from mcdr2restic.core.i18n import server_tr
-from mcdr2restic.config.state_store import ensure_runtime, get_config_snapshot, save_config_unlocked
-from mcdr2restic.notifications import DiscordWebhookClient, NotificationDispatcher, OneBotClient
+from mcdr2restic.config.state_store import (
+    ensure_runtime,
+    get_config_snapshot,
+    save_config_unlocked,
+)
+from mcdr2restic.notifications import (
+    DiscordWebhookClient,
+    NotificationDispatcher,
+    OneBotClient,
+)
 from mcdr2restic.minecraft.player_activity_service import (
     handle_player_joined,
     handle_player_left,
     should_skip_for_no_player_activity,
 )
 from mcdr2restic.restore.restore_task_repository import clear_restore_tasks
-from mcdr2restic.snapshots.snapshot_cache import invalidate_snapshot_cache as invalidate_snapshot_cache_impl
+from mcdr2restic.snapshots.snapshot_cache import (
+    invalidate_snapshot_cache as invalidate_snapshot_cache_impl,
+)
 from mcdr2restic.update.update_check import UpdateChecker
 from mcdr2restic.core.utils import now_text
 
@@ -53,59 +63,73 @@ class PluginEntrypoint:
         self.restart_discord(server)
         self.start_scheduler(server)
         self.restart_update_checker(server, startup_check=True)
-        server.logger.info(server_tr(server, 'log.plugin.loaded'))
+        server.logger.info(server_tr(server, "log.plugin.loaded"))
 
     def shutdown_previous_module(self, server: PluginServerInterface, prev_module):
-        if prev_module is None or not hasattr(prev_module, '_shutdown_runtime'):
+        if prev_module is None or not hasattr(prev_module, "_shutdown_runtime"):
             return
         try:
-            prev_module._shutdown_runtime(server, server_tr(server, 'reason.plugin_reload'))
+            prev_module._shutdown_runtime(
+                server, server_tr(server, "reason.plugin_reload")
+            )
         except Exception:
-            server.logger.warning(server_tr(
-                server,
-                'warn.plugin.previous_shutdown_failed',
-                error=traceback.format_exc()
-            ))
+            server.logger.warning(
+                server_tr(
+                    server,
+                    "warn.plugin.previous_shutdown_failed",
+                    error=traceback.format_exc(),
+                )
+            )
 
     def prepare_runtime(self, server: PluginServerInterface):
         self.runtime.service.server = server
         for entry in self.bootstrap_result.logs:
-            server.logger.info('[bootstrap] {}'.format(server_tr(server, entry.i18n_key, **entry.params)))
+            server.logger.info(
+                "[bootstrap] {}".format(
+                    server_tr(server, entry.i18n_key, **entry.params)
+                )
+            )
         self.bootstrap_result.logs.clear()
         self.runtime.service.stopping.clear()
         self.runtime.backup.cancel.clear()
         self.runtime.service.server_ready = server_is_running(self.runtime, server)
 
     def on_unload(self, server: PluginServerInterface):
-        self.shutdown_runtime(server, server_tr(server, 'reason.plugin_unload'))
+        self.shutdown_runtime(server, server_tr(server, "reason.plugin_unload"))
 
     def on_server_startup(self, server: PluginServerInterface):
         self.runtime.service.server_ready = True
-        server.logger.info(server_tr(server, 'log.plugin.server_started'))
+        server.logger.info(server_tr(server, "log.plugin.server_started"))
         handle_restore_server_startup(self.runtime, server)
 
     def on_server_stop(self, server: PluginServerInterface, server_return_code: int):
         self.runtime.service.server_ready = False
         self.record_server_stopped(server)
-        if handle_restore_server_stop(self.runtime, server, server_return_code, clear_restore_tasks):
+        if handle_restore_server_stop(
+            self.runtime, server, server_return_code, clear_restore_tasks
+        ):
             return
         if is_backup_running(self.runtime):
-            server.logger.warning(server_tr(server, 'warn.plugin.server_stopped_cancel_backup'))
-            request_cancel_current_backup(self.runtime, server_tr(server, 'reason.server_stopped'))
+            server.logger.warning(
+                server_tr(server, "warn.plugin.server_stopped_cancel_backup")
+            )
+            request_cancel_current_backup(
+                self.runtime, server_tr(server, "reason.server_stopped")
+            )
 
     def record_server_stopped(self, server: PluginServerInterface):
         with self.runtime.config_state.lock:
             ensure_runtime(self.runtime.config_state.config)
-            runtime_state = self.runtime.config_state.config['runtime']
-            runtime_state['known_online_players'] = []
-            runtime_state['current_online_players'] = 0
-            runtime_state['last_online_check'] = now_text()
-            runtime_state['last_online_check_source'] = 'server stop'
-            runtime_state['last_online_check_result'] = '0 online after server stop'
+            runtime_state = self.runtime.config_state.config["runtime"]
+            runtime_state["known_online_players"] = []
+            runtime_state["current_online_players"] = 0
+            runtime_state["last_online_check"] = now_text()
+            runtime_state["last_online_check_source"] = "server stop"
+            runtime_state["last_online_check_result"] = "0 online after server stop"
             save_config_unlocked(self.runtime, server)
 
     def on_mcdr_stop(self, server: PluginServerInterface):
-        self.shutdown_runtime(server, server_tr(server, 'reason.mcdr_stop'))
+        self.shutdown_runtime(server, server_tr(server, "reason.mcdr_stop"))
 
     def on_player_joined(self, server: PluginServerInterface, player: str, info: Info):
         handle_player_joined(self.runtime, server, player)
@@ -122,7 +146,7 @@ class PluginEntrypoint:
         self.stop_onebot()
         self.runtime.service.discord = None
         if self.runtime.service.server is not None:
-            server.logger.info(server_tr(server, 'log.plugin.stopped', reason=reason))
+            server.logger.info(server_tr(server, "log.plugin.stopped", reason=reason))
 
     def stop_update_checker(self):
         if self.runtime.service.update_checker is None:
@@ -165,7 +189,7 @@ class PluginEntrypoint:
             self.create_backup_runner,
             self.reload_services,
             self.wake_scheduler,
-            self.invalidate_snapshot_cache
+            self.invalidate_snapshot_cache,
         )
 
     def reload_services(self, server: PluginServerInterface):
@@ -178,42 +202,50 @@ class PluginEntrypoint:
         self,
         server: Optional[PluginServerInterface] = None,
         restic_cfg: Optional[Dict[str, Any]] = None,
-        reason: str = ''
+        reason: str = "",
     ):
         resolved_server = server or self.runtime.service.server
-        reason_text = str(reason or '').strip()
+        reason_text = str(reason or "").strip()
         if not reason_text and resolved_server is not None:
-            reason_text = server_tr(resolved_server, 'snapshot.cache.reason.repository_changed')
+            reason_text = server_tr(
+                resolved_server, "snapshot.cache.reason.repository_changed"
+            )
         invalidate_snapshot_cache_impl(
             server,
             restic_cfg,
             reason_text,
             default_server=self.runtime.service.server,
-            config_snapshot_provider=lambda: get_config_snapshot(self.runtime)
+            config_snapshot_provider=lambda: get_config_snapshot(self.runtime),
         )
 
     def restart_onebot(self, server: PluginServerInterface):
         self.stop_onebot()
         self.runtime.service.onebot = OneBotClient(
             server,
-            get_config_snapshot(self.runtime).get('onebot', {}),
-            self.bootstrap_result.websocket_client
+            get_config_snapshot(self.runtime).get("onebot", {}),
+            self.bootstrap_result.websocket_client,
         )
         self.runtime.service.onebot.start()
 
     def restart_discord(self, server: PluginServerInterface):
-        self.runtime.service.discord = DiscordWebhookClient(server, get_config_snapshot(self.runtime).get('discord', {}))
+        self.runtime.service.discord = DiscordWebhookClient(
+            server, get_config_snapshot(self.runtime).get("discord", {})
+        )
 
-    def restart_update_checker(self, server: PluginServerInterface, startup_check: bool):
+    def restart_update_checker(
+        self, server: PluginServerInterface, startup_check: bool
+    ):
         self.stop_update_checker()
-        update_cfg = get_config_snapshot(self.runtime).get('update_check', {})
-        if not isinstance(update_cfg, dict) or not bool(update_cfg.get('enabled', True)):
-            server.logger.info(server_tr(server, 'log.update.disabled'))
+        update_cfg = get_config_snapshot(self.runtime).get("update_check", {})
+        if not isinstance(update_cfg, dict) or not bool(
+            update_cfg.get("enabled", True)
+        ):
+            server.logger.info(server_tr(server, "log.update.disabled"))
             return
         self.runtime.service.update_checker = UpdateChecker(
             server,
-            startup_check and bool(update_cfg.get('check_on_startup', True)),
-            lambda: get_config_snapshot(self.runtime)
+            startup_check and bool(update_cfg.get("check_on_startup", True)),
+            lambda: get_config_snapshot(self.runtime),
         )
         self.runtime.service.update_checker.start()
 
@@ -226,7 +258,7 @@ class PluginEntrypoint:
             backup_runner.run_locked,
             lambda target: is_mc_ready(self.runtime, target),
             lambda cfg: should_skip_for_no_player_activity(self.runtime, cfg),
-            notification_dispatcher.notify_admins
+            notification_dispatcher.notify_admins,
         )
         self.runtime.service.scheduler.start()
 
@@ -235,14 +267,16 @@ class PluginEntrypoint:
             self.runtime.service.scheduler.wakeup()
 
     def create_notification_dispatcher(self) -> NotificationDispatcher:
-        return NotificationDispatcher(self.runtime, lambda: get_config_snapshot(self.runtime))
+        return NotificationDispatcher(
+            self.runtime, lambda: get_config_snapshot(self.runtime)
+        )
 
     def create_backup_runner(self) -> BackupRunner:
         return BackupRunner(
             self.runtime,
             is_restore_running,
             self.create_notification_dispatcher().notify_admins,
-            self.invalidate_snapshot_cache
+            self.invalidate_snapshot_cache,
         )
 
 

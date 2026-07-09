@@ -20,7 +20,7 @@ def ensure_config_file_exists(server: PluginServerInterface, language: str):
     if os.path.exists(config_path):
         return
 
-    with open(config_path, 'w', encoding='utf8') as file:
+    with open(config_path, "w", encoding="utf8") as file:
         file.write(get_default_config_template(language))
     warn_about_legacy_config_if_needed(server)
 
@@ -28,18 +28,22 @@ def ensure_config_file_exists(server: PluginServerInterface, language: str):
 def warn_about_legacy_config_if_needed(server: PluginServerInterface):
     legacy_path = get_data_file_path(server, LEGACY_CONFIG_NAME)
     if os.path.exists(legacy_path):
-        server.logger.warning(server_tr(
-            server,
-            'warn.config.legacy_json_detected',
-            config_name=CONFIG_NAME,
-            legacy_name=LEGACY_CONFIG_NAME
-        ))
+        server.logger.warning(
+            server_tr(
+                server,
+                "warn.config.legacy_json_detected",
+                config_name=CONFIG_NAME,
+                legacy_name=LEGACY_CONFIG_NAME,
+            )
+        )
         return
-    server.logger.info(server_tr(
-        server,
-        'info.config.default_created',
-        path=get_data_file_path(server, CONFIG_NAME)
-    ))
+    server.logger.info(
+        server_tr(
+            server,
+            "info.config.default_created",
+            path=get_data_file_path(server, CONFIG_NAME),
+        )
+    )
 
 
 def get_data_file_path(server: PluginServerInterface, file_name: str) -> str:

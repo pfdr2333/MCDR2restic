@@ -7,17 +7,17 @@ from typing import Any
 
 
 def now_text() -> str:
-    return datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 
 def tail_text(text: str, max_chars: int) -> str:
     if len(text) <= max_chars:
         return text.strip()
-    return '...\n{}'.format(text[-max_chars:].strip())
+    return "...\n{}".format(text[-max_chars:].strip())
 
 
 def sha256_text(text: str) -> str:
-    return hashlib.sha256(str(text).encode('utf-8')).hexdigest()
+    return hashlib.sha256(str(text).encode("utf-8")).hexdigest()
 
 
 def non_negative_int(value: Any, default: int = 0) -> int:

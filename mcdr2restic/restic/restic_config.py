@@ -39,14 +39,14 @@ def build_restic_environment(restic_cfg: Dict[str, Any]) -> Dict[str, str]:
 
 
 def apply_repository_environment(env: Dict[str, str], restic_cfg: Dict[str, Any]):
-    repository = str(restic_cfg.get(RESTIC_CFG_REPOSITORY, '') or '').strip()
+    repository = str(restic_cfg.get(RESTIC_CFG_REPOSITORY, "") or "").strip()
     if repository:
         env[RESTIC_ENV_REPOSITORY] = repository
 
 
 def apply_password_environment(env: Dict[str, str], restic_cfg: Dict[str, Any]):
-    password = str(restic_cfg.get(RESTIC_CFG_PASSWORD, '') or '')
-    password_file = str(restic_cfg.get(RESTIC_CFG_PASSWORD_FILE, '') or '').strip()
+    password = str(restic_cfg.get(RESTIC_CFG_PASSWORD, "") or "")
+    password_file = str(restic_cfg.get(RESTIC_CFG_PASSWORD_FILE, "") or "").strip()
     if password:
         env[RESTIC_ENV_PASSWORD] = password
         env.pop(RESTIC_ENV_PASSWORD_FILE, None)
@@ -61,12 +61,21 @@ def is_local_restic_repository(repository: str) -> bool:
     repo = repository.strip()
     if not repo:
         return False
-    if re.match(r'^[A-Za-z]:[\\/]', repo):
+    if re.match(r"^[A-Za-z]:[\\/]", repo):
         return True
     lowered = repo.lower()
     remote_prefixes = (
-        'sftp:', 'rest:', 's3:', 'b2:', 'azure:', 'gs:', 'rclone:', 'swift:',
-        'opendal:', 'http:', 'https:'
+        "sftp:",
+        "rest:",
+        "s3:",
+        "b2:",
+        "azure:",
+        "gs:",
+        "rclone:",
+        "swift:",
+        "opendal:",
+        "http:",
+        "https:",
     )
     return not lowered.startswith(remote_prefixes)
 
@@ -89,7 +98,9 @@ def assert_backup_sources_do_not_contain_repository(restic_cfg: Dict[str, Any]):
         raise_repository_source_conflict(repository_path, conflicts)
 
 
-def find_repository_source_conflicts(restic_cfg: Dict[str, Any], repository_path: str) -> List[str]:
+def find_repository_source_conflicts(
+    restic_cfg: Dict[str, Any], repository_path: str
+) -> List[str]:
     return [
         source_path
         for source_path in get_backup_source_paths(restic_cfg)
@@ -99,21 +110,21 @@ def find_repository_source_conflicts(restic_cfg: Dict[str, Any], repository_path
 
 def raise_repository_source_conflict(repository_path: str, conflicts: List[str]):
     raise BackupProblem(
-        i18n_key='error.restic.repository_inside_backup_sources',
+        i18n_key="error.restic.repository_inside_backup_sources",
         repository_path=repository_path,
-        conflicts=', '.join(conflicts)
+        conflicts=", ".join(conflicts),
     )
 
 
 def get_effective_restic_repository(restic_cfg: Dict[str, Any]) -> str:
     env = build_restic_environment(restic_cfg)
-    repository = str(env.get(RESTIC_ENV_REPOSITORY, '') or '').strip()
+    repository = str(env.get(RESTIC_ENV_REPOSITORY, "") or "").strip()
     if repository:
         return repository
     try:
         args = normalize_command_args(restic_cfg.get(RESTIC_CFG_BACKUP_COMMAND, []))
     except BackupProblem:
-        return ''
+        return ""
     return find_option_value(args, set(RESTIC_REPOSITORY_OPTIONS))
 
 
@@ -122,9 +133,9 @@ def find_option_value(args: List[str], names: Set[str]) -> str:
         for name in names:
             if item == name and index + 1 < len(args):
                 return str(args[index + 1]).strip()
-            if item.startswith(name + '='):
-                return item.split('=', 1)[1].strip()
-    return ''
+            if item.startswith(name + "="):
+                return item.split("=", 1)[1].strip()
+    return ""
 
 
 def get_backup_source_paths(restic_cfg: Dict[str, Any]) -> List[str]:
@@ -147,10 +158,10 @@ def collect_restic_backup_sources(args: List[str], start_index: int) -> List[str
     index = start_index
     while index < len(args):
         item = args[index]
-        if item == '--':
-            sources.extend(args[index + 1:])
+        if item == "--":
+            sources.extend(args[index + 1 :])
             break
-        if item.startswith('-') and item != '-':
+        if item.startswith("-") and item != "-":
             index += restic_backup_option_width(args, index)
             continue
         sources.append(item)
@@ -160,9 +171,9 @@ def collect_restic_backup_sources(args: List[str], start_index: int) -> List[str
 
 def restic_backup_option_width(args: List[str], index: int) -> int:
     option = args[index]
-    if '=' in option:
+    if "=" in option:
         return 1
-    name = option.split('=', 1)[0]
+    name = option.split("=", 1)[0]
     if name in restic_backup_value_options() and index + 1 < len(args):
         return 2
     return 1
@@ -198,4 +209,4 @@ def normalize_command_args(value: Any) -> List[str]:
         return shlex.split(value)
     if isinstance(value, Sequence):
         return [str(item) for item in value]
-    raise BackupProblem(i18n_key='error.restic.command_args_invalid', value=value)
+    raise BackupProblem(i18n_key="error.restic.command_args_invalid", value=value)

@@ -11,7 +11,10 @@ from typing import Any, Callable, Dict, Optional, Tuple
 from mcdreforged.api.all import PluginServerInterface
 
 from mcdr2restic.core.i18n import server_tr, tr, tr_error
-from mcdr2restic.defaults.default_config import build_default_config, build_default_snapshot_cache_config
+from mcdr2restic.defaults.default_config import (
+    build_default_config,
+    build_default_snapshot_cache_config,
+)
 from mcdr2restic.defaults.default_constants import (
     SNAPSHOT_PAGE_SIZE,
     SNAPSHOT_QUERY_TIMEOUT_SECONDS,
@@ -46,28 +49,38 @@ def build_snapshot_cache_key(restic_cfg: Dict[str, Any]) -> str:
     if not isinstance(configured_env, dict):
         configured_env = {}
     key_material = {
-        RESTIC_CFG_EXECUTABLE: str(restic_cfg.get(RESTIC_CFG_EXECUTABLE, 'restic') or 'restic'),
-        RESTIC_CFG_WORKING_DIRECTORY: normalize_optional_path(str(restic_cfg.get(RESTIC_CFG_WORKING_DIRECTORY, '') or '')),
-        RESTIC_CFG_REPOSITORY: str(get_effective_restic_repository(restic_cfg) or ''),
-        RESTIC_CFG_PASSWORD: sha256_text(str(restic_cfg.get(RESTIC_CFG_PASSWORD, '') or '')),
-        RESTIC_CFG_PASSWORD_FILE: normalize_optional_path(str(restic_cfg.get(RESTIC_CFG_PASSWORD_FILE, '') or '')),
+        RESTIC_CFG_EXECUTABLE: str(
+            restic_cfg.get(RESTIC_CFG_EXECUTABLE, "restic") or "restic"
+        ),
+        RESTIC_CFG_WORKING_DIRECTORY: normalize_optional_path(
+            str(restic_cfg.get(RESTIC_CFG_WORKING_DIRECTORY, "") or "")
+        ),
+        RESTIC_CFG_REPOSITORY: str(get_effective_restic_repository(restic_cfg) or ""),
+        RESTIC_CFG_PASSWORD: sha256_text(
+            str(restic_cfg.get(RESTIC_CFG_PASSWORD, "") or "")
+        ),
+        RESTIC_CFG_PASSWORD_FILE: normalize_optional_path(
+            str(restic_cfg.get(RESTIC_CFG_PASSWORD_FILE, "") or "")
+        ),
         RESTIC_CFG_ENVIRONMENT: hashed_environment_pairs(configured_env),
     }
-    text = json.dumps(key_material, ensure_ascii=False, sort_keys=True, separators=(',', ':'))
+    text = json.dumps(
+        key_material, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    )
     return sha256_text(text)
 
 
 def hashed_environment_pairs(configured_env: Dict[Any, Any]):
     return [
-        [str(key), sha256_text('' if value is None else str(value))]
+        [str(key), sha256_text("" if value is None else str(value))]
         for key, value in sorted(configured_env.items(), key=lambda item: str(item[0]))
     ]
 
 
 def normalize_optional_path(path: str) -> str:
-    text = str(path or '').strip()
+    text = str(path or "").strip()
     if not text:
-        return ''
+        return ""
     try:
         return normalize_filesystem_path(text)
     except Exception:
@@ -79,19 +92,41 @@ def get_snapshot_cache_config(
     config_snapshot_provider: Optional[Callable[[], Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
     if cfg is None:
-        cfg = config_snapshot_provider() if config_snapshot_provider is not None else build_default_config()
-    snapshot_cfg = cfg.get('snapshot_cache', {}) if isinstance(cfg.get('snapshot_cache'), dict) else {}
+        cfg = (
+            config_snapshot_provider()
+            if config_snapshot_provider is not None
+            else build_default_config()
+        )
+    snapshot_cfg = (
+        cfg.get("snapshot_cache", {})
+        if isinstance(cfg.get("snapshot_cache"), dict)
+        else {}
+    )
     merged = copy.deepcopy(snapshot_cfg)
     merge_defaults(merged, build_default_snapshot_cache_config())
     return merged
 
 
 def get_snapshot_page_size(snapshot_cfg: Dict[str, Any]) -> int:
-    return max(1, min(100, int(snapshot_cfg.get('page_size', SNAPSHOT_PAGE_SIZE) or SNAPSHOT_PAGE_SIZE)))
+    return max(
+        1,
+        min(
+            100,
+            int(
+                snapshot_cfg.get("page_size", SNAPSHOT_PAGE_SIZE) or SNAPSHOT_PAGE_SIZE
+            ),
+        ),
+    )
 
 
 def get_snapshot_query_timeout(snapshot_cfg: Dict[str, Any]) -> int:
-    return max(1, int(snapshot_cfg.get('query_timeout_seconds', SNAPSHOT_QUERY_TIMEOUT_SECONDS) or SNAPSHOT_QUERY_TIMEOUT_SECONDS))
+    return max(
+        1,
+        int(
+            snapshot_cfg.get("query_timeout_seconds", SNAPSHOT_QUERY_TIMEOUT_SECONDS)
+            or SNAPSHOT_QUERY_TIMEOUT_SECONDS
+        ),
+    )
 
 
 def ensure_snapshot_cache_fresh(
@@ -103,16 +138,16 @@ def ensure_snapshot_cache_fresh(
     language: str,
 ) -> str:
     if is_snapshot_cache_valid(server, snapshot_cfg, cache_key):
-        return ''
+        return ""
     if not snapshot_query_lock.acquire(blocking=False):
         return localized_refresh_running(language)
     try:
         refresh_snapshot_cache(server, restic_cfg, cache_key, snapshot_cfg, language)
     except BackupProblem:
-        return ''
+        return ""
     finally:
         snapshot_query_lock.release()
-    return ''
+    return ""
 
 
 def is_snapshot_cache_valid(
@@ -122,11 +157,11 @@ def is_snapshot_cache_valid(
 ) -> bool:
     with closing(open_snapshot_db(server, snapshot_cfg)) as conn:
         meta = read_snapshot_meta(conn, cache_key)
-    return meta is not None and int(meta['invalidated'] or 0) == 0
+    return meta is not None and int(meta["invalidated"] or 0) == 0
 
 
 def localized_refresh_running(language: str) -> str:
-    return tr(language, 'snapshot.cache.refresh_running')
+    return tr(language, "snapshot.cache.refresh_running")
 
 
 def refresh_snapshot_cache(
@@ -140,15 +175,19 @@ def refresh_snapshot_cache(
     started = time.monotonic()
     with closing(open_snapshot_db(server, snapshot_cfg)) as conn:
         try:
-            count = import_restic_snapshots_to_sql(restic_cfg, conn, temp_key, get_snapshot_query_timeout(snapshot_cfg))
-            commit_refreshed_snapshot_cache(conn, cache_key, temp_key, count, time.monotonic() - started)
+            count = import_restic_snapshots_to_sql(
+                restic_cfg, conn, temp_key, get_snapshot_query_timeout(snapshot_cfg)
+            )
+            commit_refreshed_snapshot_cache(
+                conn, cache_key, temp_key, count, time.monotonic() - started
+            )
         except Exception as exc:
             error = record_snapshot_refresh_failure(
                 conn,
                 cache_key,
                 temp_key,
                 tr_error(language, exc),
-                time.monotonic() - started
+                time.monotonic() - started,
             )
             raise BackupProblem(error)
         finally:
@@ -156,35 +195,36 @@ def refresh_snapshot_cache(
 
 
 def make_snapshot_refresh_temp_key(cache_key: str) -> str:
-    return '{}:refresh:{}:{}'.format(cache_key, int(time.time() * 1000), threading.get_ident())
+    return "{}:refresh:{}:{}".format(
+        cache_key, int(time.time() * 1000), threading.get_ident()
+    )
 
 
 def invalidate_snapshot_cache(
     server: Optional[PluginServerInterface] = None,
     restic_cfg: Optional[Dict[str, Any]] = None,
-    reason: str = '',
+    reason: str = "",
     default_server: Optional[PluginServerInterface] = None,
     config_snapshot_provider: Optional[Callable[[], Dict[str, Any]]] = None,
 ):
     target, resolved_restic_cfg, snapshot_cfg = resolve_snapshot_invalidation_context(
-        server,
-        restic_cfg,
-        default_server,
-        config_snapshot_provider
+        server, restic_cfg, default_server, config_snapshot_provider
     )
     if target is None:
         return
-    if not bool(snapshot_cfg.get('enabled', True)):
+    if not bool(snapshot_cfg.get("enabled", True)):
         return
     try:
         mark_snapshot_cache_invalid(
             target,
             snapshot_cfg,
             resolved_restic_cfg,
-            resolve_snapshot_invalidation_reason(target, reason)
+            resolve_snapshot_invalidation_reason(target, reason),
         )
     except Exception as exc:
-        target.logger.debug(server_tr(target, 'debug.snapshot.invalidate_failed', error=exc))
+        target.logger.debug(
+            server_tr(target, "debug.snapshot.invalidate_failed", error=exc)
+        )
 
 
 def resolve_snapshot_invalidation_context(
@@ -195,11 +235,29 @@ def resolve_snapshot_invalidation_context(
 ) -> Tuple[Optional[PluginServerInterface], Dict[str, Any], Dict[str, Any]]:
     target = server or default_server
     if restic_cfg is not None:
-        return target, restic_cfg, get_snapshot_cache_config(config_snapshot_provider=config_snapshot_provider)
+        return (
+            target,
+            restic_cfg,
+            get_snapshot_cache_config(
+                config_snapshot_provider=config_snapshot_provider
+            ),
+        )
 
-    cfg = config_snapshot_provider() if config_snapshot_provider is not None else build_default_config()
-    resolved_restic_cfg = cfg.get('restic', {}) if isinstance(cfg.get('restic'), dict) else {}
-    return target, resolved_restic_cfg, get_snapshot_cache_config(cfg, config_snapshot_provider=config_snapshot_provider)
+    cfg = (
+        config_snapshot_provider()
+        if config_snapshot_provider is not None
+        else build_default_config()
+    )
+    resolved_restic_cfg = (
+        cfg.get("restic", {}) if isinstance(cfg.get("restic"), dict) else {}
+    )
+    return (
+        target,
+        resolved_restic_cfg,
+        get_snapshot_cache_config(
+            cfg, config_snapshot_provider=config_snapshot_provider
+        ),
+    )
 
 
 def mark_snapshot_cache_invalid(
@@ -213,31 +271,35 @@ def mark_snapshot_cache_invalid(
         existing = read_snapshot_meta(conn, cache_key)
         with conn:
             conn.execute(
-                '''
+                """
                 INSERT OR REPLACE INTO snapshot_meta
                 (
                     cache_key, updated_at_epoch, updated_at_text, snapshot_count,
                     error, invalidated, invalidation_reason, last_refresh_duration
                 )
                 VALUES (?, ?, ?, ?, '', 1, ?, ?)
-                ''',
-                build_snapshot_invalidation_row(cache_key, existing, reason)
+                """,
+                build_snapshot_invalidation_row(cache_key, existing, reason),
             )
 
 
-def build_snapshot_invalidation_row(cache_key: str, existing, reason: str) -> Tuple[Any, ...]:
+def build_snapshot_invalidation_row(
+    cache_key: str, existing, reason: str
+) -> Tuple[Any, ...]:
     return (
         cache_key,
-        float(existing['updated_at_epoch'] or 0) if existing is not None else 0,
-        existing['updated_at_text'] if existing is not None else None,
-        int(existing['snapshot_count'] or 0) if existing is not None else 0,
-        '{} @ {}'.format(reason, now_text()),
-        float(existing['last_refresh_duration'] or 0) if existing is not None else 0
+        float(existing["updated_at_epoch"] or 0) if existing is not None else 0,
+        existing["updated_at_text"] if existing is not None else None,
+        int(existing["snapshot_count"] or 0) if existing is not None else 0,
+        "{} @ {}".format(reason, now_text()),
+        float(existing["last_refresh_duration"] or 0) if existing is not None else 0,
     )
 
 
-def resolve_snapshot_invalidation_reason(server: PluginServerInterface, reason: str) -> str:
-    text = str(reason or '').strip()
+def resolve_snapshot_invalidation_reason(
+    server: PluginServerInterface, reason: str
+) -> str:
+    text = str(reason or "").strip()
     if text:
         return text
-    return server_tr(server, 'snapshot.cache.reason.repository_changed')
+    return server_tr(server, "snapshot.cache.reason.repository_changed")

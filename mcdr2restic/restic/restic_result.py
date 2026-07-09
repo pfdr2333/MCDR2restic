@@ -15,8 +15,10 @@ from mcdr2restic.restic.restic_constants import (
 
 
 def assert_restic_success(restic_cfg: Dict[str, Any], result: ResticCommandResult):
-    success_codes = set(int(code) for code in restic_cfg.get(RESTIC_CFG_SUCCESS_EXIT_CODES, [0]))
-    combined = '{}\n{}'.format(result.stdout, result.stderr)
+    success_codes = set(
+        int(code) for code in restic_cfg.get(RESTIC_CFG_SUCCESS_EXIT_CODES, [0])
+    )
+    combined = "{}\n{}".format(result.stdout, result.stderr)
     max_output_chars = int(restic_cfg.get(RESTIC_CFG_MAX_OUTPUT_CHARS, 1800))
 
     assert_no_json_errors(result, max_output_chars)
@@ -27,9 +29,9 @@ def assert_restic_success(restic_cfg: Dict[str, Any], result: ResticCommandResul
 def assert_no_json_errors(result: ResticCommandResult, max_output_chars: int):
     if result.json_errors:
         raise BackupProblem(
-            i18n_key='error.restic.json_output_error',
+            i18n_key="error.restic.json_output_error",
             phase=result.phase,
-            output=tail_text('\n'.join(result.json_errors), max_output_chars)
+            output=tail_text("\n".join(result.json_errors), max_output_chars),
         )
 
 
@@ -42,11 +44,11 @@ def assert_return_code_success(
     if result.return_code in success_codes:
         return
     raise BackupProblem(
-        i18n_key='error.restic.return_code',
+        i18n_key="error.restic.return_code",
         phase=result.phase,
         return_code=result.return_code,
         duration_seconds=int(result.duration_seconds),
-        output=tail_text(combined_output, max_output_chars)
+        output=tail_text(combined_output, max_output_chars),
     )
 
 
@@ -59,18 +61,20 @@ def assert_no_suspicious_output(
     suspicious_lines = detect_error_lines(
         combined_output,
         restic_cfg.get(RESTIC_CFG_ERROR_REGEXES, []),
-        restic_cfg.get(RESTIC_CFG_IGNORE_ERROR_REGEXES, [])
+        restic_cfg.get(RESTIC_CFG_IGNORE_ERROR_REGEXES, []),
     )
     if not suspicious_lines:
         return
     raise BackupProblem(
-        i18n_key='error.restic.suspicious_output',
+        i18n_key="error.restic.suspicious_output",
         phase=result.phase,
-        output=tail_text('\n'.join(suspicious_lines), max_output_chars)
+        output=tail_text("\n".join(suspicious_lines), max_output_chars),
     )
 
 
-def detect_error_lines(text: str, patterns: Iterable[str], ignore_patterns: Iterable[str]) -> List[str]:
+def detect_error_lines(
+    text: str, patterns: Iterable[str], ignore_patterns: Iterable[str]
+) -> List[str]:
     compiled = [re.compile(pattern) for pattern in patterns if pattern]
     ignored = [re.compile(pattern) for pattern in ignore_patterns if pattern]
     lines: List[str] = []

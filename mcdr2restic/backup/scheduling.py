@@ -9,46 +9,52 @@ from mcdr2restic.core.i18n import FALLBACK_LANGUAGE, tr
 from mcdr2restic.core.models import LocalizedValueError
 
 
-DEFAULT_NORMAL_CRON = '0 0 0,3,6,9,12,15,18,21 * * *'
-DISABLED_CRON = '0'
+DEFAULT_NORMAL_CRON = "0 0 0,3,6,9,12,15,18,21 * * *"
+DISABLED_CRON = "0"
 
 
 def compute_update_check_wait_seconds(cfg: Dict[str, Any]) -> Tuple[float, str]:
-    update_cfg = cfg.get('update_check', {}) if isinstance(cfg.get('update_check'), dict) else {}
-    daily_time = parse_daily_time(str(update_cfg.get('daily_time', '00:00') or '00:00'))
+    update_cfg = (
+        cfg.get("update_check", {}) if isinstance(cfg.get("update_check"), dict) else {}
+    )
+    daily_time = parse_daily_time(str(update_cfg.get("daily_time", "00:00") or "00:00"))
     now = datetime.now()
     due = now.replace(hour=daily_time[0], minute=daily_time[1], second=0, microsecond=0)
     if due <= now:
         due = due + timedelta(days=1)
-    return (due - now).total_seconds(), due.strftime('%Y-%m-%d %H:%M:%S')
+    return (due - now).total_seconds(), due.strftime("%Y-%m-%d %H:%M:%S")
 
 
 def parse_daily_time(text: str) -> Tuple[int, int]:
-    parts = str(text or '').strip().split(':')
+    parts = str(text or "").strip().split(":")
     if len(parts) != 2:
-        raise LocalizedValueError('error.schedule.daily_time_format')
+        raise LocalizedValueError("error.schedule.daily_time_format")
     hour = int(parts[0])
     minute = int(parts[1])
     if hour < 0 or hour > 23 or minute < 0 or minute > 59:
-        raise LocalizedValueError('error.schedule.daily_time_range', value=text)
+        raise LocalizedValueError("error.schedule.daily_time_range", value=text)
     return hour, minute
 
 
-def compute_wait_seconds(cfg: Dict[str, Any], language: str = FALLBACK_LANGUAGE) -> Tuple[float, str]:
+def compute_wait_seconds(
+    cfg: Dict[str, Any], language: str = FALLBACK_LANGUAGE
+) -> Tuple[float, str]:
     return compute_schedule_wait_seconds(
-        cfg.get('schedule', {}),
+        cfg.get("schedule", {}),
         DEFAULT_NORMAL_CRON,
         disabled_when_zero_cron=False,
-        language=language
+        language=language,
     )
 
 
-def compute_force_wait_seconds(cfg: Dict[str, Any], language: str = FALLBACK_LANGUAGE) -> Optional[Tuple[float, str]]:
+def compute_force_wait_seconds(
+    cfg: Dict[str, Any], language: str = FALLBACK_LANGUAGE
+) -> Optional[Tuple[float, str]]:
     return compute_schedule_wait_seconds(
-        cfg.get('force_schedule', {}),
+        cfg.get("force_schedule", {}),
         DISABLED_CRON,
         disabled_when_zero_cron=True,
-        language=language
+        language=language,
     )
 
 
@@ -60,15 +66,19 @@ def compute_schedule_wait_seconds(
 ) -> Optional[Tuple[float, str]]:
     if not isinstance(schedule, dict):
         schedule = {}
-    interval_seconds = int(schedule.get('interval_seconds', 0))
+    interval_seconds = int(schedule.get("interval_seconds", 0))
     if interval_seconds > 0:
-        return float(interval_seconds), tr(language, 'status.schedule.fixed_interval', seconds=interval_seconds)
+        return float(interval_seconds), tr(
+            language, "status.schedule.fixed_interval", seconds=interval_seconds
+        )
     if interval_seconds < 0:
-        raise LocalizedValueError('error.schedule.interval_negative')
-    cron_text = str(schedule.get('cron_expression', default_cron) or '').strip()
-    if disabled_when_zero_cron and cron_text in ('', DISABLED_CRON):
+        raise LocalizedValueError("error.schedule.interval_negative")
+    cron_text = str(schedule.get("cron_expression", default_cron) or "").strip()
+    if disabled_when_zero_cron and cron_text in ("", DISABLED_CRON):
         return None
     cron = CronExpression(cron_text)
     now = datetime.now()
     next_time = cron.next_after(now)
-    return max(0.0, (next_time - datetime.now()).total_seconds()), next_time.strftime('%Y-%m-%d %H:%M:%S')
+    return max(0.0, (next_time - datetime.now()).total_seconds()), next_time.strftime(
+        "%Y-%m-%d %H:%M:%S"
+    )

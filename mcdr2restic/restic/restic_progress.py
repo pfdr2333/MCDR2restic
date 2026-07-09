@@ -9,17 +9,22 @@ from mcdreforged.api.all import PluginServerInterface
 
 from mcdr2restic.core.i18n import server_tr
 from mcdr2restic.core.models import ResticProgressState
-from mcdr2restic.restic.restic_progress_text import format_restic_json_error, format_restic_progress
+from mcdr2restic.restic.restic_progress_text import (
+    format_restic_json_error,
+    format_restic_progress,
+)
 from mcdr2restic.core.utils import tail_text
 
 
-def build_restic_progress_state(phase: str, language: str, started: float) -> ResticProgressState:
+def build_restic_progress_state(
+    phase: str, language: str, started: float
+) -> ResticProgressState:
     return ResticProgressState(
         phase=phase,
         language=language,
         json_errors=[],
         started_at=started,
-        last_emit_at=started
+        last_emit_at=started,
     )
 
 
@@ -29,11 +34,11 @@ def handle_restic_stream_line(
     stream_name: str,
     line: str,
 ):
-    text = str(line or '').strip()
+    text = str(line or "").strip()
     if not text:
         return
     progress.last_text = text
-    if not text.startswith('{'):
+    if not text.startswith("{"):
         return
     handle_restic_json_line(server, progress, text)
 
@@ -60,22 +65,24 @@ def apply_restic_json_payload(
     text: str,
     payload: dict,
 ):
-    message_type = str(payload.get('message_type') or '').strip()
-    if message_type == 'status':
+    message_type = str(payload.get("message_type") or "").strip()
+    if message_type == "status":
         progress.status = payload
-    elif message_type == 'summary':
+    elif message_type == "summary":
         progress.summary = payload
-    elif message_type in ('error', 'exit_error'):
+    elif message_type in ("error", "exit_error"):
         if progress.json_errors is None:
             progress.json_errors = []
         progress.json_errors.append(format_restic_json_error(payload))
     elif server is not None:
-        server.logger.debug(server_tr(
-            server,
-            'debug.restic.unhandled_json',
-            phase=progress.phase,
-            payload=tail_text(text, 500)
-        ))
+        server.logger.debug(
+            server_tr(
+                server,
+                "debug.restic.unhandled_json",
+                phase=progress.phase,
+                payload=tail_text(text, 500),
+            )
+        )
 
 
 def maybe_emit_restic_progress(

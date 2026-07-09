@@ -17,7 +17,9 @@ from mcdr2restic.core.utils import safe_int
 BackupRunnerFactory = Callable[[], BackupRunner]
 ReloadServices = Callable[[PluginServerInterface], None]
 WakeScheduler = Callable[[], None]
-SnapshotInvalidator = Callable[[Optional[PluginServerInterface], Optional[Dict[str, Any]], str], None]
+SnapshotInvalidator = Callable[
+    [Optional[PluginServerInterface], Optional[Dict[str, Any]], str], None
+]
 
 
 @dataclass
@@ -39,12 +41,12 @@ class CommandContext:
             allowed = False
         if not allowed:
             server = self.server_from_source(source)
-            reply_tr(source, server, 'error.permission.denied', level=level)
+            reply_tr(source, server, "error.permission.denied", level=level)
         return allowed
 
     def get_command_permission_level(self) -> int:
         cfg = get_config_snapshot(self.app_runtime)
-        return safe_int(cfg.get('command', {}).get('permission_level', 3), 3)
+        return safe_int(cfg.get("command", {}).get("permission_level", 3), 3)
 
     def get_command_root(self) -> str:
         return get_command_root(self.app_runtime)

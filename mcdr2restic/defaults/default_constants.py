@@ -1,31 +1,37 @@
 # -*- coding: utf-8 -*-
+"""Centralized constant values shared across configuration and runtime layers."""
+
 from __future__ import annotations
 
+from typing import Final
 
-PLUGIN_ID = 'mcdr2restic'
 
-CONFIG_NAME = 'config.yml'
+PLUGIN_ID: Final[str] = "mcdr2restic"
 
-STATE_NAME = 'state.yml'
+CONFIG_NAME: Final[str] = "config.yml"
 
-SNAPSHOT_DB_NAME = 'snapshots.sqlite3'
+STATE_NAME: Final[str] = "state.yml"
 
-LEGACY_CONFIG_NAME = 'config.json'
+SNAPSHOT_DB_NAME: Final[str] = "snapshots.sqlite3"
 
-CONFIG_VERSION = 9
+LEGACY_CONFIG_NAME: Final[str] = "config.json"
 
-PLUGIN_REPOSITORY_URL = 'https://github.com/pfdr2333/MCDR2restic'
+CONFIG_VERSION: Final[int] = 9
 
-DEFAULT_UPDATE_API_URL = 'https://api.github.com/repos/pfdr2333/MCDR2restic/releases/latest'
+PLUGIN_REPOSITORY_URL: Final[str] = "https://github.com/pfdr2333/MCDR2restic"
 
-DEFAULT_PROXY_PREFIXES = (
-    'https://gh.llkk.cc/',
-    'https://gh-proxy.com/',
-    'https://hub.gitmirror.com/',
+DEFAULT_UPDATE_API_URL: Final[str] = (
+    "https://api.github.com/repos/pfdr2333/MCDR2restic/releases/latest"
 )
 
-SNAPSHOT_PAGE_SIZE = 10
+DEFAULT_PROXY_PREFIXES: Final[tuple[str, ...]] = (
+    "https://gh.llkk.cc/",
+    "https://gh-proxy.com/",
+    "https://hub.gitmirror.com/",
+)
 
-SNAPSHOT_QUERY_TIMEOUT_SECONDS = 30
+SNAPSHOT_PAGE_SIZE: Final[int] = 10
 
-RESTIC_PROGRESS_INTERVAL_SECONDS = 5
+SNAPSHOT_QUERY_TIMEOUT_SECONDS: Final[int] = 30
+
+RESTIC_PROGRESS_INTERVAL_SECONDS: Final[int] = 5

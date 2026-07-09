@@ -8,7 +8,12 @@ from typing import Any, Callable, Dict, Optional
 from mcdreforged.api.all import PluginServerInterface
 
 from mcdr2restic.core.i18n import server_tr
-from mcdr2restic.minecraft.minecraft_service import check_canceled, execute_mc_command, is_mc_ready, sleep_or_cancel
+from mcdr2restic.minecraft.minecraft_service import (
+    check_canceled,
+    execute_mc_command,
+    is_mc_ready,
+    sleep_or_cancel,
+)
 from mcdr2restic.core.models import BackupProblem
 from mcdr2restic.restic.restic_config import (
     assert_backup_sources_do_not_contain_repository,
@@ -26,7 +31,9 @@ from mcdr2restic.restic.restic_constants import (
     RESTIC_ENV_REPOSITORY,
     RESTIC_PHASE_MAINTENANCE,
 )
-from mcdr2restic.restic.restic_download import ensure_default_restic_executable_available
+from mcdr2restic.restic.restic_download import (
+    ensure_default_restic_executable_available,
+)
 from mcdr2restic.restic.restic_runner import run_restic_command
 from mcdr2restic.restic.restic_result import assert_restic_success
 from mcdr2restic.core.runtime import PluginRuntime
@@ -41,14 +48,25 @@ def run_backup_body(
     server: PluginServerInterface,
     cfg: Dict[str, Any],
     label: str,
-    invalidate_snapshot_cache_func: SnapshotCacheInvalidator
+    invalidate_snapshot_cache_func: SnapshotCacheInvalidator,
 ) -> str:
-    restic_cfg = cfg.get('restic', {})
+    restic_cfg = cfg.get("restic", {})
     deadline = make_restic_deadline(restic_cfg)
-    newly_initialized = prepare_backup_repository(app_runtime, server, restic_cfg, deadline, invalidate_snapshot_cache_func)
-    run_backup_maintenance(app_runtime, server, restic_cfg, deadline, newly_initialized, invalidate_snapshot_cache_func)
+    newly_initialized = prepare_backup_repository(
+        app_runtime, server, restic_cfg, deadline, invalidate_snapshot_cache_func
+    )
+    run_backup_maintenance(
+        app_runtime,
+        server,
+        restic_cfg,
+        deadline,
+        newly_initialized,
+        invalidate_snapshot_cache_func,
+    )
     prepare_minecraft_for_backup(app_runtime, server, cfg)
-    return run_backup_command(app_runtime, server, restic_cfg, deadline, invalidate_snapshot_cache_func)
+    return run_backup_command(
+        app_runtime, server, restic_cfg, deadline, invalidate_snapshot_cache_func
+    )
 
 
 def prepare_backup_repository(
@@ -56,13 +74,15 @@ def prepare_backup_repository(
     server: PluginServerInterface,
     restic_cfg: Dict[str, Any],
     deadline: Optional[float],
-    invalidate_snapshot_cache_func: SnapshotCacheInvalidator
+    invalidate_snapshot_cache_func: SnapshotCacheInvalidator,
 ) -> bool:
     if not is_mc_ready(app_runtime, server):
-        raise BackupProblem(i18n_key='error.backup.minecraft_not_ready')
+        raise BackupProblem(i18n_key="error.backup.minecraft_not_ready")
     assert_backup_sources_do_not_contain_repository(restic_cfg)
     ensure_default_restic_executable_available(server, restic_cfg)
-    return ensure_restic_repository_initialized(app_runtime, server, restic_cfg, deadline, invalidate_snapshot_cache_func)
+    return ensure_restic_repository_initialized(
+        app_runtime, server, restic_cfg, deadline, invalidate_snapshot_cache_func
+    )
 
 
 def run_backup_maintenance(
@@ -71,31 +91,53 @@ def run_backup_maintenance(
     restic_cfg: Dict[str, Any],
     deadline: Optional[float],
     newly_initialized: bool,
-    invalidate_snapshot_cache_func: SnapshotCacheInvalidator
+    invalidate_snapshot_cache_func: SnapshotCacheInvalidator,
 ):
     if newly_initialized:
-        server.logger.info(server_tr(server, 'info.restic.maintenance_skipped_after_init'))
+        server.logger.info(
+            server_tr(server, "info.restic.maintenance_skipped_after_init")
+        )
         return
     for command in restic_cfg.get(RESTIC_CFG_MAINTENANCE_COMMANDS, []):
         check_canceled(app_runtime)
-        result = run_restic_command(app_runtime, restic_cfg, command, RESTIC_PHASE_MAINTENANCE, deadline)
+        result = run_restic_command(
+            app_runtime, restic_cfg, command, RESTIC_PHASE_MAINTENANCE, deadline
+        )
         assert_restic_success(restic_cfg, result)
         invalidate_snapshot_cache_func(
             server,
             restic_cfg,
-            server_tr(server, 'snapshot.cache.reason.maintenance_finished')
+            server_tr(server, "snapshot.cache.reason.maintenance_finished"),
         )
 
 
-def prepare_minecraft_for_backup(app_runtime: PluginRuntime, server: PluginServerInterface, cfg: Dict[str, Any]):
-    minecraft_cfg = cfg.get('minecraft', {}) if isinstance(cfg.get('minecraft'), dict) else {}
+def prepare_minecraft_for_backup(
+    app_runtime: PluginRuntime, server: PluginServerInterface, cfg: Dict[str, Any]
+):
+    minecraft_cfg = (
+        cfg.get("minecraft", {}) if isinstance(cfg.get("minecraft"), dict) else {}
+    )
     check_canceled(app_runtime)
-    execute_mc_command(app_runtime, server, minecraft_cfg.get('save_off_command', 'save-off'), 'save-off')
-    sleep_or_cancel(app_runtime, float(minecraft_cfg.get('wait_after_save_off_seconds', 2)))
+    execute_mc_command(
+        app_runtime,
+        server,
+        minecraft_cfg.get("save_off_command", "save-off"),
+        "save-off",
+    )
+    sleep_or_cancel(
+        app_runtime, float(minecraft_cfg.get("wait_after_save_off_seconds", 2))
+    )
 
     check_canceled(app_runtime)
-    execute_mc_command(app_runtime, server, minecraft_cfg.get('save_all_command', 'save-all flush'), 'save-all')
-    sleep_or_cancel(app_runtime, float(minecraft_cfg.get('wait_after_save_all_seconds', 10)))
+    execute_mc_command(
+        app_runtime,
+        server,
+        minecraft_cfg.get("save_all_command", "save-all flush"),
+        "save-all",
+    )
+    sleep_or_cancel(
+        app_runtime, float(minecraft_cfg.get("wait_after_save_all_seconds", 10))
+    )
 
 
 def run_backup_command(
@@ -103,7 +145,7 @@ def run_backup_command(
     server: PluginServerInterface,
     restic_cfg: Dict[str, Any],
     deadline: Optional[float],
-    invalidate_snapshot_cache_func: SnapshotCacheInvalidator
+    invalidate_snapshot_cache_func: SnapshotCacheInvalidator,
 ) -> str:
     check_canceled(app_runtime)
     result = run_restic_command(
@@ -111,15 +153,14 @@ def run_backup_command(
         restic_cfg,
         restic_cfg.get(RESTIC_CFG_BACKUP_COMMAND, []),
         RESTIC_COMMAND_BACKUP,
-        deadline
+        deadline,
     )
     assert_restic_success(restic_cfg, result)
     invalidate_snapshot_cache_func(
-        server,
-        restic_cfg,
-        server_tr(server, 'snapshot.cache.reason.backup_finished')
+        server, restic_cfg, server_tr(server, "snapshot.cache.reason.backup_finished")
     )
     return result.snapshot_id
+
 
 def make_restic_deadline(restic_cfg: Dict[str, Any]) -> Optional[float]:
     timeout_seconds = safe_int(restic_cfg.get(RESTIC_CFG_TIMEOUT_SECONDS, 0), 0)
@@ -127,37 +168,51 @@ def make_restic_deadline(restic_cfg: Dict[str, Any]) -> Optional[float]:
         return None
     return time.monotonic() + max(1, timeout_seconds)
 
+
 def ensure_restic_repository_initialized(
     app_runtime: PluginRuntime,
     server: PluginServerInterface,
     restic_cfg: Dict[str, Any],
     deadline: Optional[float],
-    invalidate_snapshot_cache_func: SnapshotCacheInvalidator
+    invalidate_snapshot_cache_func: SnapshotCacheInvalidator,
 ) -> bool:
     if not bool(restic_cfg.get(RESTIC_CFG_AUTO_INIT_LOCAL_REPOSITORY, True)):
         return False
     env = build_restic_environment(restic_cfg)
-    repository = str(env.get(RESTIC_ENV_REPOSITORY, '') or '').strip()
+    repository = str(env.get(RESTIC_ENV_REPOSITORY, "") or "").strip()
     if not repository:
         return False
     if not is_local_restic_repository(repository):
-        server.logger.debug(server_tr(server, 'debug.restic.auto_init_skipped_remote', repository=repository))
+        server.logger.debug(
+            server_tr(
+                server, "debug.restic.auto_init_skipped_remote", repository=repository
+            )
+        )
         return False
 
     repository_path = resolve_restic_repository_path(restic_cfg, repository)
-    config_path = os.path.join(repository_path, 'config')
+    config_path = os.path.join(repository_path, "config")
     if os.path.isfile(config_path):
         return False
     if os.path.exists(repository_path) and not os.path.isdir(repository_path):
-        raise BackupProblem(i18n_key='error.restic.repository_path_not_directory', repository_path=repository_path)
+        raise BackupProblem(
+            i18n_key="error.restic.repository_path_not_directory",
+            repository_path=repository_path,
+        )
 
     os.makedirs(repository_path, exist_ok=True)
-    server.logger.info(server_tr(server, 'info.restic.auto_init_started', repository_path=repository_path))
-    result = run_restic_command(app_runtime, restic_cfg, [RESTIC_COMMAND_INIT], RESTIC_COMMAND_INIT, deadline)
+    server.logger.info(
+        server_tr(
+            server, "info.restic.auto_init_started", repository_path=repository_path
+        )
+    )
+    result = run_restic_command(
+        app_runtime, restic_cfg, [RESTIC_COMMAND_INIT], RESTIC_COMMAND_INIT, deadline
+    )
     assert_restic_success(restic_cfg, result)
     invalidate_snapshot_cache_func(
         server,
         restic_cfg,
-        server_tr(server, 'snapshot.cache.reason.repository_initialized')
+        server_tr(server, "snapshot.cache.reason.repository_initialized"),
     )
     return True
