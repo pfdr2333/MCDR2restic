@@ -9,7 +9,7 @@ MCDR2Restic is an MCDReforged plugin designed to regularly invoke restic to back
 > Before using this project, please familiarize yourself with the core concepts and configuration methods of restic, and ensure you can use restic independently.
 > The usage of restic is beyond the scope of this document (see the [restic](https://restic.readthedocs.io/en/stable/)). Most backup features require a basic understanding of restic. Restic is a fast, efficient, and secure open-source backup tool. Its deduplication capability is particularly well-suited for Minecraft servers, significantly reducing backup sizes.
 
-> Although the plugin's default configuration handles the installation of restic automatically, it is highly recommended to learn how to use restic and its advanced configurations—you will definitely need them. ~~Of course, you can also ask an AI; just remember to enable thinking mode.~~
+> Although the plugin's default configuration handles the installation of restic automatically, it is highly recommended to learn how to use restic and its advanced configurations—you will definitely need them. 
 
 # Language **[中文](README.md)| English**
 
