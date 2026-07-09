@@ -122,6 +122,7 @@ from mcdr2restic.snapshots.snapshot_importer import (
     assert_snapshot_import_finished,
     iter_json_array_stream,
 )
+import mcdr2restic.restic.restic_lock_recovery as restic_lock_recovery
 import mcdr2restic.restic.restic_service as restic_service
 from mcdr2restic.update.update_check import (
     get_current_plugin_version,
@@ -514,6 +515,96 @@ class ResticResultTests(unittest.TestCase):
         self.assertEqual(lines, ["error: failed"])
 
 
+class ResticLockRecoveryTests(unittest.TestCase):
+    LOCK_ERROR_OUTPUT = (
+        "repo already locked, waiting up to 0s for the lock\n\n"
+        "unable to create lock in backend: repository is already locked by PID 69916 "
+        "on T6A-x by T6A-X\\mo182 (UID 0, GID 0)\n"
+        "lock was created at 2026-07-09 09:16:29 (1h22m52.1074711s ago)\n"
+        "storage ID 53ac25a7\n"
+    )
+
+    def test_extract_restic_lock_info_parses_pid_and_host(self):
+        info = restic_lock_recovery.extract_restic_lock_info(self.LOCK_ERROR_OUTPUT)
+
+        self.assertEqual(
+            info, restic_lock_recovery.ResticLockInfo(pid=69916, host="T6A-x")
+        )
+
+    def test_recoverable_stale_lock_info_accepts_dead_local_process(self):
+        result = ResticCommandResult(
+            "maintenance", ["forget"], 11, "", self.LOCK_ERROR_OUTPUT, 1
+        )
+
+        with (
+            mock.patch.object(
+                restic_lock_recovery,
+                "lock_belongs_to_current_host",
+                return_value=True,
+            ),
+            mock.patch.object(
+                restic_lock_recovery, "process_exists", return_value=False
+            ),
+        ):
+            info = restic_lock_recovery.recoverable_stale_lock_info(result)
+
+        self.assertEqual(
+            info, restic_lock_recovery.ResticLockInfo(pid=69916, host="T6A-x")
+        )
+
+    def test_run_restic_command_with_lock_recovery_unlocks_and_retries_once(self):
+        runtime = create_runtime()
+        server = FakePluginServer()
+        locked_result = ResticCommandResult(
+            "maintenance", ["forget"], 11, "", self.LOCK_ERROR_OUTPUT, 1
+        )
+        unlock_result = ResticCommandResult("unlock", ["unlock"], 0, "", "", 0)
+        retry_result = ResticCommandResult("maintenance", ["forget"], 0, "", "", 0)
+        calls = []
+
+        def fake_run(_runtime, _restic_cfg, args, phase, _deadline):
+            calls.append((phase, list(args)))
+            if len(calls) == 1:
+                return locked_result
+            if len(calls) == 2:
+                return unlock_result
+            return retry_result
+
+        with (
+            mock.patch.object(
+                restic_lock_recovery,
+                "recoverable_stale_lock_info",
+                return_value=restic_lock_recovery.ResticLockInfo(
+                    pid=69916, host="T6A-x"
+                ),
+            ),
+            mock.patch.object(
+                restic_lock_recovery, "run_restic_command", side_effect=fake_run
+            ),
+            mock.patch.object(restic_lock_recovery, "assert_restic_success"),
+        ):
+            result = restic_lock_recovery.run_restic_command_with_lock_recovery(
+                runtime,
+                server,
+                {},
+                ["forget"],
+                "maintenance",
+                None,
+            )
+
+        self.assertIs(result, retry_result)
+        self.assertEqual(
+            calls,
+            [
+                ("maintenance", ["forget"]),
+                ("unlock", ["unlock"]),
+                ("maintenance", ["forget"]),
+            ],
+        )
+        self.assertTrue(server.logger.warning_messages)
+        self.assertTrue(server.logger.info_messages)
+
+
 class BackupFlowTests(unittest.TestCase):
     def test_run_backup_body_executes_maintenance_then_minecraft_then_backup(self):
         runtime = create_runtime()
@@ -534,7 +625,7 @@ class BackupFlowTests(unittest.TestCase):
         }
         restic_calls = []
 
-        def fake_run_restic(_runtime, _restic_cfg, args, phase, _deadline):
+        def fake_run_restic(_runtime, _server, _restic_cfg, args, phase, _deadline):
             restic_calls.append((phase, list(args)))
             return ResticCommandResult(
                 phase, list(args), 0, "", "", 0, snapshot_id="abc123"
@@ -554,7 +645,9 @@ class BackupFlowTests(unittest.TestCase):
                 return_value=False,
             ),
             mock.patch.object(
-                restic_service, "run_restic_command", side_effect=fake_run_restic
+                restic_service,
+                "run_restic_command_with_lock_recovery",
+                side_effect=fake_run_restic,
             ),
             mock.patch.object(restic_service, "assert_restic_success"),
         ):

@@ -41,7 +41,9 @@ from mcdr2restic.restic.restic_download import (
     ensure_default_restic_executable_available,
 )
 from mcdr2restic.minecraft.minecraft_service import try_force_save_on
-from mcdr2restic.restic.restic_runner import run_restic_command
+from mcdr2restic.restic.restic_lock_recovery import (
+    run_restic_command_with_lock_recovery,
+)
 from mcdr2restic.restic.restic_result import assert_restic_success
 from mcdr2restic.restic.restic_service import make_restic_deadline, run_backup_body
 from mcdr2restic.core.utils import now_text
@@ -522,8 +524,9 @@ def execute_restore_tasks(
     deadline = make_restic_deadline(restic_cfg)
     ensure_default_restic_executable_available(server, restic_cfg)
     for task in session.tasks:
-        result = run_restic_command(
+        result = run_restic_command_with_lock_recovery(
             app_runtime,
+            server,
             restic_cfg,
             build_restore_command(restic_cfg, task),
             RESTIC_COMMAND_RESTORE,
@@ -702,8 +705,9 @@ def rollback_to_safety_snapshot(
     mark_restore_rollback_started(app_runtime)
     try:
         deadline = make_restic_deadline(restic_cfg)
-        result = run_restic_command(
+        result = run_restic_command_with_lock_recovery(
             app_runtime,
+            server,
             restic_cfg,
             build_full_restore_command(restic_cfg, snapshot_id),
             RESTIC_COMMAND_ROLLBACK,

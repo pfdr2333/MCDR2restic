@@ -34,7 +34,9 @@ from mcdr2restic.restic.restic_constants import (
 from mcdr2restic.restic.restic_download import (
     ensure_default_restic_executable_available,
 )
-from mcdr2restic.restic.restic_runner import run_restic_command
+from mcdr2restic.restic.restic_lock_recovery import (
+    run_restic_command_with_lock_recovery,
+)
 from mcdr2restic.restic.restic_result import assert_restic_success
 from mcdr2restic.core.runtime import PluginRuntime
 from mcdr2restic.core.utils import safe_int
@@ -100,8 +102,13 @@ def run_backup_maintenance(
         return
     for command in restic_cfg.get(RESTIC_CFG_MAINTENANCE_COMMANDS, []):
         check_canceled(app_runtime)
-        result = run_restic_command(
-            app_runtime, restic_cfg, command, RESTIC_PHASE_MAINTENANCE, deadline
+        result = run_restic_command_with_lock_recovery(
+            app_runtime,
+            server,
+            restic_cfg,
+            command,
+            RESTIC_PHASE_MAINTENANCE,
+            deadline,
         )
         assert_restic_success(restic_cfg, result)
         invalidate_snapshot_cache_func(
@@ -148,8 +155,9 @@ def run_backup_command(
     invalidate_snapshot_cache_func: SnapshotCacheInvalidator,
 ) -> str:
     check_canceled(app_runtime)
-    result = run_restic_command(
+    result = run_restic_command_with_lock_recovery(
         app_runtime,
+        server,
         restic_cfg,
         restic_cfg.get(RESTIC_CFG_BACKUP_COMMAND, []),
         RESTIC_COMMAND_BACKUP,
@@ -206,8 +214,13 @@ def ensure_restic_repository_initialized(
             server, "info.restic.auto_init_started", repository_path=repository_path
         )
     )
-    result = run_restic_command(
-        app_runtime, restic_cfg, [RESTIC_COMMAND_INIT], RESTIC_COMMAND_INIT, deadline
+    result = run_restic_command_with_lock_recovery(
+        app_runtime,
+        server,
+        restic_cfg,
+        [RESTIC_COMMAND_INIT],
+        RESTIC_COMMAND_INIT,
+        deadline,
     )
     assert_restic_success(restic_cfg, result)
     invalidate_snapshot_cache_func(
