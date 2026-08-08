@@ -4,11 +4,15 @@ from __future__ import annotations
 import json
 import os
 import re
+from functools import lru_cache
 from typing import List, Optional
 
 import yaml
 
-from mcdr2restic.core.i18n import tr
+from mcdr2restic.defaults.config_template_resources import (
+    config_template_text,
+    load_base_config_template as load_config_template_text,
+)
 from mcdr2restic.defaults.default_constants import (
     CONFIG_VERSION,
     DEFAULT_MAINTENANCE_CRON,
@@ -29,14 +33,18 @@ DEFAULT_BACKUP_COMMENT_MARKER = "__MCDR2RESTIC_DEFAULT_BACKUP_COMMENT__"
 RESTIC_EXECUTABLE_MARKER = "__MCDR2RESTIC_EXECUTABLE__"
 RESTIC_REPOSITORY_MARKER = "__MCDR2RESTIC_REPOSITORY__"
 CONFIG_VERSION_MARKER_COMMENT = "__MCDR2RESTIC_CONFIG_VERSION_MARKER_COMMENT__"
+LANGUAGE_MARKER = "__MCDR2RESTIC_LANGUAGE__"
 UNRESOLVED_MARKER_PATTERN = re.compile(r"__MCDR2RESTIC_[A-Z0-9_]+__")
 
 
 def get_default_config_template(
     language: str, base_directory: Optional[str] = None
 ) -> str:
-    template = tr(language, "template.default_config")
+    template = load_base_config_template(language)
     template = render_platform_placeholders(template, language)
+    template = replace_required_marker(
+        template, LANGUAGE_MARKER, yaml_language_scalar(language)
+    )
     template = render_default_message_placeholders(template, language)
     template = render_default_backup_sources(template, base_directory or os.getcwd())
     template = rewrite_maintenance_command_comments(template)
@@ -47,32 +55,42 @@ def get_default_config_template(
     return template
 
 
+@lru_cache(maxsize=None)
+def load_base_config_template(language: str) -> str:
+    return load_config_template_text(language)
+
+
+DEFAULT_CONFIG_TEMPLATE_ZH = load_base_config_template("zh_cn")
+DEFAULT_CONFIG_TEMPLATE_EN = load_base_config_template("en_us")
+
+
+def adapt_default_config_template_for_platform(
+    template: str, language: str = "zh_cn"
+) -> str:
+    return render_platform_placeholders(template, language)
+
+
 def render_platform_placeholders(template: str, language: str) -> str:
     replacements = {
-        MINECRAFT_SAVE_ALL_COMMENT_MARKER: platform_template_snippet(
+        MINECRAFT_SAVE_ALL_COMMENT_MARKER: config_template_text(
             language, "template.snippet.minecraft_save_all_comment"
         ),
-        DEFAULT_BACKUP_COMMENT_MARKER: platform_template_snippet(
+        DEFAULT_BACKUP_COMMENT_MARKER: config_template_text(
             language, "template.snippet.default_backup_comment"
         ),
-        RESTIC_EXECUTABLE_MARKER: platform_template_snippet(
+        RESTIC_EXECUTABLE_MARKER: config_template_text(
             language, "template.snippet.restic_executable"
         ),
-        RESTIC_REPOSITORY_MARKER: platform_template_snippet(
+        RESTIC_REPOSITORY_MARKER: config_template_text(
             language, "template.snippet.restic_repository"
         ),
-        CONFIG_VERSION_MARKER_COMMENT: tr(
+        CONFIG_VERSION_MARKER_COMMENT: config_template_text(
             language, "template.snippet.config_version_marker_comment"
         ),
     }
     for marker, value in replacements.items():
         template = replace_required_marker(template, marker, value)
     return template
-
-
-def platform_template_snippet(language: str, key_prefix: str) -> str:
-    platform_name = "windows" if os.name == "nt" else "posix"
-    return tr(language, "{}.{}".format(key_prefix, platform_name))
 
 
 def render_default_message_placeholders(template: str, language: str) -> str:
@@ -137,13 +155,19 @@ def yaml_path_scalar(path: str) -> str:
     return json.dumps(text, ensure_ascii=False)
 
 
+def yaml_language_scalar(language: str) -> str:
+    return json.dumps(str(language or ""), ensure_ascii=False)
+
+
 def add_windows_session_lock_exclude(template: str, language: str) -> str:
     if os.name != "nt":
         return template
     marker = '    - "--tag"\n'
     if marker not in template:
         return template
-    comment = tr(language, "template.snippet.session_lock_exclude_comment")
+    comment = config_template_text(
+        language, "template.snippet.session_lock_exclude_comment"
+    )
     block = '{}\n    - "--exclude"\n    - "session.lock"\n'.format(comment)
     return template.replace(marker, block + marker, 1)
 

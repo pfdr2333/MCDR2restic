@@ -17,7 +17,7 @@ from mcdr2restic.config.config_paths import (
 )
 from mcdr2restic.defaults.default_config import default_config_for_language
 from mcdr2restic.defaults.default_constants import CONFIG_NAME
-from mcdr2restic.core.i18n import reply_tr, server_tr
+from mcdr2restic.core.i18n import config_language, server_tr, set_active_language, tr
 from mcdr2restic.core.language import get_mcdr_language
 from mcdr2restic.core.runtime import PluginRuntime
 from mcdr2restic.config.state_store import (
@@ -36,20 +36,25 @@ def load_config(
     server: PluginServerInterface,
     source: Optional[CommandSource] = None,
 ):
-    language = get_mcdr_language(server)
-    loaded = load_config_mapping(server, language)
+    mcdr_language = get_mcdr_language(server)
+    loaded = load_config_mapping(server, mcdr_language)
+    language = config_language(loaded, mcdr_language)
     state = load_state_file(server)
     with app_runtime.config_state.lock:
         app_runtime.config_state.config = loaded
         app_runtime.config_state.state = state
         merge_defaults(
-            app_runtime.config_state.config, default_config_for_language(language)
+            app_runtime.config_state.config,
+            default_config_for_language(language),
         )
+        language = config_language(app_runtime.config_state.config, mcdr_language)
+        app_runtime.config_state.language = language
         ensure_runtime(app_runtime.config_state.config, app_runtime.config_state.state)
         save_config_unlocked(app_runtime, server)
+    set_active_language(language)
     migrate_config_file(server, language, get_config_snapshot(app_runtime))
     if source is not None:
-        reply_tr(source, server, "info.config.reloaded", name=CONFIG_NAME)
+        source.reply(tr(language, "info.config.reloaded", name=CONFIG_NAME))
 
 
 def load_config_mapping(server: PluginServerInterface, language: str) -> Dict[str, Any]:

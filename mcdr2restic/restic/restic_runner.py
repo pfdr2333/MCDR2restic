@@ -8,8 +8,9 @@ import threading
 import time
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
+from mcdr2restic.config.state_store import get_config_snapshot
 from mcdr2restic.defaults.default_constants import RESTIC_PROGRESS_INTERVAL_SECONDS
-from mcdr2restic.core.i18n import tr
+from mcdr2restic.core.i18n import config_language, tr
 from mcdr2restic.core.language import get_mcdr_language
 from mcdr2restic.core.models import (
     BackupCanceled,
@@ -434,7 +435,9 @@ def compute_restic_queue_wait(
 
 
 def get_runtime_language(app_runtime: PluginRuntime) -> str:
-    return get_mcdr_language(app_runtime.service.server)
+    return config_language(
+        get_config_snapshot(app_runtime), get_mcdr_language(app_runtime.service.server)
+    )
 
 
 def raise_backup_canceled_with_termination_result(result, language: str):

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Dict
 
-from mcdr2restic.core.i18n import tr
+from mcdr2restic.defaults.config_template_resources import config_template_text
 
 
 DEFAULT_MESSAGE_KEYS = (
@@ -18,9 +18,13 @@ DEFAULT_MESSAGE_KEYS = (
 
 def build_default_messages(language: str = "zh_cn") -> Dict[str, str]:
     return {
-        key: tr(language, "template.message.{}".format(key))
+        key: config_template_text(language, "template.message.{}".format(key))
         for key in DEFAULT_MESSAGE_KEYS
     }
+
+
+DEFAULT_MESSAGES_ZH = build_default_messages("zh_cn")
+DEFAULT_MESSAGES_EN = build_default_messages("en_us")
 
 
 def get_default_message_template(template_key: str, language: str = "zh_cn") -> str:

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Any, Callable, Dict, Optional
 
-from mcdr2restic.core.i18n import server_tr
+from mcdr2restic.core.i18n import config_language, server_tr
 from mcdr2restic.core.language import get_mcdr_language
 from mcdr2restic.core.runtime import PluginRuntime
 from mcdr2restic.notifications.message_templates import render_message
@@ -118,4 +118,6 @@ class NotificationDispatcher:
         self._warn(server_tr(server, key, **params))
 
     def _language(self) -> str:
-        return get_mcdr_language(self.app_runtime.service.server)
+        return config_language(
+            self.config_provider(), get_mcdr_language(self.app_runtime.service.server)
+        )

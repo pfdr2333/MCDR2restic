@@ -16,19 +16,46 @@ from mcdr2restic.defaults.default_constants import PLUGIN_ID
 
 DEFAULT_LANGUAGE = "zh_cn"
 FALLBACK_LANGUAGE = "en_us"
-SUPPORTED_LANGUAGES = frozenset({DEFAULT_LANGUAGE, FALLBACK_LANGUAGE})
 LANG_PACKAGE = "mcdr2restic.lang"
 TRANSLATION_KEY_PREFIX = "{}.".format(PLUGIN_ID)
 TranslateFunc = Callable[..., str]
+_ACTIVE_LANGUAGE = ""
 
 
 def normalize_language(language: str) -> str:
-    text = str(language or "").lower().replace("-", "_")
-    if text in SUPPORTED_LANGUAGES:
-        return text
-    if text.startswith("zh"):
-        return DEFAULT_LANGUAGE
+    requested = normalize_language_name(language)
+    available = available_language_codes()
+    if requested in available:
+        return requested
+    if requested in {"zh_tw", "zh_hant", "zh_hk", "zh_mo"} and "zh_tw" in available:
+        return "zh_tw"
+    if (
+        requested == "zh"
+        or requested.startswith("zh_cn")
+        or requested.startswith("zh_hans")
+    ) and "zh_cn" in available:
+        return "zh_cn"
     return FALLBACK_LANGUAGE
+
+
+def normalize_language_name(language: str) -> str:
+    return str(language or "").strip().lower().replace("-", "_")
+
+
+def set_active_language(language: str):
+    global _ACTIVE_LANGUAGE
+    _ACTIVE_LANGUAGE = normalize_language(language) if str(language or "").strip() else ""
+
+
+def active_language(server: PluginServerInterface | None = None) -> str:
+    if _ACTIVE_LANGUAGE:
+        return _ACTIVE_LANGUAGE
+    return normalize_language(get_mcdr_language(server))
+
+
+def config_language(cfg: Dict[str, Any], mcdr_language: str = "") -> str:
+    configured = cfg.get("language") if isinstance(cfg, dict) else ""
+    return normalize_language(str(configured or mcdr_language or DEFAULT_LANGUAGE))
 
 
 def tr(language: str, key: str, **params: Any) -> str:
@@ -38,22 +65,22 @@ def tr(language: str, key: str, **params: Any) -> str:
 
 def server_tr(server: PluginServerInterface, key: str, **params: Any) -> str:
     translate = getattr(server, "tr", None)
-    if callable(translate):
+    if callable(translate) and not _ACTIVE_LANGUAGE:
         try:
             return str(translate(plugin_translation_key(key), **params))
         except Exception:
             pass
-    return tr(get_mcdr_language(server), key, **params)
+    return tr(active_language(server), key, **params)
 
 
 def server_rtr(server: PluginServerInterface, key: str, **params: Any) -> Any:
     translate = getattr(server, "rtr", None)
-    if callable(translate):
+    if callable(translate) and not _ACTIVE_LANGUAGE:
         try:
             return translate(plugin_translation_key(key), **params)
         except Exception:
             pass
-    return tr(get_mcdr_language(server), key, **params)
+    return tr(active_language(server), key, **params)
 
 
 def reply_tr(
@@ -66,13 +93,13 @@ def source_tr(
     source: CommandSource, server: PluginServerInterface, key: str, **params: Any
 ) -> str:
     translate = getattr(server, "rtr", None)
-    if callable(translate):
+    if callable(translate) and not _ACTIVE_LANGUAGE:
         try:
             text = translate(plugin_translation_key(key), **params)
             return render_text_for_source(source, text)
         except Exception:
             pass
-    return tr(get_source_language(source, server), key, **params)
+    return tr(active_language(server) if _ACTIVE_LANGUAGE else get_source_language(source, server), key, **params)
 
 
 def make_source_translate(
@@ -155,6 +182,24 @@ def load_language_messages(language: str) -> Dict[str, str]:
         for key, value in data.items()
         if isinstance(key, str) and isinstance(value, str)
     }
+
+
+def supported_languages() -> frozenset[str]:
+    return available_language_codes()
+
+
+@lru_cache(maxsize=None)
+def available_language_codes() -> frozenset[str]:
+    try:
+        entries = resources.files(LANG_PACKAGE).iterdir()
+    except Exception:
+        return frozenset({FALLBACK_LANGUAGE})
+    codes = [
+        entry.name[:-5]
+        for entry in entries
+        if entry.name.endswith(".json") and not entry.name.startswith("__")
+    ]
+    return frozenset(codes) or frozenset({FALLBACK_LANGUAGE})
 
 
 def plugin_translation_key(key: str) -> str:

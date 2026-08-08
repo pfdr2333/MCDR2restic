@@ -7,7 +7,6 @@ from typing import Any, Dict, List, Optional
 
 from mcdr2restic.defaults.default_config import build_default_config
 from mcdr2restic.defaults.default_config_templates import get_default_config_template
-from mcdr2restic.defaults.default_constants import DEFAULT_MAINTENANCE_CRON
 
 
 TOP_LEVEL_KEY_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_-]*\s*:")
@@ -54,31 +53,20 @@ def get_maintenance_schedule_lines(
     language: str, maintenance_schedule: Dict[str, Any]
 ) -> List[str]:
     values = section_values(language, "maintenance_schedule", maintenance_schedule)
-    if str(language).lower().startswith("zh"):
-        lines = [
-            "\n",
-            "maintenance_schedule:\n",
-            "  # 仓库维护调度。默认每天 03:00 执行一次；cron_expression 留空时仍使用默认值。\n",
-            "  # interval_seconds > 0 时使用固定间隔。\n",
-            "  # interval_seconds = 0 且 cron_expression = \"0\" 表示关闭维护调度。\n",
-            "  interval_seconds: 0\n",
-            '  cron_expression: "{}"\n'.format(DEFAULT_MAINTENANCE_CRON),
-        ]
-    else:
-        lines = [
-            "\n",
-            "maintenance_schedule:\n",
-            "  # Repository maintenance schedule. Default: run once per day at 03:00; empty cron_expression keeps this default.\n",
-            "  # interval_seconds > 0 uses a fixed interval.\n",
-            "  # interval_seconds = 0 with cron_expression = \"0\" disables maintenance scheduling.\n",
-            "  interval_seconds: 0\n",
-            '  cron_expression: "{}"\n'.format(DEFAULT_MAINTENANCE_CRON),
-        ]
+    lines = get_top_level_block_lines(language, "maintenance_schedule")
     lines = rewrite_nested_scalar(
         lines, "interval_seconds", values.get("interval_seconds")
     )
     return rewrite_nested_scalar(
         lines, "cron_expression", values.get("cron_expression")
+    )
+
+
+def get_language_lines(language: str, configured_language: str) -> List[str]:
+    return rewrite_top_level_scalar(
+        get_top_level_block_lines(language, "language"),
+        "language",
+        configured_language,
     )
 
 
@@ -300,6 +288,17 @@ def rewrite_nested_scalar(lines: List[str], key: str, value: Any) -> List[str]:
         return lines
     rewritten = list(lines)
     rewritten[index] = rewrite_value_line(rewritten[index], key, value)
+    return rewritten
+
+
+def rewrite_top_level_scalar(lines: List[str], key: str, value: Any) -> List[str]:
+    rewritten = list(lines)
+    pattern = re.compile(r"^({}\s*:\s*).*$".format(re.escape(key)))
+    for index, line in enumerate(rewritten):
+        match = pattern.match(line)
+        if match:
+            rewritten[index] = "{}{}\n".format(match.group(1), yaml_scalar(value))
+            return rewritten
     return rewritten
 
 

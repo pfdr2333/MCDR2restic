@@ -13,6 +13,7 @@ from mcdreforged.api.all import PluginServerInterface
 class ConfigRuntimeState:
     config: Dict[str, Any] = field(default_factory=dict)
     state: Dict[str, Any] = field(default_factory=dict)
+    language: str = ""
     lock: threading.RLock = field(default_factory=threading.RLock)
 
 

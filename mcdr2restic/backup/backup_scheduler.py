@@ -12,7 +12,7 @@ from mcdr2restic.backup.scheduling import (
     compute_maintenance_wait_seconds,
     compute_wait_seconds,
 )
-from mcdr2restic.core.i18n import tr, tr_error
+from mcdr2restic.core.i18n import config_language, tr, tr_error
 from mcdr2restic.core.language import get_mcdr_language
 from mcdr2restic.core.models import BackupTrigger
 
@@ -103,7 +103,7 @@ class BackupScheduler:
         schedule_provider: ScheduleProvider,
         schedule_trigger: ScheduleTrigger,
     ):
-        language = get_mcdr_language(self.server)
+        language = self._language()
         label = tr(language, label_key)
         self.server.logger.info(tr(language, "log.scheduler.started", label=label))
         while not self.stop_event.is_set():
@@ -130,7 +130,7 @@ class BackupScheduler:
         if not self._enabled_or_sleep(cfg):
             return None
         try:
-            return compute_wait_seconds(cfg, get_mcdr_language(self.server))
+            return compute_wait_seconds(cfg, self._language(cfg))
         except Exception as exc:
             self._handle_schedule_error(cfg, exc, "error.schedule.compute_next")
             return None
@@ -140,7 +140,7 @@ class BackupScheduler:
         if not self._enabled_or_sleep(cfg):
             return None
         try:
-            schedule = compute_force_wait_seconds(cfg, get_mcdr_language(self.server))
+            schedule = compute_force_wait_seconds(cfg, self._language(cfg))
         except Exception as exc:
             self._handle_schedule_error(cfg, exc, "error.schedule.compute_forced_next")
             return None
@@ -154,7 +154,7 @@ class BackupScheduler:
             return None
         try:
             schedule = compute_maintenance_wait_seconds(
-                cfg, get_mcdr_language(self.server)
+                cfg, self._language(cfg)
             )
         except Exception as exc:
             self._handle_schedule_error(
@@ -174,7 +174,7 @@ class BackupScheduler:
     def _handle_schedule_error(
         self, cfg: Dict[str, Any], exc: Exception, message_key: str
     ):
-        language = get_mcdr_language(self.server)
+        language = self._language(cfg)
         message = tr(language, message_key)
         detail = tr_error(language, exc)
         self.server.logger.error("{}: {}".format(message, detail))
@@ -209,7 +209,7 @@ class BackupScheduler:
             return False
         if self.mc_ready_provider(self.server):
             return True
-        not_ready_message = tr(get_mcdr_language(self.server), not_ready_key)
+        not_ready_message = tr(self._language(cfg), not_ready_key)
         self.server.logger.warning(not_ready_message)
         self.admin_notifier(
             "backup_not_ready", {"message": not_ready_message}, cfg, True
@@ -218,7 +218,7 @@ class BackupScheduler:
 
     def _handle_no_player_activity_skip(self, cfg: Dict[str, Any]):
         message = tr(
-            get_mcdr_language(self.server), "info.backup.skip_no_player_activity"
+            self._language(cfg), "info.backup.skip_no_player_activity"
         )
         self.server.logger.info(message)
         if cfg.get("notification", {}).get("notify_on_skip", False):
@@ -237,3 +237,8 @@ class BackupScheduler:
                 self.wakeup_event.clear()
                 return True
         return True
+
+    def _language(self, cfg: Optional[Dict[str, Any]] = None) -> str:
+        return config_language(
+            cfg or self.config_provider(), get_mcdr_language(self.server)
+        )

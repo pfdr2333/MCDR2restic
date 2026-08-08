@@ -8,10 +8,11 @@ from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 from mcdreforged.api.all import PluginServerInterface
 
 from mcdr2restic.config.config_paths import get_data_file_path
-from mcdr2restic.core.i18n import server_tr, tr
+from mcdr2restic.core.i18n import server_tr
 from mcdr2restic.config.config_template import (
     get_discord_block_lines,
     get_force_schedule_lines,
+    get_language_lines,
     get_maintenance_schedule_lines,
     get_restic_auto_download_lines,
     get_restic_auto_init_lines,
@@ -29,6 +30,10 @@ from mcdr2restic.config.config_template import (
     get_snapshot_cache_block_lines,
     get_update_check_lines,
     yaml_scalar,
+)
+from mcdr2restic.defaults.config_template_resources import (
+    available_config_template_languages,
+    config_template_text,
 )
 from mcdr2restic.defaults.default_constants import CONFIG_NAME, CONFIG_VERSION
 from mcdr2restic.core.utils import safe_int
@@ -127,6 +132,7 @@ def apply_config_file_migrations(
     language: str,
     cfg: Dict[str, Any],
 ) -> List[str]:
+    lines = ensure_language_line(lines, language, cfg)
     lines = ensure_schedule_migration_lines(lines, language, cfg)
     lines = remove_deprecated_schedule_lines(lines)
     lines = ensure_restic_migration_lines(lines, language, cfg)
@@ -138,6 +144,19 @@ def apply_config_file_migrations(
     lines = ensure_snapshot_cache_block(lines, language, cfg)
     lines = ensure_restore_block(lines, language, cfg)
     return ensure_config_version_tail(lines, language)
+
+
+def ensure_language_line(
+    lines: List[str],
+    language: str,
+    cfg: Dict[str, Any],
+) -> List[str]:
+    if has_top_level_key(lines, "language"):
+        return lines
+    configured_language = str(cfg.get("language") or language)
+    return insert_before_top_level_key(
+        lines, "command", get_language_lines(language, configured_language)
+    )
 
 
 def ensure_schedule_migration_lines(
@@ -312,7 +331,9 @@ def ensure_config_version_tail(lines: List[str], language: str) -> List[str]:
 
 
 def config_version_marker_comment(language: str) -> str:
-    return "{}\n".format(tr(language, "template.snippet.config_version_marker_comment"))
+    return "{}\n".format(
+        config_template_text(language, "template.snippet.config_version_marker_comment")
+    )
 
 
 def remove_config_version_lines(lines: List[str]) -> List[str]:
@@ -329,8 +350,10 @@ def remove_config_version_lines(lines: List[str]) -> List[str]:
 def is_config_version_comment(line: str) -> bool:
     stripped = line.strip().lower()
     comments = {
-        tr("zh_cn", "template.snippet.config_version_marker_comment").strip().lower(),
-        tr("en_us", "template.snippet.config_version_marker_comment").strip().lower(),
+        config_template_text(language, "template.snippet.config_version_marker_comment")
+        .strip()
+        .lower()
+        for language in available_config_template_languages()
     }
     return stripped in comments
 

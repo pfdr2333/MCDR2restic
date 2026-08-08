@@ -7,7 +7,7 @@ from typing import Any, Callable, Dict
 from mcdreforged.api.all import PluginServerInterface
 
 from mcdr2restic.config.state_store import get_config_snapshot
-from mcdr2restic.core.i18n import tr
+from mcdr2restic.core.i18n import config_language, tr
 from mcdr2restic.core.language import get_mcdr_language
 from mcdr2restic.core.runtime import PluginRuntime
 from mcdr2restic.restic.restic_service import run_maintenance_body
@@ -29,7 +29,8 @@ class MaintenanceRunner:
         self.snapshot_invalidator = snapshot_invalidator
 
     def run_waiting(self, server: PluginServerInterface) -> bool:
-        language = get_mcdr_language(server)
+        cfg = get_config_snapshot(self.app_runtime)
+        language = config_language(cfg, get_mcdr_language(server))
         if self.restore_running_provider(self.app_runtime):
             server.logger.warning(tr(language, "warn.maintenance.restore_running"))
             return False
@@ -38,7 +39,6 @@ class MaintenanceRunner:
         self.app_runtime.backup.label = "maintenance"
         self.app_runtime.backup.cancel.clear()
         try:
-            cfg = get_config_snapshot(self.app_runtime)
             server.logger.info(tr(language, "info.maintenance.started"))
             run_maintenance_body(
                 self.app_runtime, server, cfg, self.snapshot_invalidator

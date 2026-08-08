@@ -5,6 +5,7 @@ from __future__ import annotations
 # defaults are provided through build_* constructors.
 from mcdr2restic.defaults.default_config import (
     DEFAULT_CONFIG,
+    DEFAULT_LANGUAGE_CONFIG_VALUE,
     build_base_default_config,
     build_default_config,
     build_default_discord_config,
@@ -61,6 +62,7 @@ __all__ = [
     "DEFAULT_BACKUP_SOURCE_MARKER",
     "DEFAULT_BACKUP_WORLD_PATHS",
     "DEFAULT_CONFIG",
+    "DEFAULT_LANGUAGE_CONFIG_VALUE",
     "DEFAULT_CONFIG_TEMPLATE_EN",
     "DEFAULT_CONFIG_TEMPLATE_ZH",
     "DEFAULT_MESSAGES_EN",

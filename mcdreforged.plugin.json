@@ -15,7 +15,8 @@
     "mcdreforged": ">=2.12.0"
   },
   "resources": [
-    "lang"
+    "lang",
+    "config_templates"
   ],
   "entrypoint": "mcdr2restic"
 }

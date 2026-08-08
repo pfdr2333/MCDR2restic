@@ -13,7 +13,7 @@ from mcdr2restic.config.state_store import (
     get_config_snapshot,
     save_config_unlocked,
 )
-from mcdr2restic.core.i18n import FALLBACK_LANGUAGE, tr
+from mcdr2restic.core.i18n import FALLBACK_LANGUAGE, config_language, tr
 from mcdr2restic.core.language import get_mcdr_language
 from mcdr2restic.core.models import (
     BackupCanceled,
@@ -73,7 +73,7 @@ class BackupRunner:
         wait_for_slot: bool = False,
     ) -> bool:
         label_text = backup_trigger_label(label)
-        language = get_mcdr_language(server)
+        language = self._language(server)
         if self.restore_running_provider(self.app_runtime):
             server.logger.warning(
                 tr(language, "warn.backup.restore_running", label=label_text)
@@ -115,6 +115,11 @@ class BackupRunner:
         finally:
             self._release_backup_slot()
 
+    def _language(self, server: PluginServerInterface) -> str:
+        return config_language(
+            get_config_snapshot(self.app_runtime), get_mcdr_language(server)
+        )
+
     def _record_backup_started(
         self, server: PluginServerInterface, label: str, start_time: str
     ):
@@ -151,7 +156,7 @@ class BackupRunner:
         label: str,
         started_at: float,
     ) -> BackupRunOutcome:
-        language = get_mcdr_language(server)
+        language = config_language(cfg, get_mcdr_language(server))
         try:
             server.logger.info(tr(language, "info.backup.started", label=label))
             run_backup_body(
@@ -168,7 +173,7 @@ class BackupRunner:
     ) -> BackupRunOutcome:
         duration_seconds = int(time.monotonic() - started_at)
         message = tr(
-            get_mcdr_language(server),
+            self._language(server),
             "info.backup.success",
             label=label,
             duration_seconds=duration_seconds,
@@ -185,7 +190,7 @@ class BackupRunner:
     ) -> BackupRunOutcome:
         duration_seconds = int(time.monotonic() - started_at)
         message = tr(
-            get_mcdr_language(server), "warn.backup.canceled", label=label, error=exc
+            self._language(server), "warn.backup.canceled", label=label, error=exc
         )
         server.logger.warning(message)
         return BackupRunOutcome(
@@ -201,7 +206,7 @@ class BackupRunner:
     ) -> BackupRunOutcome:
         duration_seconds = int(time.monotonic() - started_at)
         message = tr(
-            get_mcdr_language(server), "error.backup.failed", label=label, error=exc
+            self._language(server), "error.backup.failed", label=label, error=exc
         )
         server.logger.error("{}\n{}".format(message, traceback.format_exc()))
         return BackupRunOutcome(
@@ -222,7 +227,7 @@ class BackupRunner:
     def _save_on_failure_outcome(
         self, server: PluginServerInterface, outcome: BackupRunOutcome, exc: Exception
     ) -> BackupRunOutcome:
-        language = get_mcdr_language(server)
+        language = self._language(server)
         server.logger.error(tr(language, "error.backup.save_on_failed", error=exc))
         detail = tr(language, "error.backup.save_on_detail", error=exc)
         if outcome.status == BackupRunStatus.SUCCESS:

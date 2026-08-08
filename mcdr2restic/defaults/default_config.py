@@ -17,7 +17,6 @@ from mcdr2restic.defaults.default_constants import (
     SNAPSHOT_QUERY_TIMEOUT_SECONDS,
 )
 from mcdr2restic.defaults.default_freeze import freeze_default
-from mcdr2restic.core.language import is_zh_language
 from mcdr2restic.defaults.message_defaults import build_default_messages
 
 
@@ -30,8 +29,8 @@ def build_default_config(language: str = "zh_cn") -> ConfigDict:
     """Build defaults and localize mutable message templates when needed."""
 
     cfg = build_base_default_config()
-    if not is_zh_language(language):
-        cfg["messages"] = build_default_messages(language)
+    cfg["language"] = default_language_config_value(language)
+    cfg["messages"] = build_default_messages(language)
     return cfg
 
 
@@ -40,6 +39,7 @@ def build_base_default_config() -> ConfigDict:
 
     return {
         "enabled": True,
+        "language": DEFAULT_LANGUAGE_CONFIG_VALUE,
         "command": build_default_command_config(),
         "schedule": build_default_schedule_config(),
         "force_schedule": build_default_force_schedule_config(),
@@ -55,6 +55,13 @@ def build_base_default_config() -> ConfigDict:
         "messages": build_default_messages("zh_cn"),
         "config_version": CONFIG_VERSION,
     }
+
+
+DEFAULT_LANGUAGE_CONFIG_VALUE = "zh_cn"
+
+
+def default_language_config_value(language: str) -> str:
+    return str(language or "").strip().lower().replace("-", "_") or DEFAULT_LANGUAGE_CONFIG_VALUE
 
 
 def build_default_command_config() -> ConfigDict:
