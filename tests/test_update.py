@@ -1,5 +1,6 @@
 try:
     from .support import (
+        REPO_ROOT,
         get_current_plugin_version,
         is_newer_version,
         json,
@@ -10,6 +11,7 @@ try:
     )
 except ImportError:
     from support import (
+        REPO_ROOT,
         get_current_plugin_version,
         is_newer_version,
         json,
@@ -32,7 +34,7 @@ class UpdateCheckTests(unittest.TestCase):
         self.assertFalse(is_newer_version("1.2.0", "1.2"))
 
     def test_bundled_plugin_version_reads_repository_metadata(self):
-        with open("mcdreforged.plugin.json", "r", encoding="utf8") as file:
+        with open(REPO_ROOT / "mcdreforged.plugin.json", "r", encoding="utf8") as file:
             metadata = json.load(file)
 
         self.assertEqual(read_bundled_plugin_version(), metadata["version"])

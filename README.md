@@ -194,6 +194,12 @@ discord:
 
 默认命令权限等级为 `3`，可在配置中修改。
 
+## 构建与发布
+
+本地执行 `pack\build.bat`，或运行 `python tools/pack_plugin.py --output-dir dist`，会生成符合 MCDR 插件目录结构的 `.mcdr` 归档。归档包含 `mcdreforged.plugin.json`、`requirements.txt`、入口包和元数据声明的资源目录。
+
+GitHub Actions 会在每次推送或 Pull Request 时检查并保存构建产物；推送形如 `v0.5.0` 的 Git 标签时，会自动构建并创建 GitHub Release，发布生成的 `.mcdr` 文件。
+
 # 贡献
 欢迎提交PR和ISSUE
 

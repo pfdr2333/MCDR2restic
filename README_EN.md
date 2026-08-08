@@ -200,6 +200,12 @@ Admin notification texts can be customized within `messages`. Available variable
 
 The default command permission level is `3`, which can be modified in the configuration.
 
+## Build and Release
+
+Run `pack\build.bat`, or `python tools/pack_plugin.py --output-dir dist`, to create an `.mcdr` archive with the standard MCDR plugin layout. The archive contains `mcdreforged.plugin.json`, `requirements.txt`, the entrypoint package, and all resources declared by the metadata.
+
+GitHub Actions validates and stores a build artifact on every push or pull request. Pushing a Git tag such as `v0.5.0` automatically builds the archive and creates a GitHub Release containing the generated `.mcdr` file.
+
 # Contributing
 
 Pull Requests and Issues are highly welcome!

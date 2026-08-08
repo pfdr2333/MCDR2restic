@@ -1,5 +1,6 @@
 try:
     from .support import (
+        REPO_ROOT,
         FakeCommandSource,
         FakePluginServer,
         config_template_resources,
@@ -21,6 +22,7 @@ try:
     )
 except ImportError:
     from support import (
+        REPO_ROOT,
         FakeCommandSource,
         FakePluginServer,
         config_template_resources,
@@ -98,13 +100,13 @@ class I18nTests(unittest.TestCase):
     def test_root_lang_files_match_prefixed_package_lang_files(self):
         for name in ("zh_cn", "zh_tw", "en_us"):
             with open(
-                os.path.join("mcdr2restic", "lang", "{}.json".format(name)),
+                REPO_ROOT / "mcdr2restic" / "lang" / "{}.json".format(name),
                 "r",
                 encoding="utf8",
             ) as file:
                 package_lang = json.load(file)
             with open(
-                os.path.join("lang", "{}.json".format(name)), "r", encoding="utf8"
+                REPO_ROOT / "lang" / "{}.json".format(name), "r", encoding="utf8"
             ) as file:
                 root_lang = json.load(file)
 
@@ -152,13 +154,13 @@ class I18nTests(unittest.TestCase):
     def test_config_file_template_text_is_not_stored_in_language_resources(self):
         for name in ("zh_cn", "zh_tw", "en_us"):
             with open(
-                os.path.join("mcdr2restic", "lang", "{}.json".format(name)),
+                REPO_ROOT / "mcdr2restic" / "lang" / "{}.json".format(name),
                 "r",
                 encoding="utf8",
             ) as file:
                 package_lang = json.load(file)
             with open(
-                os.path.join("mcdr2restic", "config_templates", "{}.yml".format(name)),
+                REPO_ROOT / "mcdr2restic" / "config_templates" / "{}.yml".format(name),
                 "r",
                 encoding="utf8",
             ) as file:
@@ -179,7 +181,7 @@ class I18nTests(unittest.TestCase):
 
     def test_default_config_template_renders_placeholders(self):
         for language in ("zh_cn", "zh_tw", "en_us", "fr_fr"):
-            template = get_default_config_template(language, os.getcwd())
+            template = get_default_config_template(language, str(REPO_ROOT))
 
             expected_language = "fr_fr" if language == "fr_fr" else language
             loaded = yaml.safe_load(template)

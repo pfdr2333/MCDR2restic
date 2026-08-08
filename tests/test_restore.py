@@ -1,22 +1,24 @@
 try:
     from .support import (
+        REPO_ROOT,
+        BackupProblem,
         FakePluginServer,
         RestoreSession,
         clear_restore_tasks,
         create_runtime,
         normalize_restore_include_path,
-        os,
         restore_workflow,
         unittest,
     )
 except ImportError:
     from support import (
+        REPO_ROOT,
+        BackupProblem,
         FakePluginServer,
         RestoreSession,
         clear_restore_tasks,
         create_runtime,
         normalize_restore_include_path,
-        os,
         restore_workflow,
         unittest,
     )
@@ -24,11 +26,107 @@ except ImportError:
 
 class RestoreWorkflowTests(unittest.TestCase):
     def test_normalize_restore_include_path_returns_restic_absolute_path(self):
-        restic_cfg = {"working_directory": os.getcwd()}
+        restic_cfg = {"working_directory": str(REPO_ROOT)}
         self.assertEqual(
             normalize_restore_include_path("world/region", restic_cfg, "!!backup"),
             "/world/region",
         )
+
+    def test_restore_snapshot_rejects_empty_and_whitespace_values(self):
+        for value, expected_key in (
+            ("", "error.restore.snapshot_empty"),
+            ("snapshot with spaces", "error.restore.snapshot_whitespace"),
+        ):
+            with self.assertRaises(BackupProblem) as error:
+                restore_workflow.normalize_restore_snapshot(value)
+
+            self.assertEqual(error.exception.i18n_key, expected_key)
+
+    def test_restore_include_path_rejects_parent_and_external_paths(self):
+        restic_cfg = {"working_directory": str(REPO_ROOT)}
+
+        for value, expected_key in (
+            ("../outside", "error.restore.path_parent_reference"),
+            (r"C:\\outside", "error.restore.path_outside_workdir"),
+        ):
+            with self.assertRaises(BackupProblem) as error:
+                normalize_restore_include_path(value, restic_cfg, "!!restic")
+
+            self.assertEqual(error.exception.i18n_key, expected_key)
+
+    def test_restore_apply_rejection_checks_tasks_backup_and_server_state(self):
+        runtime = create_runtime()
+        server = FakePluginServer()
+        translate = lambda key: key
+
+        self.assertEqual(
+            restore_workflow.get_restore_apply_rejection(
+                runtime, server, translate, [], lambda _: False, lambda *_: True
+            ),
+            "error.restore.no_tasks",
+        )
+        self.assertEqual(
+            restore_workflow.get_restore_apply_rejection(
+                runtime, server, translate, [{}], lambda _: True, lambda *_: True
+            ),
+            "error.restore.backup_running",
+        )
+        self.assertEqual(
+            restore_workflow.get_restore_apply_rejection(
+                runtime, server, translate, [{}], lambda _: False, lambda *_: False
+            ),
+            "error.restore.minecraft_not_ready",
+        )
+        self.assertEqual(
+            restore_workflow.get_restore_apply_rejection(
+                runtime, server, translate, [{}], lambda _: False, lambda *_: True
+            ),
+            "",
+        )
+
+    def test_pre_restore_config_adds_tag_without_mutating_original(self):
+        cfg = {
+            "restic": {
+                "backup_command": ["backup", "world"],
+                "maintenance_commands": [["forget"]],
+            },
+            "restore": {"pre_restore_backup_tag": "protect"},
+        }
+
+        result = restore_workflow.build_pre_restore_backup_config(cfg)
+
+        self.assertEqual(
+            result["restic"]["backup_command"], ["backup", "world", "--tag", "protect"]
+        )
+        self.assertEqual(result["restic"]["maintenance_commands"], [])
+        self.assertEqual(cfg["restic"]["backup_command"], ["backup", "world"])
+
+    def test_build_restore_command_supports_full_and_included_tasks(self):
+        restic_cfg = {"working_directory": str(REPO_ROOT)}
+
+        self.assertEqual(
+            restore_workflow.build_restore_command(
+                restic_cfg, {"snapshot": "abc", "item_type": "full"}
+            ),
+            ["restore", "abc", "--target", str(REPO_ROOT)],
+        )
+        self.assertEqual(
+            restore_workflow.build_restore_command(
+                restic_cfg,
+                {
+                    "snapshot": "abc",
+                    "item_type": "file",
+                    "include_path": "/world/region",
+                },
+            )[-2:],
+            ["--include", "/world/region"],
+        )
+
+        with self.assertRaises(BackupProblem) as error:
+            restore_workflow.build_restore_command(
+                restic_cfg, {"snapshot": "abc", "item_type": "unknown"}
+            )
+        self.assertEqual(error.exception.i18n_key, "error.restore.unknown_task_type")
 
     def test_restore_startup_finishes_session_and_releases_lock(self):
         runtime = create_runtime()

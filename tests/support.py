@@ -17,6 +17,10 @@ from unittest import mock
 
 import yaml
 
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
 
 def install_mcdr_stub():
     module_names = [
@@ -50,6 +54,7 @@ def install_mcdr_stub():
 
 install_mcdr_stub()
 
+import mcdr2restic.commands.command_handlers as command_handlers
 import mcdr2restic.core.bootstrap as bootstrap
 import mcdr2restic.core.i18n as i18n
 import mcdr2restic.defaults.config_template_resources as config_template_resources
@@ -103,7 +108,9 @@ from mcdr2restic.minecraft.player_activity_service import (
 )
 from mcdr2restic.notifications import render_message
 from mcdr2restic.notifications.discord_webhook import (
+    DiscordWebhookClient,
     build_discord_mentions,
+    build_discord_request,
     truncate_discord_content,
 )
 from mcdr2restic.restic.restic_download import (
@@ -116,7 +123,10 @@ from mcdr2restic.restic.restic_progress_text import (
     format_restic_summary,
 )
 from mcdr2restic.restic.restic_result import assert_restic_success, detect_error_lines
-from mcdr2restic.restic.restic_runner import resolve_popen_executable
+from mcdr2restic.restic.restic_runner import (
+    resolve_popen_executable,
+    start_restic_process,
+)
 from mcdr2restic.restic.restic_termination import (
     TerminateResult,
     termination_failure_suffix,
@@ -245,6 +255,7 @@ __all__ = [
     "Path",
     "PermissiveCommandSource",
     "ProcessTimeoutState",
+    "REPO_ROOT",
     "ProbeServer",
     "ResticCommandResult",
     "ResticCommands",
@@ -258,6 +269,7 @@ __all__ = [
     "bootstrap",
     "build_default_config",
     "build_discord_mentions",
+    "build_discord_request",
     "build_snapshot_cache_key",
     "classify_restic_failure_output",
     "clear_restore_tasks",
@@ -265,8 +277,10 @@ __all__ = [
     "compute_maintenance_wait_seconds",
     "config_template_resources",
     "create_runtime",
+    "command_handlers",
     "datetime",
     "detect_error_lines",
+    "DiscordWebhookClient",
     "format_restic_status",
     "format_restic_summary",
     "get_current_plugin_version",
@@ -302,6 +316,7 @@ __all__ = [
     "render_status_output",
     "resolve_known_online_players",
     "resolve_popen_executable",
+    "start_restic_process",
     "resolve_restic_executable_path",
     "restore_tasks_output",
     "restore_workflow",

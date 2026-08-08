@@ -1,0 +1,2 @@
+coverage>=7.6,<8
+opencc-python-reimplemented>=0.1.7,<0.2

@@ -1,5 +1,6 @@
 try:
     from .support import (
+        REPO_ROOT,
         BackupProblem,
         CommandContext,
         CommandServer,
@@ -23,11 +24,13 @@ try:
         resolve_restic_executable_path,
         restic_lock_recovery,
         restic_service,
+        start_restic_process,
         termination_failure_suffix,
         unittest,
     )
 except ImportError:
     from support import (
+        REPO_ROOT,
         BackupProblem,
         CommandContext,
         CommandServer,
@@ -50,6 +53,7 @@ except ImportError:
         resolve_restic_executable_path,
         restic_lock_recovery,
         restic_service,
+        start_restic_process,
         termination_failure_suffix,
         unittest,
     )
@@ -117,13 +121,15 @@ class ResticResultTests(unittest.TestCase):
         self.assertTrue(is_default_restic_executable_path(executable))
         self.assertEqual(
             resolve_restic_executable_path(
-                {"working_directory": os.path.join(os.getcwd(), "server")},
+                {"working_directory": os.path.join(str(REPO_ROOT), "server")},
                 executable,
             ),
             os.path.abspath(executable),
         )
         self.assertEqual(
-            resolve_popen_executable(executable, os.path.join(os.getcwd(), "server")),
+            resolve_popen_executable(
+                executable, os.path.join(str(REPO_ROOT), "server")
+            ),
             os.path.abspath(executable),
         )
 
@@ -219,6 +225,28 @@ class ResticLockRecoveryTests(unittest.TestCase):
 
 
 class ResticCommandTests(unittest.TestCase):
+    def test_start_restic_process_maps_missing_executable(self):
+        with mock.patch(
+            "mcdr2restic.restic.restic_runner.subprocess.Popen",
+            side_effect=FileNotFoundError,
+        ):
+            with self.assertRaises(BackupProblem) as error:
+                start_restic_process(
+                    ["missing-restic"], None, {}, "missing-restic", "backup"
+                )
+
+        self.assertEqual(error.exception.i18n_key, "error.restic.executable_not_found")
+
+    def test_start_restic_process_maps_start_failure(self):
+        with mock.patch(
+            "mcdr2restic.restic.restic_runner.subprocess.Popen",
+            side_effect=OSError("permission denied"),
+        ):
+            with self.assertRaises(BackupProblem) as error:
+                start_restic_process(["restic"], None, {}, "restic", "backup")
+
+        self.assertEqual(error.exception.i18n_key, "error.restic.start_failed")
+
     def test_manual_init_runs_restic_init_and_invalidates_snapshot_cache(self):
         runtime = create_runtime()
         runtime.config_state.config = {
