@@ -93,7 +93,10 @@ from mcdr2restic.restore.restore_task_repository import (
 )
 from mcdr2restic.core.runtime import create_runtime
 from mcdr2restic.core.presentation import render_status_output, schedule_status_text
-from mcdr2restic.backup.scheduling import parse_daily_time
+from mcdr2restic.backup.scheduling import (
+    compute_maintenance_wait_seconds,
+    parse_daily_time,
+)
 from mcdr2restic.config.config_loader import replace_or_append_enabled_line
 from mcdr2restic.config.config_migration import (
     apply_config_file_migrations,
@@ -266,12 +269,21 @@ class SchedulingTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             parse_daily_time("25:00")
 
+    def test_maintenance_schedule_empty_cron_uses_default(self):
+        wait_seconds, due_text = compute_maintenance_wait_seconds(
+            {"maintenance_schedule": {"interval_seconds": 0, "cron_expression": ""}}
+        )
+
+        self.assertGreater(wait_seconds, 0)
+        self.assertRegex(due_text, r"\d{4}-\d{2}-\d{2} 03:00:00")
+
     def test_scheduler_loop_triggers_ready_schedule_once(self):
         server = FakePluginServer()
         scheduler = BackupScheduler(
             server,
             lambda: {"enabled": True},
             lambda target, label: True,
+            lambda target: True,
             lambda target: True,
             lambda cfg: False,
             lambda key, data, cfg, important: None,
@@ -386,6 +398,8 @@ class I18nTests(unittest.TestCase):
             template = get_default_config_template(language, os.getcwd())
 
             self.assertIn("messages:", template)
+            self.assertIn("maintenance_schedule:", template)
+            self.assertIn("config_version: 10", template)
             self.assertNotIn("__MCDR2RESTIC_", template)
             self.assertIsInstance(yaml.safe_load(template), dict)
 
@@ -609,7 +623,7 @@ class ResticLockRecoveryTests(unittest.TestCase):
 
 
 class BackupFlowTests(unittest.TestCase):
-    def test_run_backup_body_executes_maintenance_then_minecraft_then_backup(self):
+    def test_run_backup_body_executes_minecraft_then_backup_without_maintenance(self):
         runtime = create_runtime()
         runtime.service.server_ready = True
         server = CommandServer()
@@ -660,9 +674,49 @@ class BackupFlowTests(unittest.TestCase):
 
         self.assertEqual(snapshot_id, "abc123")
         self.assertEqual(
-            restic_calls, [("maintenance", ["forget"]), ("backup", ["backup", "world"])]
+            restic_calls, [("backup", ["backup", "world"])]
         )
         self.assertEqual(server.commands, ["save-off", "save-all"])
+
+    def test_run_maintenance_body_executes_maintenance_without_minecraft_commands(self):
+        runtime = create_runtime()
+        runtime.service.server_ready = True
+        server = CommandServer()
+        cfg = {
+            "restic": {
+                "maintenance_commands": [["forget"]],
+                "backup_command": ["backup", "world"],
+                "timeout_seconds": 0,
+            },
+        }
+        restic_calls = []
+
+        def fake_run_restic(_runtime, _server, _restic_cfg, args, phase, _deadline):
+            restic_calls.append((phase, list(args)))
+            return ResticCommandResult(phase, list(args), 0, "", "", 0)
+
+        with (
+            mock.patch.object(
+                restic_service, "ensure_default_restic_executable_available"
+            ),
+            mock.patch.object(
+                restic_service,
+                "ensure_restic_repository_initialized",
+                return_value=False,
+            ),
+            mock.patch.object(
+                restic_service,
+                "run_restic_command_with_lock_recovery",
+                side_effect=fake_run_restic,
+            ),
+            mock.patch.object(restic_service, "assert_restic_success"),
+        ):
+            restic_service.run_maintenance_body(
+                runtime, server, cfg, lambda *_args: None
+            )
+
+        self.assertEqual(restic_calls, [("maintenance", ["forget"])])
+        self.assertEqual(server.commands, [])
 
 
 class ResticProgressTests(unittest.TestCase):
@@ -855,9 +909,10 @@ class ConfigurationTests(unittest.TestCase):
 
         self.assertIn("require_player_activity_in_wait_period", migrated)
         self.assertIn("online_check_command", migrated)
+        self.assertIn("maintenance_schedule:", migrated)
         self.assertNotIn("  require_player_joined_in_wait_period:", migrated)
         self.assertNotIn("  online_check_interval_seconds:", migrated)
-        self.assertIn("config_version:", migrated)
+        self.assertIn("config_version: 10", migrated)
 
     def test_apply_config_file_migrations_is_idempotent(self):
         lines = [
@@ -881,6 +936,7 @@ class ConfigurationTests(unittest.TestCase):
         self.assertEqual(first, second)
         migrated = "".join(first)
         self.assertEqual(migrated.count("force_schedule:"), 1)
+        self.assertEqual(migrated.count("maintenance_schedule:"), 1)
         self.assertEqual(migrated.count("update_check:"), 1)
         self.assertEqual(migrated.count("snapshot_cache:"), 1)
         self.assertEqual(migrated.count("restore:"), 1)
@@ -952,7 +1008,7 @@ class PackagingTests(unittest.TestCase):
             with zipfile.ZipFile(archive_path, "r") as archive:
                 names = archive.namelist()
 
-        self.assertEqual(archive_path.name, "MCDR2Restic_v0.4.0.mcdr")
+        self.assertEqual(archive_path.name, "MCDR2Restic_v0.5.0.mcdr")
         self.assertIn("mcdr2restic/__init__.py", names)
         self.assertIn("lang/zh_cn.json", names)
         self.assertIn("mcdreforged.plugin.json", names)

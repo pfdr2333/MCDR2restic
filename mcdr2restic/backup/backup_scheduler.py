@@ -9,6 +9,7 @@ from mcdreforged.api.all import PluginServerInterface
 
 from mcdr2restic.backup.scheduling import (
     compute_force_wait_seconds,
+    compute_maintenance_wait_seconds,
     compute_wait_seconds,
 )
 from mcdr2restic.core.i18n import tr, tr_error
@@ -18,6 +19,7 @@ from mcdr2restic.core.models import BackupTrigger
 
 ConfigProvider = Callable[[], Dict[str, Any]]
 BackupRunner = Callable[[PluginServerInterface, BackupTrigger], bool]
+MaintenanceRunner = Callable[[PluginServerInterface], bool]
 McReadyProvider = Callable[[PluginServerInterface], bool]
 SkipPredicate = Callable[[Dict[str, Any]], bool]
 AdminNotifier = Callable[
@@ -25,6 +27,7 @@ AdminNotifier = Callable[
 ]
 ScheduleProvider = Callable[[], Optional[Tuple[float, str]]]
 ScheduleTrigger = Callable[[], None]
+MAINTENANCE_BACKUP_PRIORITY_GRACE_SECONDS = 1.0
 
 
 class BackupScheduler:
@@ -33,6 +36,7 @@ class BackupScheduler:
         server: PluginServerInterface,
         config_provider: ConfigProvider,
         backup_runner: BackupRunner,
+        maintenance_runner: MaintenanceRunner,
         mc_ready_provider: McReadyProvider,
         skip_predicate: SkipPredicate,
         admin_notifier: AdminNotifier,
@@ -40,6 +44,7 @@ class BackupScheduler:
         self.server = server
         self.config_provider = config_provider
         self.backup_runner = backup_runner
+        self.maintenance_runner = maintenance_runner
         self.mc_ready_provider = mc_ready_provider
         self.skip_predicate = skip_predicate
         self.admin_notifier = admin_notifier
@@ -51,10 +56,16 @@ class BackupScheduler:
         self.force_thread = threading.Thread(
             target=self._force_main, name="MCDR2Restic-Scheduler-Force", daemon=True
         )
+        self.maintenance_thread = threading.Thread(
+            target=self._maintenance_main,
+            name="MCDR2Restic-Scheduler-Maintenance",
+            daemon=True,
+        )
 
     def start(self):
         self.thread.start()
         self.force_thread.start()
+        self.maintenance_thread.start()
 
     def stop(self):
         self.stop_event.set()
@@ -63,6 +74,8 @@ class BackupScheduler:
             self.thread.join(timeout=5)
         if self.force_thread.is_alive():
             self.force_thread.join(timeout=5)
+        if self.maintenance_thread.is_alive():
+            self.maintenance_thread.join(timeout=5)
 
     def wakeup(self):
         self.wakeup_event.set()
@@ -75,6 +88,13 @@ class BackupScheduler:
     def _force_main(self):
         self._run_schedule_loop(
             "schedule.forced", self._next_force_schedule, self._trigger_forced_backup
+        )
+
+    def _maintenance_main(self):
+        self._run_schedule_loop(
+            "schedule.maintenance",
+            self._next_maintenance_schedule,
+            self._trigger_maintenance,
         )
 
     def _run_schedule_loop(
@@ -94,7 +114,7 @@ class BackupScheduler:
             self.server.logger.info(
                 tr(
                     language,
-                    "log.scheduler.next_backup",
+                    "log.scheduler.next_run",
                     label=label,
                     seconds=int(wait_seconds),
                     due_text=due_text,
@@ -123,6 +143,23 @@ class BackupScheduler:
             schedule = compute_force_wait_seconds(cfg, get_mcdr_language(self.server))
         except Exception as exc:
             self._handle_schedule_error(cfg, exc, "error.schedule.compute_forced_next")
+            return None
+        if schedule is None:
+            self._wait(60)
+        return schedule
+
+    def _next_maintenance_schedule(self) -> Optional[Tuple[float, str]]:
+        cfg = self.config_provider()
+        if not self._enabled_or_sleep(cfg):
+            return None
+        try:
+            schedule = compute_maintenance_wait_seconds(
+                cfg, get_mcdr_language(self.server)
+            )
+        except Exception as exc:
+            self._handle_schedule_error(
+                cfg, exc, "error.schedule.compute_maintenance_next"
+            )
             return None
         if schedule is None:
             self._wait(60)
@@ -158,6 +195,14 @@ class BackupScheduler:
         if not self._can_start_backup(cfg, "warn.backup.not_ready.forced"):
             return
         self.backup_runner(self.server, BackupTrigger.FORCED)
+
+    def _trigger_maintenance(self):
+        cfg = self.config_provider()
+        if not bool(cfg.get("enabled", True)):
+            return
+        if self._wait(MAINTENANCE_BACKUP_PRIORITY_GRACE_SECONDS):
+            return
+        self.maintenance_runner(self.server)
 
     def _can_start_backup(self, cfg: Dict[str, Any], not_ready_key: str) -> bool:
         if not bool(cfg.get("enabled", True)):

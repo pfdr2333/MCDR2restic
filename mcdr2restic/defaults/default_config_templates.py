@@ -9,6 +9,10 @@ from typing import List, Optional
 import yaml
 
 from mcdr2restic.core.i18n import tr
+from mcdr2restic.defaults.default_constants import (
+    CONFIG_VERSION,
+    DEFAULT_MAINTENANCE_CRON,
+)
 from mcdr2restic.defaults.message_defaults import build_default_messages
 
 
@@ -35,7 +39,10 @@ def get_default_config_template(
     template = render_platform_placeholders(template, language)
     template = render_default_message_placeholders(template, language)
     template = render_default_backup_sources(template, base_directory or os.getcwd())
+    template = rewrite_maintenance_command_comments(template)
     template = add_windows_session_lock_exclude(template, language)
+    template = insert_maintenance_schedule_block(template, language)
+    template = render_config_version(template)
     validate_rendered_config_template(template)
     return template
 
@@ -139,6 +146,58 @@ def add_windows_session_lock_exclude(template: str, language: str) -> str:
     comment = tr(language, "template.snippet.session_lock_exclude_comment")
     block = '{}\n    - "--exclude"\n    - "session.lock"\n'.format(comment)
     return template.replace(marker, block + marker, 1)
+
+
+def rewrite_maintenance_command_comments(template: str) -> str:
+    replacements = {
+        "# 备份前的仓库维护命令。每一项都会自动在前面加 executable，例如 restic forget ...": (
+            "# 仓库维护命令，由 maintenance_schedule 单独调度执行。每一项都会自动在前面加 executable，例如 restic forget ..."
+        ),
+        "# Repository maintenance commands executed before backup.": (
+            "# Repository maintenance commands run from maintenance_schedule, independently of backups."
+        ),
+    }
+    for old, new in replacements.items():
+        template = template.replace(old, new)
+    return template
+
+
+def insert_maintenance_schedule_block(template: str, language: str) -> str:
+    if "\nmaintenance_schedule:\n" in template:
+        return template
+    marker = "\n\nupdate_check:\n"
+    if marker not in template:
+        return template
+    return template.replace(marker, maintenance_schedule_block(language) + marker, 1)
+
+
+def maintenance_schedule_block(language: str) -> str:
+    if str(language).lower().startswith("zh"):
+        return (
+            "\n\nmaintenance_schedule:\n"
+            "  # 仓库维护调度。默认每天 03:00 执行一次；cron_expression 留空时仍使用默认值。\n"
+            "  # interval_seconds > 0 时使用固定间隔。\n"
+            "  # interval_seconds = 0 且 cron_expression = \"0\" 表示关闭维护调度。\n"
+            "  interval_seconds: 0\n"
+            '  cron_expression: "{}"'.format(DEFAULT_MAINTENANCE_CRON)
+        )
+    return (
+        "\n\nmaintenance_schedule:\n"
+        "  # Repository maintenance schedule. Default: run once per day at 03:00; empty cron_expression keeps this default.\n"
+        "  # interval_seconds > 0 uses a fixed interval.\n"
+        "  # interval_seconds = 0 with cron_expression = \"0\" disables maintenance scheduling.\n"
+        "  interval_seconds: 0\n"
+        '  cron_expression: "{}"'.format(DEFAULT_MAINTENANCE_CRON)
+    )
+
+
+def render_config_version(template: str) -> str:
+    return re.sub(
+        r"(?m)^config_version\s*:\s*\d+\s*$",
+        "config_version: {}".format(CONFIG_VERSION),
+        template,
+        count=1,
+    )
 
 
 def replace_required_marker(template: str, marker: str, replacement: str) -> str:

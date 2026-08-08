@@ -7,6 +7,7 @@ from typing import Any, Dict, List, TypeAlias
 
 from mcdr2restic.defaults.default_constants import (
     CONFIG_VERSION,
+    DEFAULT_MAINTENANCE_CRON,
     DEFAULT_PROXY_PREFIXES,
     DEFAULT_UPDATE_API_URL,
     PLUGIN_REPOSITORY_URL,
@@ -42,6 +43,7 @@ def build_base_default_config() -> ConfigDict:
         "command": build_default_command_config(),
         "schedule": build_default_schedule_config(),
         "force_schedule": build_default_force_schedule_config(),
+        "maintenance_schedule": build_default_maintenance_schedule_config(),
         "update_check": build_default_update_check_config(),
         "minecraft": build_default_minecraft_config(),
         "restic": build_default_restic_config(),
@@ -82,6 +84,15 @@ def build_default_force_schedule_config() -> ConfigDict:
     return {
         "interval_seconds": 0,
         "cron_expression": "0",
+    }
+
+
+def build_default_maintenance_schedule_config() -> ConfigDict:
+    """Return the repository maintenance schedule defaults."""
+
+    return {
+        "interval_seconds": 0,
+        "cron_expression": DEFAULT_MAINTENANCE_CRON,
     }
 
 

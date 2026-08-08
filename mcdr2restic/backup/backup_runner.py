@@ -67,7 +67,10 @@ class BackupRunner:
         return True
 
     def run_locked(
-        self, server: PluginServerInterface, label: Union[BackupTrigger, str]
+        self,
+        server: PluginServerInterface,
+        label: Union[BackupTrigger, str],
+        wait_for_slot: bool = False,
     ) -> bool:
         label_text = backup_trigger_label(label)
         language = get_mcdr_language(server)
@@ -76,13 +79,24 @@ class BackupRunner:
                 tr(language, "warn.backup.restore_running", label=label_text)
             )
             return False
-        if not self.app_runtime.backup.lock.acquire(blocking=False):
+        if not self._acquire_backup_slot(wait_for_slot):
             server.logger.warning(
                 tr(language, "warn.backup.already_running", label=label_text)
             )
             return False
         self._run_with_acquired_lock(server, label_text)
         return True
+
+    def _acquire_backup_slot(self, wait_for_maintenance: bool) -> bool:
+        if not wait_for_maintenance:
+            return self.app_runtime.backup.lock.acquire(blocking=False)
+
+        while True:
+            if self.app_runtime.backup.lock.acquire(blocking=False):
+                return True
+            if self.app_runtime.backup.label != "maintenance":
+                return False
+            time.sleep(1.0)
 
     def _run_with_acquired_lock(self, server: PluginServerInterface, label: str):
         self.app_runtime.backup.label = label

@@ -7,6 +7,7 @@ from typing import Any, Dict, Optional, Tuple
 from mcdr2restic.backup.cron import CronExpression
 from mcdr2restic.core.i18n import FALLBACK_LANGUAGE, tr
 from mcdr2restic.core.models import LocalizedValueError
+from mcdr2restic.defaults.default_constants import DEFAULT_MAINTENANCE_CRON
 
 
 DEFAULT_NORMAL_CRON = "0 0 0,3,6,9,12,15,18,21 * * *"
@@ -58,11 +59,24 @@ def compute_force_wait_seconds(
     )
 
 
+def compute_maintenance_wait_seconds(
+    cfg: Dict[str, Any], language: str = FALLBACK_LANGUAGE
+) -> Optional[Tuple[float, str]]:
+    return compute_schedule_wait_seconds(
+        cfg.get("maintenance_schedule", {}),
+        DEFAULT_MAINTENANCE_CRON,
+        disabled_when_zero_cron=True,
+        language=language,
+        empty_uses_default=True,
+    )
+
+
 def compute_schedule_wait_seconds(
     schedule: Dict[str, Any],
     default_cron: str,
     disabled_when_zero_cron: bool,
     language: str = FALLBACK_LANGUAGE,
+    empty_uses_default: bool = False,
 ) -> Optional[Tuple[float, str]]:
     if not isinstance(schedule, dict):
         schedule = {}
@@ -74,6 +88,8 @@ def compute_schedule_wait_seconds(
     if interval_seconds < 0:
         raise LocalizedValueError("error.schedule.interval_negative")
     cron_text = str(schedule.get("cron_expression", default_cron) or "").strip()
+    if empty_uses_default and not cron_text:
+        cron_text = default_cron
     if disabled_when_zero_cron and cron_text in ("", DISABLED_CRON):
         return None
     cron = CronExpression(cron_text)

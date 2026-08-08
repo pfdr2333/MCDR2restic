@@ -83,6 +83,15 @@ force_schedule:
 
 ```
 
+`maintenance_schedule` controls repository maintenance independently from backups. By default it runs `restic.maintenance_commands` once per day at `03:00`. An empty `cron_expression` keeps the default `03:00`; set it to `"0"` to disable maintenance scheduling. Maintenance does not run `save-off`, `save-all`, or `save-on`. If maintenance and backup fire at the same time, backup runs first; if they overlap after different trigger times, the later task waits for the current one to finish.
+
+```yaml
+maintenance_schedule:
+  interval_seconds: 0
+  cron_expression: "0 0 3 * * *"
+
+```
+
 `update_check` controls version update checks and is enabled by default. The plugin checks once in the background when it loads, then once every day at `00:00`; it only writes log messages and never downloads or updates the plugin automatically. Set `enabled` to `false` to disable it.
 
 ```yaml
@@ -134,6 +143,8 @@ restic:
   progress_interval_seconds: 5
 
 ```
+
+The backup sequence is now `save-off` -> `save-all` -> `restic backup` -> `save-on`. Repository maintenance is triggered separately by `maintenance_schedule` and no longer runs as a pre-backup step.
 
 This setup allows the plugin to automatically download restic on Linux/Windows amd64 even if it is not present in the MCDR working directory. A newly generated config backs up only `./server/world` by default; if `./server/world`, `./server/world_nether`, and `./server/world_the_end` all exist when the file is generated, the three world directories are written automatically. On Windows, the initial config automatically uses `.\restic.exe` and backslash paths, and excludes `session.lock` by default to avoid restic exit code 3 caused by Minecraft file locks. The example password `123456` is provided solely to lower the initial configuration barrier; please replace it with your own strong password for production use.
 

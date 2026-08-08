@@ -12,6 +12,7 @@ from mcdr2restic.core.i18n import server_tr, tr
 from mcdr2restic.config.config_template import (
     get_discord_block_lines,
     get_force_schedule_lines,
+    get_maintenance_schedule_lines,
     get_restic_auto_download_lines,
     get_restic_auto_init_lines,
     get_restic_download_proxy_lines,
@@ -131,6 +132,7 @@ def apply_config_file_migrations(
     lines = ensure_restic_migration_lines(lines, language, cfg)
     lines = ensure_restic_timeout_value(lines, cfg)
     lines = ensure_force_schedule_block(lines, language, cfg)
+    lines = ensure_maintenance_schedule_block(lines, language, cfg)
     lines = ensure_update_check_block(lines, language, cfg)
     lines = ensure_discord_block(lines, language, cfg)
     lines = ensure_snapshot_cache_block(lines, language, cfg)
@@ -168,6 +170,25 @@ def ensure_force_schedule_block(
     )
     return insert_before_config_version_or_end(
         lines, get_force_schedule_lines(language, force_schedule)
+    )
+
+
+def ensure_maintenance_schedule_block(
+    lines: List[str],
+    language: str,
+    cfg: Dict[str, Any],
+) -> List[str]:
+    if has_top_level_key(lines, "maintenance_schedule"):
+        return lines
+    maintenance_schedule = (
+        cfg.get("maintenance_schedule", {})
+        if isinstance(cfg.get("maintenance_schedule"), dict)
+        else {}
+    )
+    return insert_before_top_level_key(
+        lines,
+        "update_check",
+        get_maintenance_schedule_lines(language, maintenance_schedule),
     )
 
 

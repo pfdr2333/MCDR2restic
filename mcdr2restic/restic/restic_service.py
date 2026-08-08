@@ -57,6 +57,23 @@ def run_backup_body(
     newly_initialized = prepare_backup_repository(
         app_runtime, server, restic_cfg, deadline, invalidate_snapshot_cache_func
     )
+    prepare_minecraft_for_backup(app_runtime, server, cfg)
+    return run_backup_command(
+        app_runtime, server, restic_cfg, deadline, invalidate_snapshot_cache_func
+    )
+
+
+def run_maintenance_body(
+    app_runtime: PluginRuntime,
+    server: PluginServerInterface,
+    cfg: Dict[str, Any],
+    invalidate_snapshot_cache_func: SnapshotCacheInvalidator,
+):
+    restic_cfg = cfg.get("restic", {})
+    deadline = make_restic_deadline(restic_cfg)
+    newly_initialized = prepare_maintenance_repository(
+        app_runtime, server, restic_cfg, deadline, invalidate_snapshot_cache_func
+    )
     run_backup_maintenance(
         app_runtime,
         server,
@@ -64,10 +81,6 @@ def run_backup_body(
         deadline,
         newly_initialized,
         invalidate_snapshot_cache_func,
-    )
-    prepare_minecraft_for_backup(app_runtime, server, cfg)
-    return run_backup_command(
-        app_runtime, server, restic_cfg, deadline, invalidate_snapshot_cache_func
     )
 
 
@@ -81,6 +94,19 @@ def prepare_backup_repository(
     if not is_mc_ready(app_runtime, server):
         raise BackupProblem(i18n_key="error.backup.minecraft_not_ready")
     assert_backup_sources_do_not_contain_repository(restic_cfg)
+    ensure_default_restic_executable_available(server, restic_cfg)
+    return ensure_restic_repository_initialized(
+        app_runtime, server, restic_cfg, deadline, invalidate_snapshot_cache_func
+    )
+
+
+def prepare_maintenance_repository(
+    app_runtime: PluginRuntime,
+    server: PluginServerInterface,
+    restic_cfg: Dict[str, Any],
+    deadline: Optional[float],
+    invalidate_snapshot_cache_func: SnapshotCacheInvalidator,
+) -> bool:
     ensure_default_restic_executable_available(server, restic_cfg)
     return ensure_restic_repository_initialized(
         app_runtime, server, restic_cfg, deadline, invalidate_snapshot_cache_func

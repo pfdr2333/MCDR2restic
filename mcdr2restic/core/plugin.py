@@ -35,6 +35,7 @@ from mcdr2restic.notifications import (
     NotificationDispatcher,
     OneBotClient,
 )
+from mcdr2restic.restic.maintenance_runner import MaintenanceRunner
 from mcdr2restic.minecraft.player_activity_service import (
     handle_player_joined,
     handle_player_left,
@@ -255,7 +256,10 @@ class PluginEntrypoint:
         self.runtime.service.scheduler = BackupScheduler(
             server,
             lambda: get_config_snapshot(self.runtime),
-            backup_runner.run_locked,
+            lambda target, trigger: backup_runner.run_locked(
+                target, trigger, wait_for_slot=True
+            ),
+            self.create_maintenance_runner().run_waiting,
             lambda target: is_mc_ready(self.runtime, target),
             lambda cfg: should_skip_for_no_player_activity(self.runtime, cfg),
             notification_dispatcher.notify_admins,
@@ -276,6 +280,13 @@ class PluginEntrypoint:
             self.runtime,
             is_restore_running,
             self.create_notification_dispatcher().notify_admins,
+            self.invalidate_snapshot_cache,
+        )
+
+    def create_maintenance_runner(self) -> MaintenanceRunner:
+        return MaintenanceRunner(
+            self.runtime,
+            is_restore_running,
             self.invalidate_snapshot_cache,
         )
 

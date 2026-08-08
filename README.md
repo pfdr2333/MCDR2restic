@@ -84,6 +84,14 @@ force_schedule:
   cron_expression: "0"
 ```
 
+`maintenance_schedule` 是仓库维护调度，独立于备份流程，默认每天 `03:00` 执行一次 `restic.maintenance_commands`。`cron_expression` 留空时仍使用默认 `03:00`；写成 `"0"` 表示关闭。维护不会执行 `save-off`、`save-all`、`save-on`。如果维护和备份同一时间触发，先备份；如果二者错开但运行冲突，后到者会等待当前任务结束。
+
+```yaml
+maintenance_schedule:
+  interval_seconds: 0
+  cron_expression: "0 0 3 * * *"
+```
+
 `update_check` 是版本更新检查，默认开启。插件加载时会在后台检查一次，之后每天 `00:00` 检查一次；只写日志提示，不会自动下载或更新插件。需要关闭时把 `enabled` 改为 `false`。
 
 ```yaml
@@ -134,6 +142,8 @@ restic:
   timeout_seconds: 0
   progress_interval_seconds: 5
 ```
+
+备份顺序现在是：`save-off` -> `save-all` -> `restic backup` -> `save-on`。仓库维护由 `maintenance_schedule` 单独触发，不再作为备份前步骤运行。
 
 这样在 Linux/Windows amd64 上，即使 MCDR 工作目录下还没有默认路径的 restic，插件也会尝试自动下载。首次生成配置时默认只备份 `./server/world`；如果生成时检测到 `./server/world`、`./server/world_nether`、`./server/world_the_end` 三个目录都存在，会自动写入三世界目录。Windows 首次生成配置时会自动使用 `.\restic.exe` 和反斜杠路径，并默认排除 `session.lock`，避免 Minecraft 文件锁导致 restic 返回 3。示例密码 `123456` 只用于降低首次配置门槛，正式使用请改成自己的强密码。
 
