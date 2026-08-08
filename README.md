@@ -51,7 +51,7 @@ This project supports both Chinese and English, following the MCDR language conv
 
 4. 按需修改配置文件，修改完成后执行 `!!restic reload`
 
-
+<!--
 ## 配置
 <details>
   <summary>配置详解</summary>
@@ -178,6 +178,7 @@ discord:
 
 `messages` 里可以自定义管理员通知文本。可用变量包括：`{prefix}`、`{label}`、`{start_time}`、`{end_time}`、`{duration_seconds}`、`{status}`、`{message}`、`{detail}`、`{error}`。如果需要输出字面量花括号，请写成 `{{` 或 `}}`。
 </details>
+-->
 
 ## 命令
 
