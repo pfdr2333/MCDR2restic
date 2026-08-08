@@ -18,6 +18,8 @@ except ImportError:
         unittest,
         yaml,
     )
+
+
 class ConfigurationTests(unittest.TestCase):
     def test_default_config_constructor_returns_independent_copies(self):
         first = build_default_config()

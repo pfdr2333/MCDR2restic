@@ -20,6 +20,8 @@ except ImportError:
         restore_workflow,
         unittest,
     )
+
+
 class RestoreWorkflowTests(unittest.TestCase):
     def test_normalize_restore_include_path_returns_restic_absolute_path(self):
         restic_cfg = {"working_directory": os.getcwd()}

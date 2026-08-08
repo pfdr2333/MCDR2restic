@@ -24,6 +24,8 @@ except ImportError:
         threading,
         unittest,
     )
+
+
 class UtilsTests(unittest.TestCase):
     def test_safe_int_uses_default_on_bad_input(self):
         self.assertEqual(safe_int("oops", 7), 7)

@@ -24,6 +24,8 @@ except ImportError:
         try_call_bool,
         unittest,
     )
+
+
 class PlayerActivityTests(unittest.TestCase):
     def test_parse_english_list_output(self):
         count, names = parse_online_list_output(
@@ -54,6 +56,7 @@ class PlayerActivityTests(unittest.TestCase):
 
     def test_has_recent_player_activity_is_false_when_idle(self):
         self.assertFalse(has_recent_player_activity({"current_online_players": 0}))
+
 
 class MinecraftServiceTests(unittest.TestCase):
     def test_try_call_bool_logs_probe_failure(self):

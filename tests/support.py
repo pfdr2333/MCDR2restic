@@ -1,14 +1,14 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
-import sys
-import types
-import unittest
-import os
 import io
 import json
+import os
+import sys
 import tempfile
 import threading
+import types
+import unittest
 import zipfile
 from contextlib import closing, nullcontext
 from datetime import datetime
@@ -50,61 +50,21 @@ def install_mcdr_stub():
 
 install_mcdr_stub()
 
-from mcdr2restic.minecraft.player_activity import (
-    parse_online_list_output,
-    runtime_player_set,
-)
-from mcdr2restic.minecraft.player_activity_service import (
-    has_recent_player_activity,
-    resolve_known_online_players,
-)
-from mcdr2restic.minecraft.minecraft_service import server_is_running, try_call_bool
-from mcdr2restic.notifications import render_message
-from mcdr2restic.notifications.discord_webhook import (
-    build_discord_mentions,
-    truncate_discord_content,
-)
+import mcdr2restic.core.bootstrap as bootstrap
+import mcdr2restic.core.i18n as i18n
+import mcdr2restic.defaults.config_template_resources as config_template_resources
+import mcdr2restic.restic.restic_lock_recovery as restic_lock_recovery
+import mcdr2restic.restic.restic_service as restic_service
+import mcdr2restic.restore.restore_workflow as restore_workflow
+import tools.pack_plugin as pack_plugin
 from mcdr2restic.backup.backup_scheduler import BackupScheduler
 from mcdr2restic.backup.cron import CronExpression
-from mcdr2restic.commands.command_context import CommandContext
-from mcdr2restic.commands.restic_commands import ResticCommands
-from mcdr2restic.core.models import (
-    BackupProblem,
-    ResticCommandResult,
-    ResticProgressState,
-    RestoreSession,
-)
-from mcdr2restic.restic.restic_download import (
-    is_default_restic_executable_path,
-    resolve_restic_executable_path,
-)
-from mcdr2restic.restic.restic_guidance import classify_restic_failure_output
-from mcdr2restic.restic.restic_result import assert_restic_success, detect_error_lines
-from mcdr2restic.restic.restic_runner import resolve_popen_executable
-from mcdr2restic.restic.restic_progress_text import (
-    format_restic_status,
-    format_restic_summary,
-)
-from mcdr2restic.restic.restic_termination import (
-    TerminateResult,
-    termination_failure_suffix,
-)
-from mcdr2restic.restore.restore_workflow import normalize_restore_include_path
-import mcdr2restic.restore.restore_workflow as restore_workflow
-from mcdr2restic.restore.restore_task_repository import (
-    add_restore_task,
-    restore_tasks_output,
-)
-from mcdr2restic.restore.restore_task_repository import (
-    clear_restore_tasks,
-    list_restore_tasks,
-)
-from mcdr2restic.core.runtime import create_runtime
-from mcdr2restic.core.presentation import render_status_output, schedule_status_text
 from mcdr2restic.backup.scheduling import (
     compute_maintenance_wait_seconds,
     parse_daily_time,
 )
+from mcdr2restic.commands.command_context import CommandContext
+from mcdr2restic.commands.restic_commands import ResticCommands
 from mcdr2restic.config.config_loader import replace_or_append_enabled_line
 from mcdr2restic.config.config_migration import (
     apply_config_file_migrations,
@@ -114,18 +74,60 @@ from mcdr2restic.config.state_store import (
     load_yaml_mapping_with_text_repair,
     repair_inconsistent_block_scalar_indentation,
 )
-import mcdr2restic.core.bootstrap as bootstrap
 from mcdr2restic.core.i18n import (
     make_source_translate,
     normalize_language,
     tr,
     tr_error,
 )
-import mcdr2restic.core.i18n as i18n
-import mcdr2restic.defaults.config_template_resources as config_template_resources
+from mcdr2restic.core.models import (
+    BackupProblem,
+    ResticCommandResult,
+    ResticProgressState,
+    RestoreSession,
+)
+from mcdr2restic.core.presentation import render_status_output, schedule_status_text
+from mcdr2restic.core.runtime import create_runtime
+from mcdr2restic.core.utils import non_negative_int, safe_int, tail_text
 from mcdr2restic.defaults.default_config import DEFAULT_CONFIG, build_default_config
 from mcdr2restic.defaults.default_config_templates import get_default_config_template
 from mcdr2restic.defaults.message_defaults import get_default_message_template
+from mcdr2restic.minecraft.minecraft_service import server_is_running, try_call_bool
+from mcdr2restic.minecraft.player_activity import (
+    parse_online_list_output,
+    runtime_player_set,
+)
+from mcdr2restic.minecraft.player_activity_service import (
+    has_recent_player_activity,
+    resolve_known_online_players,
+)
+from mcdr2restic.notifications import render_message
+from mcdr2restic.notifications.discord_webhook import (
+    build_discord_mentions,
+    truncate_discord_content,
+)
+from mcdr2restic.restic.restic_download import (
+    is_default_restic_executable_path,
+    resolve_restic_executable_path,
+)
+from mcdr2restic.restic.restic_guidance import classify_restic_failure_output
+from mcdr2restic.restic.restic_progress_text import (
+    format_restic_status,
+    format_restic_summary,
+)
+from mcdr2restic.restic.restic_result import assert_restic_success, detect_error_lines
+from mcdr2restic.restic.restic_runner import resolve_popen_executable
+from mcdr2restic.restic.restic_termination import (
+    TerminateResult,
+    termination_failure_suffix,
+)
+from mcdr2restic.restore.restore_task_repository import (
+    add_restore_task,
+    clear_restore_tasks,
+    list_restore_tasks,
+    restore_tasks_output,
+)
+from mcdr2restic.restore.restore_workflow import normalize_restore_include_path
 from mcdr2restic.snapshots.snapshot_cache import build_snapshot_cache_key
 from mcdr2restic.snapshots.snapshot_db import (
     insert_snapshot_row,
@@ -137,8 +139,6 @@ from mcdr2restic.snapshots.snapshot_importer import (
     assert_snapshot_import_finished,
     iter_json_array_stream,
 )
-import mcdr2restic.restic.restic_lock_recovery as restic_lock_recovery
-import mcdr2restic.restic.restic_service as restic_service
 from mcdr2restic.update.update_check import (
     get_current_plugin_version,
     is_newer_version,
@@ -146,8 +146,6 @@ from mcdr2restic.update.update_check import (
     read_bundled_plugin_version,
     version_number_tuple,
 )
-from mcdr2restic.core.utils import non_negative_int, safe_int, tail_text
-import tools.pack_plugin as pack_plugin
 
 
 class FakeServer:

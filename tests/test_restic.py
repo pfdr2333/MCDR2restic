@@ -1,8 +1,8 @@
 try:
     from .support import (
         BackupProblem,
-        CommandServer,
         CommandContext,
+        CommandServer,
         FakePluginServer,
         PermissiveCommandSource,
         ResticCommandResult,
@@ -17,8 +17,8 @@ try:
         format_restic_summary,
         is_default_restic_executable_path,
         mock,
-        os,
         normalize_restore_include_path,
+        os,
         resolve_popen_executable,
         resolve_restic_executable_path,
         restic_lock_recovery,
@@ -29,8 +29,8 @@ try:
 except ImportError:
     from support import (
         BackupProblem,
-        CommandServer,
         CommandContext,
+        CommandServer,
         FakePluginServer,
         PermissiveCommandSource,
         ResticCommandResult,
@@ -53,6 +53,8 @@ except ImportError:
         termination_failure_suffix,
         unittest,
     )
+
+
 class ResticResultTests(unittest.TestCase):
     def test_detect_error_lines_honors_ignore_patterns(self):
         lines = detect_error_lines(
@@ -103,7 +105,9 @@ class ResticResultTests(unittest.TestCase):
             "locked",
         )
         self.assertEqual(
-            classify_restic_failure_output("Is there a repository at the following location?"),
+            classify_restic_failure_output(
+                "Is there a repository at the following location?"
+            ),
             "repository_not_initialized",
         )
 
@@ -122,6 +126,7 @@ class ResticResultTests(unittest.TestCase):
             resolve_popen_executable(executable, os.path.join(os.getcwd(), "server")),
             os.path.abspath(executable),
         )
+
 
 class ResticLockRecoveryTests(unittest.TestCase):
     LOCK_ERROR_OUTPUT = (
@@ -212,6 +217,7 @@ class ResticLockRecoveryTests(unittest.TestCase):
         self.assertTrue(server.logger.warning_messages)
         self.assertTrue(server.logger.info_messages)
 
+
 class ResticCommandTests(unittest.TestCase):
     def test_manual_init_runs_restic_init_and_invalidates_snapshot_cache(self):
         runtime = create_runtime()
@@ -248,6 +254,7 @@ class ResticCommandTests(unittest.TestCase):
         self.assertEqual(run_restic.call_args.args[3], "init")
         self.assertTrue(invalidations)
         self.assertIn("restic init", source.replies[0])
+
 
 class BackupFlowTests(unittest.TestCase):
     def test_run_backup_body_executes_minecraft_then_backup_without_maintenance(self):
@@ -300,9 +307,7 @@ class BackupFlowTests(unittest.TestCase):
             )
 
         self.assertEqual(snapshot_id, "abc123")
-        self.assertEqual(
-            restic_calls, [("backup", ["backup", "world"])]
-        )
+        self.assertEqual(restic_calls, [("backup", ["backup", "world"])])
         self.assertEqual(server.commands, ["save-off", "save-all"])
 
     def test_run_maintenance_body_executes_maintenance_without_minecraft_commands(self):
@@ -345,6 +350,7 @@ class BackupFlowTests(unittest.TestCase):
         self.assertEqual(restic_calls, [("maintenance", ["forget"])])
         self.assertEqual(server.commands, [])
 
+
 class ResticProgressTests(unittest.TestCase):
     def test_format_status_uses_progress_values(self):
         progress = ResticProgressState(
@@ -373,6 +379,7 @@ class ResticProgressTests(unittest.TestCase):
         )
 
         self.assertIn("snapshot abcdef12", format_restic_summary(progress))
+
 
 class ResticTerminationTests(unittest.TestCase):
     def test_terminate_result_reports_successful_paths(self):

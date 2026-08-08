@@ -20,6 +20,8 @@ except ImportError:
         tr_error,
         unittest,
     )
+
+
 class SchedulingTests(unittest.TestCase):
     def test_parse_daily_time(self):
         self.assertEqual(parse_daily_time("07:30"), (7, 30))
@@ -57,6 +59,7 @@ class SchedulingTests(unittest.TestCase):
 
         self.assertEqual(triggered, [True])
         self.assertIn("MCDR2Restic 测试调度线程已启动", server.logger.info_messages)
+
 
 class CronTests(unittest.TestCase):
     def test_next_after_skips_current_second(self):

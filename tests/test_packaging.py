@@ -2,6 +2,8 @@ try:
     from .support import Path, bootstrap, json, pack_plugin, tempfile, unittest, zipfile
 except ImportError:
     from support import Path, bootstrap, json, pack_plugin, tempfile, unittest, zipfile
+
+
 class BootstrapTests(unittest.TestCase):
     def test_requirements_txt_declares_runtime_dependencies(self):
         with open("requirements.txt", "r", encoding="utf8") as file:
@@ -13,6 +15,7 @@ class BootstrapTests(unittest.TestCase):
     def test_bootstrap_no_longer_exposes_pip_installer(self):
         self.assertFalse(hasattr(bootstrap, "pip_install"))
         self.assertFalse(hasattr(bootstrap, "run_pip_command"))
+
 
 class PackagingTests(unittest.TestCase):
     def test_metadata_declares_root_resources_for_packaging(self):

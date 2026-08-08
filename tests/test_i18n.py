@@ -1,5 +1,7 @@
 try:
     from .support import (
+        FakeCommandSource,
+        FakePluginServer,
         config_template_resources,
         get_default_config_template,
         get_default_message_template,
@@ -16,11 +18,11 @@ try:
         tr_error,
         unittest,
         yaml,
-        FakeCommandSource,
-        FakePluginServer,
     )
 except ImportError:
     from support import (
+        FakeCommandSource,
+        FakePluginServer,
         config_template_resources,
         get_default_config_template,
         get_default_message_template,
@@ -37,9 +39,9 @@ except ImportError:
         tr_error,
         unittest,
         yaml,
-        FakeCommandSource,
-        FakePluginServer,
     )
+
+
 class I18nTests(unittest.TestCase):
     def test_make_source_translate_prefers_source_language_over_server_default(self):
         server = FakePluginServer(language="en_us")
@@ -74,9 +76,14 @@ class I18nTests(unittest.TestCase):
         self.assertIn("{level}", tr("zh_cn", "error.permission.denied"))
 
     def test_translation_missing_language_key_falls_back_to_english(self):
-        with mock.patch.object(
-            i18n, "available_language_codes", return_value=frozenset({"xx", "en_us"})
-        ), mock.patch.object(i18n, "load_language_messages") as loader:
+        with (
+            mock.patch.object(
+                i18n,
+                "available_language_codes",
+                return_value=frozenset({"xx", "en_us"}),
+            ),
+            mock.patch.object(i18n, "load_language_messages") as loader,
+        ):
             loader.side_effect = lambda language: {
                 "xx": {"info.backup.enabled": "custom enabled"},
                 "en_us": {
@@ -141,7 +148,6 @@ class I18nTests(unittest.TestCase):
                 ),
                 "English success",
             )
-
 
     def test_config_file_template_text_is_not_stored_in_language_resources(self):
         for name in ("zh_cn", "zh_tw", "en_us"):

@@ -18,6 +18,8 @@ except ImportError:
         unittest,
         version_number_tuple,
     )
+
+
 class UpdateCheckTests(unittest.TestCase):
     def test_normalize_release_version(self):
         self.assertEqual(normalize_release_version("Version v1.2.3"), "1.2.3")

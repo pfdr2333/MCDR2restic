@@ -12,6 +12,8 @@ except ImportError:
         truncate_discord_content,
         unittest,
     )
+
+
 class NotificationTests(unittest.TestCase):
     def test_render_message_keeps_unknown_placeholders(self):
         cfg = {
