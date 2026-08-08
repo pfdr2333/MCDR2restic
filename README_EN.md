@@ -2,6 +2,8 @@
 
 MCDR2Restic is an MCDReforged plugin designed to regularly invoke restic to back up specified directories while the server is running normally.
 
+**This readme is being refactored and may contain outdated information.**
+
 ## Prerequisites
 
 > This project is responsible for invoking restic. Under the default configuration, if restic is not found in the config folder, it will automatically download the appropriate restic binary for your system. This feature will not take effect if a non-default directory is configured.
@@ -47,6 +49,7 @@ In domestic network environments (e.g., Mainland China), if MCDR dependency inst
 When generating the configuration for the first time on Windows, the example will automatically adapt to Windows-style paths like `.\config\mcdr2restic\restic.exe`, `.\restic-repo`, and `.\server\world`, utilizing YAML single quotes to avoid backslash escape issues.
 4. Modify the configuration file as needed, then execute `!!restic reload` once finished.
 
+<!--
 ## Configuration
 <details>
   <summary>Detailed Configuration Guide</summary>
@@ -182,6 +185,7 @@ discord:
 
 Admin notification texts can be customized within `messages`. Available variables include: `{prefix}`, `{label}`, `{start_time}`, `{end_time}`, `{duration_seconds}`, `{status}`, `{message}`, `{detail}`, and `{error}`. If you need to output literal curly braces, write them as `{{` or `}}`.
 </details>
+-->
 
 ## Commands
 
