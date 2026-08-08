@@ -62,6 +62,7 @@ import mcdr2restic.restic.restic_lock_recovery as restic_lock_recovery
 import mcdr2restic.restic.restic_service as restic_service
 import mcdr2restic.restore.restore_workflow as restore_workflow
 import tools.pack_plugin as pack_plugin
+import tools.verify_plugin as verify_plugin
 from mcdr2restic.backup.backup_scheduler import BackupScheduler
 from mcdr2restic.backup.cron import CronExpression
 from mcdr2restic.backup.scheduling import (
@@ -314,6 +315,7 @@ __all__ = [
     "open_snapshot_db",
     "os",
     "pack_plugin",
+    "verify_plugin",
     "parse_daily_time",
     "parse_online_list_output",
     "read_bundled_plugin_version",

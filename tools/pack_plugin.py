@@ -9,9 +9,9 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, Iterator, Sequence
 from zipfile import ZIP_DEFLATED, ZipFile
 
-
 PLUGIN_METADATA_FILE = "mcdreforged.plugin.json"
 OPTIONAL_ROOT_FILES = ("requirements.txt",)
+REQUIRED_ROOT_FILES = ("README.md", "README_EN.md", "LICENSE")
 DEFAULT_OUTPUT_DIR = "dist"
 PACKED_PLUGIN_SUFFIX = ".mcdr"
 IGNORED_DIRECTORY_NAMES = frozenset({"__pycache__"})
@@ -130,7 +130,16 @@ def iter_required_relative_paths(
 
     plugin_id = str(metadata.get("id") or "").strip()
     yield Path(PLUGIN_METADATA_FILE)
+    for required_name in REQUIRED_ROOT_FILES:
+        required_path = root / required_name
+        if not required_path.is_file():
+            raise FileNotFoundError(
+                "Missing required root file: {}".format(required_path)
+            )
+        yield Path(required_name)
     for optional_name in OPTIONAL_ROOT_FILES:
+        if optional_name in REQUIRED_ROOT_FILES:
+            continue
         optional_path = root / optional_name
         if optional_path.is_file():
             yield Path(optional_name)

@@ -7,6 +7,7 @@ try:
         pack_plugin,
         tempfile,
         unittest,
+        verify_plugin,
         zipfile,
     )
 except ImportError:
@@ -18,6 +19,7 @@ except ImportError:
         pack_plugin,
         tempfile,
         unittest,
+        verify_plugin,
         zipfile,
     )
 
@@ -60,8 +62,22 @@ class PackagingTests(unittest.TestCase):
         self.assertIn("mcdr2restic/config_templates/zh_tw.yml", names)
         self.assertIn("mcdreforged.plugin.json", names)
         self.assertIn("requirements.txt", names)
+        self.assertIn("README.md", names)
+        self.assertIn("README_EN.md", names)
+        self.assertIn("LICENSE", names)
         self.assertIn("mcdr2restic/__init__.py", names)
         for resource_name in ("lang",):
             self.assertTrue(any(name.startswith(resource_name + "/") for name in names))
         self.assertTrue(all("\\" not in name for name in names))
         self.assertFalse(any("__pycache__" in name for name in names))
+
+    def test_release_verification_checks_tag_and_archive_content(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            archive_path = pack_plugin.pack_plugin(REPO_ROOT, Path(temp_dir))
+            metadata = pack_plugin.load_plugin_metadata(REPO_ROOT)
+
+            verify_plugin.verify_git_tag(metadata, "v0.5.0")
+            verify_plugin.verify_archive(REPO_ROOT, archive_path, metadata)
+
+            with self.assertRaises(ValueError):
+                verify_plugin.verify_git_tag(metadata, "v0.5.1")
