@@ -2,6 +2,8 @@
 
 MCDR2Restic 是一个 MCDReforged 插件，用于在服务端正常运行时定时调用 restic 备份指定目录。
 
+**此readme正要重构，可能含有过时信息**
+
 ## 前置要求 / Prerequisites
 > 本项目负责调用 restic。默认配置下，如果 MCDR 工作目录找不到 restic，则会自动下载对应系统的 restic ，非默认目录该功能不生效
 
