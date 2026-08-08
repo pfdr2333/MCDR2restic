@@ -7,7 +7,6 @@ from typing import Any, Callable, Final
 
 from mcdr2restic.core.bootstrap import ensure_runtime_dependencies
 
-
 _HOOK_METHODS: Final[tuple[tuple[str, str], ...]] = (
     ("_shutdown_runtime", "shutdown_runtime"),
     ("on_load", "on_load"),

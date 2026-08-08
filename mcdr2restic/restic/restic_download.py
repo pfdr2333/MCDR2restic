@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import bz2
-import copy
 import json
 import os
 import platform
@@ -19,7 +18,11 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 from mcdreforged.api.all import PluginServerInterface
 
 from mcdr2restic.core.i18n import server_tr
-from mcdr2restic.defaults.default_constants import PLUGIN_ID
+from mcdr2restic.defaults.default_constants import (
+    DEFAULT_RESTIC_EXECUTABLE_POSIX,
+    DEFAULT_RESTIC_EXECUTABLE_WINDOWS,
+    PLUGIN_ID,
+)
 from mcdr2restic.defaults.restic_release_defaults import build_restic_fallback_release
 from mcdr2restic.core.models import BackupProblem
 from mcdr2restic.restic.restic_constants import (
@@ -37,7 +40,9 @@ def ensure_default_restic_executable_available(
 ):
     if not bool(restic_cfg.get(RESTIC_CFG_AUTO_DOWNLOAD, True)):
         return
-    executable = str(restic_cfg.get(RESTIC_CFG_EXECUTABLE, "./restic") or "").strip()
+    executable = str(
+        restic_cfg.get(RESTIC_CFG_EXECUTABLE, DEFAULT_RESTIC_EXECUTABLE_POSIX) or ""
+    ).strip()
     if not is_default_restic_executable_path(executable):
         return
     target_path = resolve_restic_executable_path(restic_cfg, executable)
@@ -73,15 +78,32 @@ def install_default_restic_for_platform(
 
 def is_default_restic_executable_path(executable: str) -> bool:
     normalized = executable.replace("\\", "/").lower()
-    return normalized in ("./restic", "restic", "./restic.exe", "restic.exe")
+    return normalized in {
+        "./restic",
+        "restic",
+        "./restic.exe",
+        "restic.exe",
+        DEFAULT_RESTIC_EXECUTABLE_POSIX.replace("\\", "/").lower(),
+        DEFAULT_RESTIC_EXECUTABLE_WINDOWS.replace("\\", "/").lower(),
+    }
 
 
 def resolve_restic_executable_path(restic_cfg: Dict[str, Any], executable: str) -> str:
     expanded = os.path.expanduser(os.path.expandvars(executable))
     if os.path.isabs(expanded):
         return os.path.abspath(expanded)
+    if is_config_folder_default_restic_path(expanded):
+        return os.path.abspath(expanded)
     cwd = restic_cfg.get(RESTIC_CFG_WORKING_DIRECTORY) or os.getcwd()
     return os.path.abspath(os.path.join(str(cwd), expanded))
+
+
+def is_config_folder_default_restic_path(executable: str) -> bool:
+    normalized = executable.replace("\\", "/").lower()
+    return normalized in {
+        DEFAULT_RESTIC_EXECUTABLE_POSIX.replace("\\", "/").lower(),
+        DEFAULT_RESTIC_EXECUTABLE_WINDOWS.replace("\\", "/").lower(),
+    }
 
 
 def get_restic_download_platform() -> Optional[Tuple[str, str, str]]:

@@ -14,6 +14,7 @@ from mcdr2restic.backup.scheduling import (
 )
 from mcdr2restic.core.i18n import DEFAULT_LANGUAGE, normalize_translate, tr_error
 from mcdr2restic.core.models import BackupRunStatus
+from mcdr2restic.restic.restic_guidance import command_root_from_config
 from mcdr2restic.snapshots.snapshot_cache import (
     build_snapshot_cache_key,
     ensure_snapshot_cache_fresh,
@@ -159,7 +160,13 @@ def render_snapshot_status_lines(
 
     try:
         page_context = load_snapshot_status_page(
-            snapshot_query_lock, server, restic_cfg, snapshot_cfg, language, page
+            snapshot_query_lock,
+            server,
+            restic_cfg,
+            snapshot_cfg,
+            language,
+            page,
+            command_root_from_config(cfg),
         )
     except Exception as exc:
         return render_snapshot_status_message(
@@ -182,11 +189,18 @@ def load_snapshot_status_page(
     snapshot_cfg: Dict[str, Any],
     language: str,
     requested_page: int,
+    command_root: str = "!!restic",
 ) -> Dict[str, Any]:
     page_size = get_snapshot_page_size(snapshot_cfg)
     cache_key = build_snapshot_cache_key(restic_cfg)
     refresh_note = ensure_snapshot_cache_fresh(
-        snapshot_query_lock, server, restic_cfg, cache_key, snapshot_cfg, language
+        snapshot_query_lock,
+        server,
+        restic_cfg,
+        cache_key,
+        snapshot_cfg,
+        language,
+        command_root,
     )
     page_data = read_snapshot_page(
         server, cache_key, requested_page, page_size, snapshot_cfg

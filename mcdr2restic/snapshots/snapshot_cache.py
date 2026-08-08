@@ -136,13 +136,16 @@ def ensure_snapshot_cache_fresh(
     cache_key: str,
     snapshot_cfg: Dict[str, Any],
     language: str,
+    command_root: str = "!!restic",
 ) -> str:
     if is_snapshot_cache_valid(server, snapshot_cfg, cache_key):
         return ""
     if not snapshot_query_lock.acquire(blocking=False):
         return localized_refresh_running(language)
     try:
-        refresh_snapshot_cache(server, restic_cfg, cache_key, snapshot_cfg, language)
+        refresh_snapshot_cache(
+            server, restic_cfg, cache_key, snapshot_cfg, language, command_root
+        )
     except BackupProblem:
         return ""
     finally:
@@ -170,13 +173,18 @@ def refresh_snapshot_cache(
     cache_key: str,
     snapshot_cfg: Dict[str, Any],
     language: str,
+    command_root: str = "!!restic",
 ):
     temp_key = make_snapshot_refresh_temp_key(cache_key)
     started = time.monotonic()
     with closing(open_snapshot_db(server, snapshot_cfg)) as conn:
         try:
             count = import_restic_snapshots_to_sql(
-                restic_cfg, conn, temp_key, get_snapshot_query_timeout(snapshot_cfg)
+                restic_cfg,
+                conn,
+                temp_key,
+                get_snapshot_query_timeout(snapshot_cfg),
+                command_root,
             )
             commit_refreshed_snapshot_cache(
                 conn, cache_key, temp_key, count, time.monotonic() - started

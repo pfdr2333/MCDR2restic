@@ -261,9 +261,9 @@ texts:
       # Windows Java 版示例。若伺服器不支持 save-all flush，可改為 save-all。
   "template.snippet.restic_executable": |-
     __MCDR2RESTIC_PLATFORM_POSIX__
-    "./restic"
+    "./config/mcdr2restic/restic"
     __MCDR2RESTIC_PLATFORM_WINDOWS__
-    '.\restic.exe'
+    '.\config\mcdr2restic\restic.exe'
   "template.snippet.restic_repository": |-
     __MCDR2RESTIC_PLATFORM_POSIX__
     "./restic-repo"

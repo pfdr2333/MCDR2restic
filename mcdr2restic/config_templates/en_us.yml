@@ -78,7 +78,7 @@ config_template: |-
   
   restic:
     # Every command is executed with executable prepended automatically.
-    # Default: the restic executable placed in MCDR's working directory.
+    # Default: the restic executable placed in MCDR's config folder.
     executable: __MCDR2RESTIC_EXECUTABLE__
     # Working directory for the restic process.
     # Empty string or null means inheriting MCDR's current working directory.
@@ -274,9 +274,9 @@ texts:
       # Windows Java Edition example. If your server does not support save-all flush, use save-all instead.
   "template.snippet.restic_executable": |-
     __MCDR2RESTIC_PLATFORM_POSIX__
-    "./restic"
+    "./config/mcdr2restic/restic"
     __MCDR2RESTIC_PLATFORM_WINDOWS__
-    '.\restic.exe'
+    '.\config\mcdr2restic\restic.exe'
   "template.snippet.restic_repository": |-
     __MCDR2RESTIC_PLATFORM_POSIX__
     "./restic-repo"

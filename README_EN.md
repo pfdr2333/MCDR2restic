@@ -4,7 +4,7 @@ MCDR2Restic is an MCDReforged plugin designed to regularly invoke restic to back
 
 ## Prerequisites
 
-> This project is responsible for invoking restic. Under the default configuration, if restic is not found in the MCDR working directory, it will automatically download the appropriate restic binary for your system. This feature will not take effect if a non-default directory is configured.
+> This project is responsible for invoking restic. Under the default configuration, if restic is not found in the config folder, it will automatically download the appropriate restic binary for your system. This feature will not take effect if a non-default directory is configured.
 
 > Before using this project, please familiarize yourself with the core concepts and configuration methods of restic, and ensure you can use restic independently.
 > The usage of restic is beyond the scope of this document (see the [restic](https://restic.readthedocs.io/en/stable/)). Most backup features require a basic understanding of restic. Restic is a fast, efficient, and secure open-source backup tool. Its deduplication capability is particularly well-suited for Minecraft servers, significantly reducing backup sizes.
@@ -44,7 +44,7 @@ In domestic network environments (e.g., Mainland China), if MCDR dependency inst
 
 
 3. After starting or reloading MCDR, if `config/mcdr2restic/config.yml` does not exist, the plugin will automatically generate a sample configuration tailored to the current operating system. The comment language adapts to MCDR's current locale: Chinese comments for the Chinese locale, and English comments for all other locales.
-When generating the configuration for the first time on Windows, the example will automatically adapt to Windows-style paths like `.\restic.exe`, `.\restic-repo`, and `.\server\world`, utilizing YAML single quotes to avoid backslash escape issues.
+When generating the configuration for the first time on Windows, the example will automatically adapt to Windows-style paths like `.\config\mcdr2restic\restic.exe`, `.\restic-repo`, and `.\server\world`, utilizing YAML single quotes to avoid backslash escape issues.
 4. Modify the configuration file as needed, then execute `!!restic reload` once finished.
 
 ## Configuration
@@ -112,7 +112,7 @@ The default generated restic configuration is a minimal, ready-to-run local exam
 
 ```yaml
 restic:
-  executable: "./restic"
+  executable: "./config/mcdr2restic/restic"
   working_directory: ""
   repository: "./restic-repo"
   password: "123456"
@@ -146,13 +146,17 @@ restic:
 
 The backup sequence is now `save-off` -> `save-all` -> `restic backup` -> `save-on`. Repository maintenance is triggered separately by `maintenance_schedule` and no longer runs as a pre-backup step.
 
-This setup allows the plugin to automatically download restic on Linux/Windows amd64 even if it is not present in the MCDR working directory. A newly generated config backs up only `./server/world` by default; if `./server/world`, `./server/world_nether`, and `./server/world_the_end` all exist when the file is generated, the three world directories are written automatically. On Windows, the initial config automatically uses `.\restic.exe` and backslash paths, and excludes `session.lock` by default to avoid restic exit code 3 caused by Minecraft file locks. The example password `123456` is provided solely to lower the initial configuration barrier; please replace it with your own strong password for production use.
+This setup allows the plugin to automatically download restic on Linux/Windows amd64 even if it is not present at the default path in the config folder. A newly generated config backs up only `./server/world` by default; if `./server/world`, `./server/world_nether`, and `./server/world_the_end` all exist when the file is generated, the three world directories are written automatically. On Windows, the initial config automatically uses `.\config\mcdr2restic\restic.exe` and backslash paths, and excludes `session.lock` by default to avoid restic exit code 3 caused by Minecraft file locks. The example password `123456` is provided solely to lower the initial configuration barrier; please replace it with your own strong password for production use.
 
 The automatic download first requests the GitHub latest release API. If `api.github.com` fails, it falls back to a built-in `v0.19.1` download link. During downloading, it will first attempt the official GitHub address, then try the proxies listed in `download_proxy_prefixes` sequentially.
 
 `restic.password` takes precedence over `restic.password_file`. The plugin will only configure `RESTIC_PASSWORD_FILE` to use a password file if `password` is left as an empty string. The value of `restic.repository` is automatically exported to `RESTIC_REPOSITORY`.
 
 When `restic.auto_init_local_repository` is `true`, the plugin will automatically execute `restic init` before backing up if the local repository does not exist or lacks a `config` file. Remote repositories such as S3, B2, rest, sftp, and rclone will not be initialized automatically.
+
+You can also run `!!restic init` manually to initialize the repository using the current configuration. The plugin points to this command when remote repositories are not initialized automatically, `auto_init_local_repository` is disabled, or restic reports that the repository is not initialized.
+
+When restic reports that the repository is locked, the plugin automatically unlocks only stale locks left by dead local processes. Other locks are preserved and the plugin points to `!!restic unlock`. Repository locks prevent multiple restic processes from writing to the same repository at the same time, so run this command only after confirming no other backup, restore, maintenance, or external restic client is using that repository.
 
 Before a backup starts, the plugin performs a configuration safety check. If the local `restic.repository` is inside a source directory listed by `backup_command`, for example backing up `.` while using `./restic-repo`, the backup is aborted and administrators are notified. Move the repository outside the backup source or adjust `backup_command`.
 

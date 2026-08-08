@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Optional
 
 from mcdreforged.api.all import CommandSource, PluginServerInterface
 

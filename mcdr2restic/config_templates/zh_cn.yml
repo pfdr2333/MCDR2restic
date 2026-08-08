@@ -76,7 +76,7 @@ config_template: |-
   
   restic:
     # 所有命令都以 executable 开头执行。
-    # 默认表示 MCDR 工作目录下的 restic 可执行文件。
+    # 默认表示 MCDR 配置文件夹下的 restic 可执行文件。
     executable: __MCDR2RESTIC_EXECUTABLE__
     # restic 进程工作目录。
     # 留空字符串或 null 表示继承 MCDR 当前工作目录。
@@ -261,9 +261,9 @@ texts:
       # Windows Java 版示例。若服务端不支持 save-all flush，可改为 save-all。
   "template.snippet.restic_executable": |-
     __MCDR2RESTIC_PLATFORM_POSIX__
-    "./restic"
+    "./config/mcdr2restic/restic"
     __MCDR2RESTIC_PLATFORM_WINDOWS__
-    '.\restic.exe'
+    '.\config\mcdr2restic\restic.exe'
   "template.snippet.restic_repository": |-
     __MCDR2RESTIC_PLATFORM_POSIX__
     "./restic-repo"

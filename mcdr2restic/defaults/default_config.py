@@ -8,6 +8,7 @@ from typing import Any, Dict, List, TypeAlias
 from mcdr2restic.defaults.default_constants import (
     CONFIG_VERSION,
     DEFAULT_MAINTENANCE_CRON,
+    DEFAULT_RESTIC_EXECUTABLE_POSIX,
     DEFAULT_PROXY_PREFIXES,
     DEFAULT_UPDATE_API_URL,
     PLUGIN_REPOSITORY_URL,
@@ -134,7 +135,7 @@ def build_default_restic_config() -> ConfigDict:
     """Return restic execution, repository, and error-detection defaults."""
 
     return {
-        "executable": "./restic",
+        "executable": DEFAULT_RESTIC_EXECUTABLE_POSIX,
         "working_directory": "",
         "repository": "./restic-repo",
         "password": "123456",

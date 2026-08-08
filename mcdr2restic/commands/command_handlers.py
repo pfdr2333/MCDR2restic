@@ -20,6 +20,7 @@ from mcdr2restic.commands.command_context import (
     WakeScheduler,
 )
 from mcdr2restic.commands.restore_commands import RestoreCommands
+from mcdr2restic.commands.restic_commands import ResticCommands
 from mcdr2restic.core.i18n import server_rtr
 from mcdr2restic.core.runtime import PluginRuntime
 from mcdr2restic.config.state_store import get_config_snapshot
@@ -45,6 +46,7 @@ class CommandHandlers:
         self.status = StatusCommands(self.context)
         self.backup = BackupCommands(self.context)
         self.restore = RestoreCommands(self.context)
+        self.restic = ResticCommands(self.context)
 
     def register_commands(self, server: PluginServerInterface):
         roots = [self.context.get_command_root()]
@@ -84,6 +86,8 @@ class CommandHandlers:
             .then(Literal("start").runs(self.backup.command_start))
             .then(Literal("stop").runs(self.backup.command_stop))
             .then(Literal("backup").runs(self.backup.command_backup))
+            .then(Literal("init").runs(self.restic.command_init))
+            .then(Literal("unlock").runs(self.restic.command_unlock))
             .then(self.build_restore_command_tree())
             .then(
                 Literal("unrestore")

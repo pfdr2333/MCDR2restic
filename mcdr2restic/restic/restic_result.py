@@ -12,9 +12,19 @@ from mcdr2restic.restic.restic_constants import (
     RESTIC_CFG_MAX_OUTPUT_CHARS,
     RESTIC_CFG_SUCCESS_EXIT_CODES,
 )
+from mcdr2restic.restic.restic_guidance import (
+    RESTIC_FAILURE_LOCKED,
+    RESTIC_FAILURE_REPOSITORY_NOT_INITIALIZED,
+    classify_restic_failure_output,
+    restic_management_command,
+)
 
 
-def assert_restic_success(restic_cfg: Dict[str, Any], result: ResticCommandResult):
+def assert_restic_success(
+    restic_cfg: Dict[str, Any],
+    result: ResticCommandResult,
+    command_root: str = "!!restic",
+):
     success_codes = set(
         int(code) for code in restic_cfg.get(RESTIC_CFG_SUCCESS_EXIT_CODES, [0])
     )
@@ -22,7 +32,9 @@ def assert_restic_success(restic_cfg: Dict[str, Any], result: ResticCommandResul
     max_output_chars = int(restic_cfg.get(RESTIC_CFG_MAX_OUTPUT_CHARS, 1800))
 
     assert_no_json_errors(result, max_output_chars)
-    assert_return_code_success(result, success_codes, combined, max_output_chars)
+    assert_return_code_success(
+        result, success_codes, combined, max_output_chars, command_root
+    )
     assert_no_suspicious_output(restic_cfg, result, combined, max_output_chars)
 
 
@@ -40,15 +52,50 @@ def assert_return_code_success(
     success_codes: set,
     combined_output: str,
     max_output_chars: int,
+    command_root: str = "!!restic",
 ):
     if result.return_code in success_codes:
         return
+    failure_kind = classify_restic_failure_output(combined_output)
+    if failure_kind == RESTIC_FAILURE_REPOSITORY_NOT_INITIALIZED:
+        raise_restic_return_code_with_command_hint(
+            result,
+            combined_output,
+            max_output_chars,
+            "error.restic.return_code.repository_not_initialized",
+            init_command=restic_management_command(command_root, "init"),
+        )
+    if failure_kind == RESTIC_FAILURE_LOCKED:
+        raise_restic_return_code_with_command_hint(
+            result,
+            combined_output,
+            max_output_chars,
+            "error.restic.return_code.locked",
+            unlock_command=restic_management_command(command_root, "unlock"),
+        )
     raise BackupProblem(
         i18n_key="error.restic.return_code",
         phase=result.phase,
         return_code=result.return_code,
         duration_seconds=int(result.duration_seconds),
         output=tail_text(combined_output, max_output_chars),
+    )
+
+
+def raise_restic_return_code_with_command_hint(
+    result: ResticCommandResult,
+    combined_output: str,
+    max_output_chars: int,
+    i18n_key: str,
+    **params: Any,
+):
+    raise BackupProblem(
+        i18n_key=i18n_key,
+        phase=result.phase,
+        return_code=result.return_code,
+        duration_seconds=int(result.duration_seconds),
+        output=tail_text(combined_output, max_output_chars),
+        **params,
     )
 
 

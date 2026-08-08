@@ -66,13 +66,21 @@ from mcdr2restic.notifications.discord_webhook import (
 )
 from mcdr2restic.backup.backup_scheduler import BackupScheduler
 from mcdr2restic.backup.cron import CronExpression
+from mcdr2restic.commands.command_context import CommandContext
+from mcdr2restic.commands.restic_commands import ResticCommands
 from mcdr2restic.core.models import (
     BackupProblem,
     ResticCommandResult,
     ResticProgressState,
     RestoreSession,
 )
-from mcdr2restic.restic.restic_result import detect_error_lines
+from mcdr2restic.restic.restic_download import (
+    is_default_restic_executable_path,
+    resolve_restic_executable_path,
+)
+from mcdr2restic.restic.restic_guidance import classify_restic_failure_output
+from mcdr2restic.restic.restic_result import assert_restic_success, detect_error_lines
+from mcdr2restic.restic.restic_runner import resolve_popen_executable
 from mcdr2restic.restic.restic_progress_text import (
     format_restic_status,
     format_restic_summary,
@@ -202,6 +210,18 @@ class FakeCommandSource:
 
     def reply(self, text):
         self.replies.append(str(text))
+
+
+class PermissiveCommandSource(FakeCommandSource):
+    def __init__(self, server, language=""):
+        super().__init__(language)
+        self.server = server
+
+    def has_permission(self, _level):
+        return True
+
+    def get_server(self):
+        return self.server
 
 
 class CommandServer(FakePluginServer):
@@ -609,6 +629,69 @@ class ResticResultTests(unittest.TestCase):
         )
         self.assertEqual(lines, ["error: failed"])
 
+    def test_return_code_error_guides_repository_initialization(self):
+        result = ResticCommandResult(
+            "snapshots",
+            ["snapshots"],
+            1,
+            "",
+            "Fatal: unable to open config file: config file does not exist",
+            2,
+        )
+
+        with self.assertRaises(BackupProblem) as error:
+            assert_restic_success({}, result, "!!backup")
+
+        self.assertEqual(
+            error.exception.i18n_key,
+            "error.restic.return_code.repository_not_initialized",
+        )
+        self.assertEqual(error.exception.i18n_params["init_command"], "!!backup init")
+
+    def test_return_code_error_guides_manual_unlock_with_risk_text(self):
+        result = ResticCommandResult(
+            "backup",
+            ["backup", "world"],
+            1,
+            "",
+            "unable to create lock in backend: repository is already locked",
+            1,
+        )
+
+        with self.assertRaises(BackupProblem) as error:
+            assert_restic_success({}, result, "!!backup")
+
+        self.assertEqual(error.exception.i18n_key, "error.restic.return_code.locked")
+        self.assertEqual(
+            error.exception.i18n_params["unlock_command"], "!!backup unlock"
+        )
+
+    def test_classify_restic_failure_output(self):
+        self.assertEqual(
+            classify_restic_failure_output("repository is already locked"),
+            "locked",
+        )
+        self.assertEqual(
+            classify_restic_failure_output("Is there a repository at the following location?"),
+            "repository_not_initialized",
+        )
+
+    def test_config_folder_default_restic_path_is_recognized_and_cwd_relative(self):
+        executable = "./config/mcdr2restic/restic"
+
+        self.assertTrue(is_default_restic_executable_path(executable))
+        self.assertEqual(
+            resolve_restic_executable_path(
+                {"working_directory": os.path.join(os.getcwd(), "server")},
+                executable,
+            ),
+            os.path.abspath(executable),
+        )
+        self.assertEqual(
+            resolve_popen_executable(executable, os.path.join(os.getcwd(), "server")),
+            os.path.abspath(executable),
+        )
+
 
 class ResticLockRecoveryTests(unittest.TestCase):
     LOCK_ERROR_OUTPUT = (
@@ -698,6 +781,44 @@ class ResticLockRecoveryTests(unittest.TestCase):
         )
         self.assertTrue(server.logger.warning_messages)
         self.assertTrue(server.logger.info_messages)
+
+
+class ResticCommandTests(unittest.TestCase):
+    def test_manual_init_runs_restic_init_and_invalidates_snapshot_cache(self):
+        runtime = create_runtime()
+        runtime.config_state.config = {
+            "command": {"root": "!!backup", "permission_level": 3},
+            "restic": {"timeout_seconds": 0},
+        }
+        server = FakePluginServer()
+        runtime.service.server = server
+        source = PermissiveCommandSource(server)
+        invalidations = []
+        commands = ResticCommands(
+            CommandContext(
+                runtime,
+                lambda: None,
+                lambda _server: None,
+                lambda: None,
+                lambda *args: invalidations.append(args),
+            )
+        )
+
+        with (
+            mock.patch(
+                "mcdr2restic.commands.restic_commands.ensure_default_restic_executable_available"
+            ),
+            mock.patch(
+                "mcdr2restic.commands.restic_commands.run_restic_command",
+                return_value=ResticCommandResult("init", ["init"], 0, "", "", 0),
+            ) as run_restic,
+        ):
+            commands.command_init(source)
+
+        self.assertEqual(run_restic.call_args.args[2], ["init"])
+        self.assertEqual(run_restic.call_args.args[3], "init")
+        self.assertTrue(invalidations)
+        self.assertIn("restic init", source.replies[0])
 
 
 class BackupFlowTests(unittest.TestCase):
@@ -1156,6 +1277,24 @@ class SnapshotImporterTests(unittest.TestCase):
 
         self.assertIn("终止失败", str(error.exception))
         self.assertIn("kill failed", str(error.exception))
+
+    def test_snapshot_return_code_guides_repository_initialization(self):
+        timeout_state = ProcessTimeoutState(threading.Event())
+
+        with self.assertRaises(BackupProblem) as error:
+            assert_snapshot_import_finished(
+                3,
+                timeout_state,
+                1,
+                "Fatal: unable to open config file: config file does not exist",
+                "!!backup",
+            )
+
+        self.assertEqual(
+            error.exception.i18n_key,
+            "error.snapshot.return_code.repository_not_initialized",
+        )
+        self.assertEqual(error.exception.i18n_params["init_command"], "!!backup init")
 
 
 class SnapshotDatabaseTests(unittest.TestCase):

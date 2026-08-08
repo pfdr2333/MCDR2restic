@@ -20,6 +20,12 @@ from mcdr2restic.restic.restic_constants import (
     RESTIC_ENV_REPOSITORY,
     RESTIC_OPTION_JSON,
 )
+from mcdr2restic.restic.restic_guidance import (
+    RESTIC_FAILURE_LOCKED,
+    RESTIC_FAILURE_REPOSITORY_NOT_INITIALIZED,
+    classify_restic_failure_output,
+    restic_management_command,
+)
 from mcdr2restic.restic.restic_runner import (
     build_restic_popen_kwargs,
     resolve_popen_executable,
@@ -50,6 +56,7 @@ def import_restic_snapshots_to_sql(
     conn: sqlite3.Connection,
     cache_key: str,
     timeout_seconds: int,
+    command_root: str = "!!restic",
 ) -> int:
     process = start_restic_snapshot_process(restic_cfg)
     stderr_tail = TextTailBuffer(SNAPSHOT_STDERR_TAIL_CHARS)
@@ -63,7 +70,7 @@ def import_restic_snapshots_to_sql(
         stderr_thread.join(timeout=RESTIC_READER_JOIN_TIMEOUT_SECONDS)
 
     assert_snapshot_import_finished(
-        timeout_seconds, timeout_state, return_code, stderr_tail.text
+        timeout_seconds, timeout_state, return_code, stderr_tail.text, command_root
     )
     conn.commit()
     return count
@@ -145,6 +152,7 @@ def assert_snapshot_import_finished(
     timeout_state: ProcessTimeoutState,
     return_code: int,
     stderr_tail: str,
+    command_root: str = "!!restic",
 ):
     if timeout_state.timed_out.is_set():
         if (
@@ -161,6 +169,21 @@ def assert_snapshot_import_finished(
         )
     if return_code == 0:
         return
+    failure_kind = classify_restic_failure_output(stderr_tail)
+    if failure_kind == RESTIC_FAILURE_REPOSITORY_NOT_INITIALIZED:
+        raise BackupProblem(
+            i18n_key="error.snapshot.return_code.repository_not_initialized",
+            return_code=return_code,
+            output=tail_text(stderr_tail, SNAPSHOT_ERROR_TAIL_CHARS),
+            init_command=restic_management_command(command_root, "init"),
+        )
+    if failure_kind == RESTIC_FAILURE_LOCKED:
+        raise BackupProblem(
+            i18n_key="error.snapshot.return_code.locked",
+            return_code=return_code,
+            output=tail_text(stderr_tail, SNAPSHOT_ERROR_TAIL_CHARS),
+            unlock_command=restic_management_command(command_root, "unlock"),
+        )
     raise BackupProblem(
         i18n_key="error.snapshot.return_code",
         return_code=return_code,
