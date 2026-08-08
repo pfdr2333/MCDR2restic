@@ -16,16 +16,20 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
 
       - name: Install dependencies
-        run: python -m pip install -r requirements.txt -r requirements-dev.txt
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --requirement requirements.txt
+          python -m pip install --requirement requirements-dev.txt
+          python -c "import coverage; import opencc; print('Test dependencies imported successfully')"
 
       - name: Run tests with coverage
         run: python -m coverage run --branch --source=mcdr2restic,tools -m unittest discover -s tests -p "test_*.py"
@@ -40,7 +44,7 @@ jobs:
         run: python tools/pack_plugin.py --output-dir dist-ci
 
       - name: Upload plugin archive
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: mcdr2restic-plugin-${{ matrix.os }}-py${{ matrix.python-version }}
           path: dist-ci/*.mcdr
@@ -48,7 +52,7 @@ jobs:
 
       - name: Upload coverage data
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: coverage-${{ matrix.os }}-${{ matrix.python-version }}
           path: .coverage
