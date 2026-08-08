@@ -70,9 +70,13 @@ from mcdr2restic.backup.scheduling import (
 )
 from mcdr2restic.commands.command_context import CommandContext
 from mcdr2restic.commands.restic_commands import ResticCommands
-from mcdr2restic.config.config_loader import replace_or_append_enabled_line
+from mcdr2restic.config.config_loader import (
+    load_config_file_mapping,
+    replace_or_append_enabled_line,
+)
 from mcdr2restic.config.config_migration import (
     apply_config_file_migrations,
+    migrate_config_file,
     migrate_legacy_config,
 )
 from mcdr2restic.config.state_store import (
@@ -87,6 +91,7 @@ from mcdr2restic.core.i18n import (
 )
 from mcdr2restic.core.models import (
     BackupProblem,
+    ConfigError,
     ResticCommandResult,
     ResticProgressState,
     RestoreSession,
@@ -243,6 +248,7 @@ class CommandServer(FakePluginServer):
 
 __all__ = [
     "BackupProblem",
+    "ConfigError",
     "BackupScheduler",
     "CommandContext",
     "CommandServer",
@@ -295,8 +301,10 @@ __all__ = [
     "json",
     "list_restore_tasks",
     "load_yaml_mapping_with_text_repair",
+    "load_config_file_mapping",
     "make_source_translate",
     "migrate_legacy_config",
+    "migrate_config_file",
     "mock",
     "non_negative_int",
     "normalize_language",

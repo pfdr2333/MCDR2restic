@@ -3,8 +3,10 @@ from __future__ import annotations
 
 import os
 import re
+from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
+import yaml
 from mcdreforged.api.all import PluginServerInterface
 
 from mcdr2restic.config.config_paths import get_data_file_path
@@ -36,6 +38,7 @@ from mcdr2restic.defaults.config_template_resources import (
     config_template_text,
 )
 from mcdr2restic.defaults.default_constants import CONFIG_NAME, CONFIG_VERSION
+from mcdr2restic.core.models import ConfigError
 from mcdr2restic.core.utils import safe_int
 
 
@@ -99,14 +102,7 @@ def migrate_config_file(
     path = get_data_file_path(server, CONFIG_NAME)
     if not os.path.exists(path):
         return
-    try:
-        migrate_config_file_or_raise(server, path, language, cfg)
-    except Exception as exc:
-        server.logger.warning(
-            server_tr(
-                server, "warn.config.migration_failed", name=CONFIG_NAME, error=exc
-            )
-        )
+    migrate_config_file_or_raise(server, path, language, cfg)
 
 
 def migrate_config_file_or_raise(
@@ -115,16 +111,71 @@ def migrate_config_file_or_raise(
     language: str,
     cfg: Dict[str, Any],
 ):
-    with open(path, "r", encoding="utf8") as file:
+    with open(path, "r", encoding="utf8", newline="") as file:
         lines = file.readlines()
     original = "".join(lines)
     updated = "".join(apply_config_file_migrations(lines, language, cfg))
     if updated == original:
         return
 
-    with open(path, "w", encoding="utf8") as file:
-        file.write(updated)
+    source_version = read_config_file_version(original, path)
+    validate_config_text(updated, path)
+    atomically_replace_config_with_backup(path, updated, source_version)
     server.logger.info(server_tr(server, "info.config.migrated", name=CONFIG_NAME))
+
+
+def read_config_file_version(text: str, path: str) -> int:
+    data = validate_config_text(text, path)
+    version = data.get("config_version")
+    if version is None:
+        return 0
+    try:
+        return int(version)
+    except (TypeError, ValueError) as exc:
+        raise ConfigError(
+            "error.config.version_invalid", path=path, value=version
+        ) from exc
+
+
+def validate_config_text(text: str, path: str) -> Dict[str, Any]:
+    try:
+        data = yaml.safe_load(text) or {}
+    except yaml.YAMLError as exc:
+        raise ConfigError("error.config.yaml_invalid", path=path) from exc
+    if not isinstance(data, dict):
+        raise ConfigError("error.config.root_not_mapping", path=path)
+    return data
+
+
+def atomically_replace_config_with_backup(
+    path: str, updated: str, source_version: int
+):
+    config_path = Path(path)
+    temporary_path = config_path.with_name("{}.temp".format(config_path.name))
+    backup_path = config_path.with_name(
+        "{}.v{}.bak".format(config_path.name, source_version)
+    )
+    if backup_path.exists():
+        raise ConfigError("error.config.migration_backup_exists", path=backup_path)
+
+    try:
+        write_durable_text_file(temporary_path, updated, exclusive=False)
+        with config_path.open("r", encoding="utf8", newline="") as file:
+            original = file.read()
+        write_durable_text_file(backup_path, original, exclusive=True)
+        os.replace(temporary_path, config_path)
+    except OSError as exc:
+        raise ConfigError(
+            "error.config.migration_write_failed", path=config_path, error=exc
+        ) from exc
+
+
+def write_durable_text_file(path: Path, text: str, exclusive: bool):
+    mode = "x" if exclusive else "w"
+    with path.open(mode, encoding="utf8", newline="") as file:
+        file.write(text)
+        file.flush()
+        os.fsync(file.fileno())
 
 
 def apply_config_file_migrations(

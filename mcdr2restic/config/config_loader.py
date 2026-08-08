@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
-import copy
 import re
 from typing import Any, Dict, Optional
 
+import yaml
 from mcdreforged.api.all import CommandSource, PluginServerInterface
 
 from mcdr2restic.config.config_migration import (
@@ -17,16 +17,15 @@ from mcdr2restic.config.config_paths import (
 )
 from mcdr2restic.defaults.default_config import default_config_for_language
 from mcdr2restic.defaults.default_constants import CONFIG_NAME
-from mcdr2restic.core.i18n import config_language, server_tr, set_active_language, tr
+from mcdr2restic.core.i18n import config_language, set_active_language, tr
 from mcdr2restic.core.language import get_mcdr_language
+from mcdr2restic.core.models import ConfigError
 from mcdr2restic.core.runtime import PluginRuntime
 from mcdr2restic.config.state_store import (
     ensure_runtime,
     get_config_snapshot,
     load_state_file,
-    load_yaml_mapping_with_text_repair,
     merge_defaults,
-    repair_inconsistent_block_scalar_indentation,
     save_config_unlocked,
 )
 
@@ -39,30 +38,25 @@ def load_config(
     mcdr_language = get_mcdr_language(server)
     loaded = load_config_mapping(server, mcdr_language)
     language = config_language(loaded, mcdr_language)
+    merge_defaults(loaded, default_config_for_language(language))
+    language = config_language(loaded, mcdr_language)
+    migrate_config_file(server, language, loaded)
+
     state = load_state_file(server)
     with app_runtime.config_state.lock:
         app_runtime.config_state.config = loaded
         app_runtime.config_state.state = state
-        merge_defaults(
-            app_runtime.config_state.config,
-            default_config_for_language(language),
-        )
-        language = config_language(app_runtime.config_state.config, mcdr_language)
         app_runtime.config_state.language = language
         ensure_runtime(app_runtime.config_state.config, app_runtime.config_state.state)
         save_config_unlocked(app_runtime, server)
     set_active_language(language)
-    migrate_config_file(server, language, get_config_snapshot(app_runtime))
     if source is not None:
         source.reply(tr(language, "info.config.reloaded", name=CONFIG_NAME))
 
 
 def load_config_mapping(server: PluginServerInterface, language: str) -> Dict[str, Any]:
-    defaults = default_config_for_language(language)
     ensure_config_file_exists(server, language)
     loaded = load_config_file_mapping(server)
-    if not isinstance(loaded, dict):
-        loaded = copy.deepcopy(defaults)
     loaded = strip_comment_keys(loaded)
     loaded.pop("runtime", None)
     migrate_legacy_config(loaded)
@@ -71,19 +65,18 @@ def load_config_mapping(server: PluginServerInterface, language: str) -> Dict[st
 
 def load_config_file_mapping(server: PluginServerInterface) -> Dict[str, Any]:
     path = get_data_file_path(server, CONFIG_NAME)
-    load_result = load_yaml_mapping_with_text_repair(
-        path, repair_inconsistent_block_scalar_indentation
-    )
-    if load_result.repaired_text is not None:
-        write_text_file(path, load_result.repaired_text)
-        server.logger.warning(
-            server_tr(
-                server,
-                "warn.config.auto_repaired_block_scalar_indentation",
-                path=path,
-            )
-        )
-    return load_result.mapping
+    try:
+        with open(path, "r", encoding="utf8") as file:
+            text = file.read()
+    except OSError as exc:
+        raise ConfigError("error.config.read_failed", path=path, error=exc) from exc
+    try:
+        loaded = yaml.safe_load(text) or {}
+    except yaml.YAMLError as exc:
+        raise ConfigError("error.config.yaml_invalid", path=path) from exc
+    if not isinstance(loaded, dict):
+        raise ConfigError("error.config.root_not_mapping", path=path)
+    return loaded
 
 
 def strip_comment_keys(value: Any) -> Any:
@@ -115,11 +108,6 @@ def save_enabled_unlocked(
 def read_config_lines(path: str):
     with open(path, "r", encoding="utf8") as file:
         return file.readlines()
-
-
-def write_text_file(path: str, text: str):
-    with open(path, "w", encoding="utf8") as file:
-        file.write(text)
 
 
 def replace_or_append_enabled_line(lines: list, enabled: bool) -> list:

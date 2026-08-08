@@ -100,6 +100,10 @@ class CronError(LocalizedValueError):
     """Raised when a cron expression is invalid or cannot produce a next run."""
 
 
+class ConfigError(LocalizedValueError):
+    """Raised when the plugin configuration cannot be loaded or migrated."""
+
+
 @dataclass
 class ResticCommandResult:
     phase: str
