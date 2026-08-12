@@ -1,21 +1,21 @@
 config_template: |-
-  # MCDR2Restic 設定檔
-  # state.yml為執行階段狀態文件，請勿更改
+  # MCDR2Restic 配置檔案
+  # state.yml為執行時狀態檔案，請勿更改
   
-  # 总開關。
+  # 總開關。
   enabled: true
   
-  # 插件语言。預設会寫入生成配置時 MCDR 传入的语言。
-  # 可填寫已有语言文件名，如 zh_cn、zh_tw、en_us；未匹配時回退 en_us。
+  # 外掛語言。預設會寫入生成配置時 MCDR 傳入的語言。
+  # 可填寫已有語言檔名，如 zh_cn、zh_tw、en_us；未匹配時回退 en_us。
   language: __MCDR2RESTIC_LANGUAGE__
   
   command:
-    # MCDR 指令根節點
+    # MCDR 命令根節點
     root: "!!restic"
     #別名
     aliases:
       - "!!m2r"
-    # MCDR 權限等級。
+    # MCDR 許可權等級。
     permission_level: 3
   
   schedule:
@@ -25,38 +25,38 @@ config_template: |-
     # 6 位 cron：秒 分 時 日 月 周。預設每 3 小時檢查一次正常備份。
     cron_expression: "0 0 0,3,6,9,12,15,18,21 * * *"
     # 正常定時備份是否啟用玩家活動感知。
-    # 觸發時会執行一次 list 檢查當前在線人數；join/left 事件会记錄本周期是否有人进入或退出。
-    # 判断流程：
-    # - 本周期有人加入：備份
-    # - 无人加入，list 檢查在線人數為 0：略過
-    # - 无人加入，list 檢查在線人數不為 0：備份
-    # - 无人加入，但有人退出，即使 list 檢查為 0：備份
+    # 觸發時會執行一次 list 檢查當前線上人數；join/left 事件會記錄本週期是否有人進入或退出。
+    # 判斷流程：
+    # - 本週期有人加入：備份
+    # - 無人加入，list 檢查線上人數為 0：跳過
+    # - 無人加入，list 檢查線上人數不為 0：備份
+    # - 無人加入，但有人退出，即使 list 檢查為 0：備份
     require_player_activity_in_wait_period: true
-    # 用于查询當前在線人數的 Minecraft 指令。預設 list。
-    # 通過 server.rcon_query 執行；如果 RCON 不可用，將只依赖 join/left 事件估算。
+    # 用於查詢當前線上人數的 Minecraft 命令。預設 list。
+    # 透過 server.rcon_query 執行；如果 RCON 不可用，將只依賴 join/left 事件估算。
     online_check_command: "list"
   
   force_schedule:
-    # 强制備份調度，不遵循玩家活動感知。預設關閉。
+    # 強制備份排程，不遵循玩家活動感知。預設關閉。
     # interval_seconds > 0 時使用固定間隔。
     # interval_seconds = 0 且 cron_expression 不是 "0" 時使用 6 位 cron。
-    # interval_seconds = 0 且 cron_expression = "0" 表示關閉强制備份。
+    # interval_seconds = 0 且 cron_expression = "0" 表示關閉強制備份。
     interval_seconds: 0
     cron_expression: "0"
   
   maintenance_schedule:
-    # 倉庫維護調度。預設每天 03:00 執行一次；cron_expression 留空時仍使用預設值。
+    # 倉庫維護排程。預設每天 03:00 執行一次；cron_expression 留空時仍使用預設值。
     # interval_seconds > 0 時使用固定間隔。
-    # interval_seconds = 0 且 cron_expression = "0" 表示關閉維護調度。
+    # interval_seconds = 0 且 cron_expression = "0" 表示關閉維護排程。
     interval_seconds: 0
     cron_expression: "0 0 3 * * *"
   
   update_check:
-    # 版本更新檢查。啟用后插件加載時檢查一次，并在每天 00:00 檢查一次。
+    # 版本更新檢查。啟用後外掛載入時檢查一次，並在每天 00:00 檢查一次。
     enabled: true
     check_on_startup: true
     daily_time: "00:00"
-    # GitHub latest release API。網路不佳時会按 proxy_prefixes 尝試代理。
+    # GitHub latest release API。網路不佳時會按 proxy_prefixes 嘗試代理。
     api_url: "https://api.github.com/repos/pfdr2333/MCDR2restic/releases/latest"
     release_page_url: "https://github.com/pfdr2333/MCDR2restic/releases/latest"
     proxy_prefixes:
@@ -75,46 +75,47 @@ config_template: |-
     wait_after_save_on_seconds: 1
   
   restic:
-    # 所有指令都以 executable 開頭執行。
-    # 預設表示 MCDR 工作目錄下的 restic 可執行文件。
+    # 所有命令都以 executable 開頭執行。
+    # 預設表示 MCDR 配置資料夾下的 restic 可執行檔案。
     executable: __MCDR2RESTIC_EXECUTABLE__
-    # restic 进程工作目錄。
-    # 留空字符串或 null 表示繼承 MCDR 當前工作目錄。
+    # restic 程序工作目錄。
+    # 留空字串或 null 表示繼承 MCDR 當前工作目錄。
     working_directory: ""
     # restic 儲存庫。預設使用 MCDR 工作目錄下的本地倉庫。
     repository: __MCDR2RESTIC_REPOSITORY__
-    # 儲存庫密碼。优先使用这里的直接密碼；留空字符串時再看 password_file。
-    # 示例密碼方便開箱測試，正式使用請改成自己的强密碼。
+    # 儲存庫密碼。優先使用這裡的直接密碼；留空字串時再看 password_file。
+    # 示例密碼方便開箱測試，正式使用請改成自己的強密碼。
     password: "123456"
-    # 密碼文件。仅當 password 為空時生效。
+    # 密碼檔案。僅當 password 為空時生效。
     password_file: ""
-    # 如果仍使用預設 executable 路徑且找不到 restic，则自動下載 restic。
-    # 仅支持 Linux amd64 和 Windows amd64；其他系统会略過。
+    # 如果仍使用預設 executable 路徑且找不到 restic，則自動下載 restic。
+    # 僅支援 Linux amd64 和 Windows amd64；其他系統會跳過。
     auto_download: true
-    # restic 下載版本。latest 表示 GitHub 最新 release，也可以寫 v0.18.0 这類版本号。
+    # restic 下載版本。latest 表示 GitHub 最新 release，也可以寫 v0.18.0 這類版本號。
     download_version: "latest"
-    # 下載加速代理前缀。会先尝試官方 GitHub 下載，再按順序尝試这里的代理。
+    # 下載加速代理字首。會先嚐試官方 GitHub 下載，再按順序嘗試這裡的代理。
     download_proxy_prefixes:
       - "https://gh.llkk.cc/"
       - "https://gh-proxy.com/"
       - "https://hub.gitmirror.com/"
     download_timeout_seconds: 120
     # 本地儲存庫不存在或缺少 config 時自動執行 restic init。
-    # S3/B2/rest/sftp/rclone 等远端倉庫不会自動初始化。
+    # S3/B2/rest/sftp/rclone 等遠端倉庫不會自動初始化。
     auto_init_local_repository: true
-    # 執行 restic 時会繼承 MCDR 进程环境，并叠加这里的变量。
-    # 值為 null 表示刪除繼承来的同名变量。
-    # repository/password/password_file 会自動寫入 RESTIC_REPOSITORY/RESTIC_PASSWORD/RESTIC_PASSWORD_FILE。
-    # S3/B2 等后端可以在这里加入对應云服務环境变量。
+    # 執行 restic 時會繼承 MCDR 程序環境，併疊加這裡的變數。
+    # 值為 null 表示刪除繼承來的同名變數。
+    # repository/password/password_file 會自動寫入 RESTIC_REPOSITORY/RESTIC_PASSWORD/RESTIC_PASSWORD_FILE。
+    # S3/B2 等後端可以在這裡加入對應雲服務環境變數。
     environment: {}
-    # 倉庫維護指令，由 maintenance_schedule 單独調度執行。每一项都会自動在前面加 executable，例如 restic forget ...
+    # 倉庫維護命令，由 maintenance_schedule 單獨排程執行。每一項都會自動在前面加 executable，例如 restic forget ...
     maintenance_commands:
       - [
           "forget",
+          "--keep-within", "1d",
           "--keep-daily", "7",
           "--prune"
         ]
-    # 備份指令。同样会自動在前面加 executable，例如 restic backup ...
+    # 備份命令。同樣會自動在前面加 executable，例如 restic backup ...
   __MCDR2RESTIC_DEFAULT_BACKUP_COMMENT__
     backup_command:
       - "backup"
@@ -123,14 +124,14 @@ config_template: |-
       - "minecraft"
       - "--host"
       - "mcdr2Restic"
-    # 整個 restic 指令流程共用的超時。0 表示不限制。
+    # 整個 restic 命令流程共用的超時。0 表示不限制。
     timeout_seconds: 0
-    # restic backup/restore --json 进度回顯間隔，單位秒。
+    # restic backup/restore --json 進度回顯間隔，單位秒。
     progress_interval_seconds: 5
-    # restic 退出碼。0 成功；3 表示有源文件不可讀，本插件預設按失敗处理。
+    # restic 退出碼。0 成功；3 表示有原始檔不可讀，本外掛預設按失敗處理。
     success_exit_codes:
       - 0
-    # 即使退出碼為 0，只要輸出匹配这些规则，也按異常处理。
+    # 即使退出碼為 0，只要輸出匹配這些規則，也按異常處理。
     error_regexes:
       - '(?i)^fatal:'
       - '(?i)^error(?:s)?\b(?!:\s*0\b)'
@@ -142,18 +143,18 @@ config_template: |-
     max_output_chars_in_notification: 1800
   
   onebot:
-    # OneBot V11 正向 WebSocket。填好 admin_qqs 后把 enabled 改為 true。
+    # OneBot V11 正向 WebSocket。填好 admin_qqs 後把 enabled 改為 true。
     enabled: false
-    # WebSocket 服務器地址
+    # WebSocket 伺服器地址
     ws_url: "ws://127.0.0.1:8777"
-    # 用于連線验證的令牌
+    # 用於連線驗證的令牌
     access_token: ""
-    # true 使用 Header: Authorization: Bearer xxx；false 使用 URL 参數 access_token，NapCat 常用。
+    # true 使用 Header: Authorization: Bearer xxx；false 使用 URL 引數 access_token，NapCat 常用。
     use_header_auth: false
     #需要通知的QQ
     admin_qqs:
       - 123456789
-    #消息前缀
+    #訊息字首
     message_prefix: "[MCDR2Restic]"
     # 網路超時與重連策略
     connect_timeout_seconds: 10
@@ -161,51 +162,51 @@ config_template: |-
     reconnect_interval_seconds: 5
   
   discord:
-    # Discord Webhook 通知。填好 webhook_url 后把 enabled 改為 true。
+    # Discord Webhook 通知。填好 webhook_url 後把 enabled 改為 true。
     enabled: false
     # Discord 頻道 Webhook URL。
     webhook_url: ""
-    # Webhook 顯示名称和頭像，可留空使用 Discord Webhook 預設值。
+    # Webhook 顯示名稱和頭像，可留空使用 Discord Webhook 預設值。
     username: "MCDR2Restic"
     avatar_url: ""
-    # Discord 通知訊息前缀，消息正文仍使用 messages 中的模板。
+    # Discord 通知訊息字首，訊息正文仍使用 messages 中的模板。
     message_prefix: "[MCDR2Restic]"
-    # 可选提及对象。預設不提及任何人，避免誤 ping。
+    # 可選提及物件。預設不提及任何人，避免誤 ping。
     mention_user_ids: []
     mention_role_ids: []
     mention_everyone: false
     send_timeout_seconds: 10
   
   notification:
-    # 備份生命周期通知策略
-    # 控制在哪些備份阶段向上述管理員推送 QQ 消息
-    notify_on_start: true # 備份任務開始時是否發送通知
-    notify_on_success: true # 備份任務成功完成時是否發送通知
-    notify_on_failure: true # 備份任務失敗時是否發送通知
-    notify_on_skip: false # 備份任務被略過（如无需備份）時是否發送通知
+    # 備份生命週期通知策略
+    # 控制在哪些備份階段向上述管理員推送 QQ 訊息
+    notify_on_start: true # 備份任務開始時是否傳送通知
+    notify_on_success: true # 備份任務成功完成時是否傳送通知
+    notify_on_failure: true # 備份任務失敗時是否傳送通知
+    notify_on_skip: false # 備份任務被跳過（如無需備份）時是否傳送通知
   
   snapshot_cache:
-    # status 指令中的 restic 快照列表缓存。
-    # 缓存寫入 SQLite 文件，只有倉庫被本插件操作后才会标记失效。
+    # status 命令中的 restic 快照列表快取。
+    # 快取寫入 SQLite 檔案，只有倉庫被本外掛操作後才會標記失效。
     enabled: true
     # 每頁顯示的快照數量。預設 10。
     page_size: 10
-    # 缓存刷新時執行 restic snapshots --json 的超時時間。
+    # 快取重新整理時執行 restic snapshots --json 的超時時間。
     query_timeout_seconds: 30
-    # SQLite 缓存文件名，位于本插件配置目錄。
+    # SQLite 快取檔名，位於本外掛配置目錄。
     database: "snapshots.sqlite3"
   
   restore:
-    # 執行還原前会自動備份一次，并给該保護快照追加这個 tag。
+    # 執行恢復前會自動備份一次，並給該保護快照追加這個 tag。
     pre_restore_backup_tag: "mcdr2restic-pre-restore"
-    # 還原流程通過 MCDR 伺服器停止/啟動 hook 接力，这两個值保留给狀態机/外部看门狗使用。
+    # 恢復流程透過 MCDR 服務端停止/啟動 hook 接力，這兩個值保留給狀態機/外部看門狗使用。
     stop_timeout_seconds: 120
     start_timeout_seconds: 120
   
   messages:
-    # 管理員通知訊息模板，可自行修改文本。
-    # 可用变量：{prefix} {label} {start_time} {end_time} {duration_seconds} {status} {message} {detail} {error}
-    # 如果需要輸出字面量花括号，請寫成 {{ 或 }}。
+    # 管理員通知訊息模板，可自行修改文字。
+    # 可用變數：{prefix} {label} {start_time} {end_time} {duration_seconds} {status} {message} {detail} {error}
+    # 如果需要輸出字面量花括號，請寫成 {{ 或 }}。
     backup_start: |-
       __MCDR2RESTIC_MESSAGE_backup_start__
     backup_success: |-
@@ -227,14 +228,14 @@ texts:
     {prefix} 備份異常
     觸發: {label}
     狀態: {status}
-    详情: {detail}
-    结束時間: {end_time}
+    詳情: {detail}
+    結束時間: {end_time}
   "template.message.backup_not_ready": |-
     {prefix} 備份異常
-    到达備份時間，但 Minecraft 伺服器尚未确認正常运行，略過本次備份
+    到達備份時間，但 Minecraft 服務端尚未確認正常執行，跳過本次備份
   "template.message.backup_skip_no_player": |-
-    {prefix} 略過備份
-    本周期没有玩家加入或退出，觸發檢查時也没有玩家在線
+    {prefix} 跳過備份
+    本週期沒有玩家加入或退出，觸發檢查時也沒有玩家線上
   "template.message.backup_start": |-
     {prefix} 備份開始
     觸發: {label}
@@ -243,22 +244,22 @@ texts:
     {prefix} 備份成功
     觸發: {label}
     耗時: {duration_seconds} 秒
-    结束時間: {end_time}
+    結束時間: {end_time}
   "template.message.schedule_config_error": |-
-    {prefix} 調度配置錯誤
-    计算下次備份時間失敗：{error}
+    {prefix} 排程配置錯誤
+    計算下次備份時間失敗：{error}
   "template.snippet.config_version_marker_comment": |-
-    # 設定檔版本标识。請保留在文件尾部，方便后續遷移。
+    # 配置檔案版本標識。請保留在檔案尾部，方便後續遷移。
   "template.snippet.default_backup_comment": |-
     __MCDR2RESTIC_PLATFORM_POSIX__
-      # 新生成配置預設只寫入 ./server/world；如果生成配置時偵測到三世界目錄全部存在，会自動加入 world_nether 和 world_the_end。
+      # 新生成配置預設只寫入 ./server/world；如果生成配置時檢測到三世界目錄全部存在，會自動加入 world_nether 和 world_the_end。
     __MCDR2RESTIC_PLATFORM_WINDOWS__
-      # 新生成配置預設只寫入 .\server\world；如果生成配置時偵測到三世界目錄全部存在，会自動加入 world_nether 和 world_the_end。
+      # 新生成配置預設只寫入 .\server\world；如果生成配置時檢測到三世界目錄全部存在，會自動加入 world_nether 和 world_the_end。
   "template.snippet.minecraft_save_all_comment": |-
     __MCDR2RESTIC_PLATFORM_POSIX__
-      # Linux Java 版示例。若伺服器不支持 save-all flush，可改為 save-all。
+      # Linux Java 版示例。若服務端不支援 save-all flush，可改為 save-all。
     __MCDR2RESTIC_PLATFORM_WINDOWS__
-      # Windows Java 版示例。若伺服器不支持 save-all flush，可改為 save-all。
+      # Windows Java 版示例。若服務端不支援 save-all flush，可改為 save-all。
   "template.snippet.restic_executable": |-
     __MCDR2RESTIC_PLATFORM_POSIX__
     "./config/mcdr2restic/restic"
@@ -270,4 +271,4 @@ texts:
     __MCDR2RESTIC_PLATFORM_WINDOWS__
     '.\restic-repo'
   "template.snippet.session_lock_exclude_comment": |-
-    # Windows 下 Minecraft 会鎖定 session.lock，預設排除以避免 restic 返回 3。
+    # Windows 下 Minecraft 會鎖定 session.lock，預設排除以避免 restic 返回 3。

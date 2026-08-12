@@ -116,6 +116,7 @@ config_template: |-
     maintenance_commands:
       - [
           "forget",
+          "--keep-within", "1d",
           "--keep-daily", "7",
           "--prune"
         ]
@@ -283,4 +284,4 @@ texts:
     __MCDR2RESTIC_PLATFORM_WINDOWS__
     '.\restic-repo'
   "template.snippet.session_lock_exclude_comment": |-
-        # On Windows, Minecraft locks session.lock; exclude it by default to avoid restic exit code 3.
+    # On Windows, Minecraft locks session.lock; exclude it by default to avoid restic exit code 3.

@@ -111,6 +111,7 @@ config_template: |-
     maintenance_commands:
       - [
           "forget",
+          "--keep-within", "1d",
           "--keep-daily", "7",
           "--prune"
         ]
@@ -270,4 +271,4 @@ texts:
     __MCDR2RESTIC_PLATFORM_WINDOWS__
     '.\restic-repo'
   "template.snippet.session_lock_exclude_comment": |-
-        # Windows 下 Minecraft 会锁定 session.lock，默认排除以避免 restic 返回 3。
+    # Windows 下 Minecraft 会锁定 session.lock，默认排除以避免 restic 返回 3。
