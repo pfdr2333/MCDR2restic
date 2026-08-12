@@ -242,6 +242,7 @@
   "error.restic.command_args_invalid": "Command arguments must be a string or sequence: {value}",
   "error.restic.manual.backup_running": "A backup, maintenance run, or restic management command is already running; this command cannot run now",
   "error.restic.manual.restore_running": "A restore workflow is running; this command cannot run now",
+  "info.maintenance.manual_started": "Manual restic maintenance started; check the logs for the result",
   "info.restic.init.completed": "restic init completed; the repository is initialized",
   "info.restic.unlock.completed": "restic unlock completed. This command removes repository locks; confirm no other restic process is using the same repository before continuing backup or restore.",
   "info.maintenance.started": "Starting restic repository maintenance",

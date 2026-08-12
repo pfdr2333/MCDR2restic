@@ -188,6 +188,7 @@ class PluginEntrypoint:
         return CommandHandlers(
             self.runtime,
             self.create_backup_runner,
+            self.create_maintenance_runner,
             self.reload_services,
             self.wake_scheduler,
             self.invalidate_snapshot_cache,

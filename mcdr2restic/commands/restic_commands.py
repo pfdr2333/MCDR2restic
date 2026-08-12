@@ -27,6 +27,18 @@ class ResticCommands:
     def command_init(self, source: CommandSource):
         self.command_manage_repository(source, RESTIC_COMMAND_INIT)
 
+    def command_maintenance(self, source: CommandSource):
+        if not self.context.check_command_permission(source):
+            return
+        server = self.context.server_from_source(source)
+        if self.context.maintenance_runner_factory().start_thread(server):
+            reply_tr(source, server, "info.maintenance.manual_started")
+            return
+        if is_restore_running(self.context.app_runtime):
+            reply_tr(source, server, "error.restic.manual.restore_running")
+            return
+        reply_tr(source, server, "error.restic.manual.backup_running")
+
     def command_unlock(self, source: CommandSource):
         self.command_manage_repository(source, RESTIC_COMMAND_UNLOCK)
 

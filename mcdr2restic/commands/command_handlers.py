@@ -15,6 +15,7 @@ from mcdr2restic.commands.backup_commands import BackupCommands
 from mcdr2restic.commands.command_context import (
     BackupRunnerFactory,
     CommandContext,
+    MaintenanceRunnerFactory,
     ReloadServices,
     SnapshotInvalidator,
     WakeScheduler,
@@ -32,6 +33,7 @@ class CommandHandlers:
         self,
         app_runtime: PluginRuntime,
         backup_runner_factory: BackupRunnerFactory,
+        maintenance_runner_factory: MaintenanceRunnerFactory,
         reload_services: ReloadServices,
         wake_scheduler: WakeScheduler,
         snapshot_invalidator: SnapshotInvalidator,
@@ -39,6 +41,7 @@ class CommandHandlers:
         self.context = CommandContext(
             app_runtime,
             backup_runner_factory,
+            maintenance_runner_factory,
             reload_services,
             wake_scheduler,
             snapshot_invalidator,
@@ -87,6 +90,7 @@ class CommandHandlers:
             .then(Literal("stop").runs(self.backup.command_stop))
             .then(Literal("backup").runs(self.backup.command_backup))
             .then(Literal("init").runs(self.restic.command_init))
+            .then(Literal("maintenance").runs(self.restic.command_maintenance))
             .then(Literal("unlock").runs(self.restic.command_unlock))
             .then(self.build_restore_command_tree())
             .then(

@@ -7,6 +7,7 @@ from typing import Any, Callable, Dict, Optional
 from mcdreforged.api.all import CommandSource, PluginServerInterface
 
 from mcdr2restic.backup.backup_runner import BackupRunner
+from mcdr2restic.restic.maintenance_runner import MaintenanceRunner
 from mcdr2restic.config.config_loader import get_command_root
 from mcdr2restic.core.i18n import reply_tr
 from mcdr2restic.core.runtime import PluginRuntime
@@ -15,6 +16,7 @@ from mcdr2restic.core.utils import safe_int
 
 
 BackupRunnerFactory = Callable[[], BackupRunner]
+MaintenanceRunnerFactory = Callable[[], MaintenanceRunner]
 ReloadServices = Callable[[PluginServerInterface], None]
 WakeScheduler = Callable[[], None]
 SnapshotInvalidator = Callable[
@@ -26,6 +28,7 @@ SnapshotInvalidator = Callable[
 class CommandContext:
     app_runtime: PluginRuntime
     backup_runner_factory: BackupRunnerFactory
+    maintenance_runner_factory: MaintenanceRunnerFactory
     reload_services: ReloadServices
     wake_scheduler: WakeScheduler
     snapshot_invalidator: SnapshotInvalidator

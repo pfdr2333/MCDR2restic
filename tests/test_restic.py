@@ -261,6 +261,7 @@ class ResticCommandTests(unittest.TestCase):
             CommandContext(
                 runtime,
                 lambda: None,
+                lambda: None,
                 lambda _server: None,
                 lambda: None,
                 lambda *args: invalidations.append(args),
@@ -282,6 +283,64 @@ class ResticCommandTests(unittest.TestCase):
         self.assertEqual(run_restic.call_args.args[3], "init")
         self.assertTrue(invalidations)
         self.assertIn("restic init", source.replies[0])
+
+    def test_manual_maintenance_starts_runner_and_replies(self):
+        runtime = create_runtime()
+        runtime.config_state.config = {"command": {"root": "!!restic", "permission_level": 3}}
+        server = FakePluginServer()
+        runtime.service.server = server
+        source = PermissiveCommandSource(server)
+        maintenance_runner = mock.Mock()
+        maintenance_runner.start_thread.return_value = True
+        commands = ResticCommands(
+            CommandContext(
+                runtime,
+                lambda: None,
+                lambda: maintenance_runner,
+                lambda _server: None,
+                lambda: None,
+                lambda *_args: None,
+            )
+        )
+
+        commands.command_maintenance(source)
+
+        maintenance_runner.start_thread.assert_called_once_with(server)
+        self.assertEqual(len(source.replies), 1)
+        self.assertIn("维护", source.replies[0])
+
+    def test_manual_maintenance_rejects_restore_and_busy_slot(self):
+        runtime = create_runtime()
+        runtime.config_state.config = {"command": {"root": "!!restic", "permission_level": 3}}
+        server = FakePluginServer()
+        runtime.service.server = server
+        source = PermissiveCommandSource(server)
+        maintenance_runner = mock.Mock()
+        maintenance_runner.start_thread.return_value = False
+        commands = ResticCommands(
+            CommandContext(
+                runtime,
+                lambda: None,
+                lambda: maintenance_runner,
+                lambda _server: None,
+                lambda: None,
+                lambda *_args: None,
+            )
+        )
+
+        with mock.patch(
+            "mcdr2restic.commands.restic_commands.is_restore_running",
+            return_value=True,
+        ):
+            commands.command_maintenance(source)
+        self.assertIn("恢复流程", source.replies[-1])
+
+        with mock.patch(
+            "mcdr2restic.commands.restic_commands.is_restore_running",
+            return_value=False,
+        ):
+            commands.command_maintenance(source)
+        self.assertIn("已有备份", source.replies[-1])
 
 
 class BackupFlowTests(unittest.TestCase):

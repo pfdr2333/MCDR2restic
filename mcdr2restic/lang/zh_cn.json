@@ -242,6 +242,7 @@
   "error.restic.command_args_invalid": "命令参数必须是字符串或数组: {value}",
   "error.restic.manual.backup_running": "当前已有备份、维护或 restic 管理命令在执行，暂不能执行此命令",
   "error.restic.manual.restore_running": "当前正在执行恢复流程，暂不能执行此命令",
+  "info.maintenance.manual_started": "已开始立即执行 restic 仓库维护，请查看日志了解结果",
   "info.restic.init.completed": "restic init 已完成，仓库已初始化",
   "info.restic.unlock.completed": "restic unlock 已完成。该命令会移除仓库锁；请确认没有其它 restic 进程正在使用同一仓库后再继续备份或恢复。",
   "info.maintenance.started": "开始执行 restic 仓库维护",
