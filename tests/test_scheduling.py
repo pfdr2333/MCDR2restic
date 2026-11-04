@@ -3,6 +3,7 @@ try:
         BackupScheduler,
         CronExpression,
         FakePluginServer,
+        SchedulerDependencies,
         compute_maintenance_wait_seconds,
         datetime,
         parse_daily_time,
@@ -14,6 +15,7 @@ except ImportError:
         BackupScheduler,
         CronExpression,
         FakePluginServer,
+        SchedulerDependencies,
         compute_maintenance_wait_seconds,
         datetime,
         parse_daily_time,
@@ -42,12 +44,14 @@ class SchedulingTests(unittest.TestCase):
         server = FakePluginServer()
         scheduler = BackupScheduler(
             server,
-            lambda: {"enabled": True},
-            lambda target, label: True,
-            lambda target: True,
-            lambda target: True,
-            lambda cfg: False,
-            lambda key, data, cfg, important: None,
+            SchedulerDependencies(
+                config_provider=lambda: {"enabled": True},
+                backup_runner=lambda target, label: True,
+                maintenance_runner=lambda target: True,
+                mc_ready_provider=lambda target: True,
+                skip_predicate=lambda cfg: False,
+                admin_notifier=lambda key, data, cfg, important: None,
+            ),
         )
         triggered = []
 

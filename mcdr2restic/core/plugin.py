@@ -7,7 +7,7 @@ from typing import Any, Dict, Optional
 from mcdreforged.api.all import Info, PluginServerInterface
 
 from mcdr2restic.backup.backup_runner import BackupRunner
-from mcdr2restic.backup.backup_scheduler import BackupScheduler
+from mcdr2restic.backup.backup_scheduler import BackupScheduler, SchedulerDependencies
 from mcdr2restic.commands.command_context import CommandContext
 from mcdr2restic.commands.command_handlers import CommandHandlers
 from mcdr2restic.core.runtime import PluginRuntime, create_runtime
@@ -259,14 +259,18 @@ class PluginEntrypoint:
         backup_runner = self.create_backup_runner()
         self.runtime.service.scheduler = BackupScheduler(
             server,
-            lambda: get_config_snapshot(self.runtime),
-            lambda target, trigger: backup_runner.run_locked(
-                target, trigger, wait_for_slot=True
+            SchedulerDependencies(
+                config_provider=lambda: get_config_snapshot(self.runtime),
+                backup_runner=lambda target, trigger: backup_runner.run_locked(
+                    target, trigger, wait_for_slot=True
+                ),
+                maintenance_runner=self.create_maintenance_runner().run_waiting,
+                mc_ready_provider=lambda target: is_mc_ready(self.runtime, target),
+                skip_predicate=lambda cfg: should_skip_for_no_player_activity(
+                    self.runtime, cfg
+                ),
+                admin_notifier=notification_dispatcher.notify_admins,
             ),
-            self.create_maintenance_runner().run_waiting,
-            lambda target: is_mc_ready(self.runtime, target),
-            lambda cfg: should_skip_for_no_player_activity(self.runtime, cfg),
-            notification_dispatcher.notify_admins,
         )
         self.runtime.service.scheduler.start()
 

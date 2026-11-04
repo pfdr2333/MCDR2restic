@@ -3,7 +3,7 @@ try:
 except ImportError:
     from support import FakePluginServer, mock, unittest
 
-from mcdr2restic.backup.backup_scheduler import BackupScheduler
+from mcdr2restic.backup.backup_scheduler import BackupScheduler, SchedulerDependencies
 from mcdr2restic.core.models import BackupTrigger
 
 
@@ -18,12 +18,14 @@ class BackupSchedulerTests(unittest.TestCase):
         notifier = mock.Mock()
         scheduler = BackupScheduler(
             FakePluginServer(),
-            config_provider,
-            backup_runner,
-            maintenance_runner,
-            ready_provider,
-            skip_predicate,
-            notifier,
+            SchedulerDependencies(
+                config_provider=config_provider,
+                backup_runner=backup_runner,
+                maintenance_runner=maintenance_runner,
+                mc_ready_provider=ready_provider,
+                skip_predicate=skip_predicate,
+                admin_notifier=notifier,
+            ),
         )
         return scheduler, backup_runner, maintenance_runner, notifier
 

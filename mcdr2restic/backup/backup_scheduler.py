@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import threading
 import time
-from typing import Any, Callable, Dict, Optional, Tuple
+from typing import Any, Callable, Dict, NamedTuple, Optional, Tuple
 
 from mcdreforged.api.all import PluginServerInterface
 
@@ -30,24 +30,30 @@ ScheduleTrigger = Callable[[], None]
 MAINTENANCE_BACKUP_PRIORITY_GRACE_SECONDS = 1.0
 
 
+class SchedulerDependencies(NamedTuple):
+    """调度器运转所需的全部协作对象。"""
+
+    config_provider: ConfigProvider
+    backup_runner: BackupRunner
+    maintenance_runner: MaintenanceRunner
+    mc_ready_provider: McReadyProvider
+    skip_predicate: SkipPredicate
+    admin_notifier: AdminNotifier
+
+
 class BackupScheduler:
     def __init__(
         self,
         server: PluginServerInterface,
-        config_provider: ConfigProvider,
-        backup_runner: BackupRunner,
-        maintenance_runner: MaintenanceRunner,
-        mc_ready_provider: McReadyProvider,
-        skip_predicate: SkipPredicate,
-        admin_notifier: AdminNotifier,
+        dependencies: SchedulerDependencies,
     ):
         self.server = server
-        self.config_provider = config_provider
-        self.backup_runner = backup_runner
-        self.maintenance_runner = maintenance_runner
-        self.mc_ready_provider = mc_ready_provider
-        self.skip_predicate = skip_predicate
-        self.admin_notifier = admin_notifier
+        self.config_provider = dependencies.config_provider
+        self.backup_runner = dependencies.backup_runner
+        self.maintenance_runner = dependencies.maintenance_runner
+        self.mc_ready_provider = dependencies.mc_ready_provider
+        self.skip_predicate = dependencies.skip_predicate
+        self.admin_notifier = dependencies.admin_notifier
         self.stop_event = threading.Event()
         self.wakeup_event = threading.Event()
         self.thread = threading.Thread(

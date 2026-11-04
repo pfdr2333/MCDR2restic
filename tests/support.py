@@ -67,7 +67,7 @@ from mcdr2restic.restore import restore_paths
 from mcdr2restic.restore import restore_workflow
 from tools import pack_plugin
 from tools import verify_plugin
-from mcdr2restic.backup.backup_scheduler import BackupScheduler
+from mcdr2restic.backup.backup_scheduler import BackupScheduler, SchedulerDependencies
 from mcdr2restic.backup.cron import CronExpression
 from mcdr2restic.backup.scheduling import (
     compute_maintenance_wait_seconds,
@@ -261,6 +261,7 @@ __all__ = [
     "REPO_ROOT",
     "BackupProblem",
     "BackupScheduler",
+    "SchedulerDependencies",
     "CommandContext",
     "CommandServer",
     "ConfigError",
