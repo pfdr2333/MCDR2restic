@@ -29,9 +29,12 @@ from mcdr2restic.restore.restore_task_repository import (
 from mcdr2restic.restore.restore_workflow import (
     create_restore_session,
     get_restore_apply_rejection,
+    is_direct_restore_session,
     normalize_restore_include_path,
     normalize_restore_snapshot,
+    normalize_restore_target_directory,
     set_restore_session,
+    start_direct_restore_thread,
     start_restore_pre_stop_thread,
 )
 from mcdr2restic.snapshots.snapshot_cache import (
@@ -70,8 +73,33 @@ class RestoreCommands:
 
         self.command_restore_add(source, context, "full")
 
+    def command_restore_add_full_to(
+        self, source: CommandSource, context: Dict[str, Any]
+    ) -> None:
+        """Queue a full-snapshot restore task into an external directory."""
+
+        self.command_restore_add(source, context, "full", to_dir=True)
+
+    def command_restore_add_file_to(
+        self, source: CommandSource, context: Dict[str, Any]
+    ) -> None:
+        """Queue a file restore task into an external directory."""
+
+        self.command_restore_add(source, context, "file", to_dir=True)
+
+    def command_restore_add_folder_to(
+        self, source: CommandSource, context: Dict[str, Any]
+    ) -> None:
+        """Queue a folder restore task into an external directory."""
+
+        self.command_restore_add(source, context, "folder", to_dir=True)
+
     def command_restore_add(
-        self, source: CommandSource, context: Dict[str, Any], item_type: str
+        self,
+        source: CommandSource,
+        context: Dict[str, Any],
+        item_type: str,
+        to_dir: bool = False,
     ) -> None:
         """Validate input and enqueue a restore task of the requested type."""
 
@@ -81,7 +109,9 @@ class RestoreCommands:
         cfg = get_config_snapshot(self.context.app_runtime)
         translate = make_source_translate(source, server)
         try:
-            task_id = self.add_restore_task(server, cfg, context, item_type)
+            task_id = self.add_restore_task(
+                server, cfg, context, item_type, to_dir
+            )
         except (BackupProblem, OSError, sqlite3.Error, TypeError, ValueError) as exc:
             reply_tr(
                 source,
@@ -98,11 +128,13 @@ class RestoreCommands:
         cfg: Dict[str, Any],
         context: Dict[str, Any],
         item_type: str,
+        to_dir: bool = False,
     ) -> int:
         """Persist a restore task in the repository-scoped task queue."""
 
         snapshot = normalize_restore_snapshot(context.get("snapshot"))
         include_path = self.restore_include_path(cfg, context, item_type)
+        target_directory = self.restore_target_directory(cfg, context, to_dir)
         return add_restore_task_to_repository(
             server,
             self.current_snapshot_cache_config(cfg),
@@ -110,6 +142,18 @@ class RestoreCommands:
             snapshot,
             item_type,
             include_path,
+            target_directory,
+        )
+
+    def restore_target_directory(
+        self, cfg: Dict[str, Any], context: Dict[str, Any], to_dir: bool
+    ) -> str:
+        """Normalize the requested restore target directory, if any."""
+
+        if not to_dir:
+            return ""
+        return normalize_restore_target_directory(
+            context.get("target"), cfg.get("restic", {})
         )
 
     def restore_include_path(
@@ -219,7 +263,10 @@ class RestoreCommands:
         if self.reject_restore_apply(source, server, translate, tasks):
             return
         self.start_restore_apply(server, cfg, snapshot_cfg, cache_key, language, tasks)
-        reply_tr(source, server, "info.restore.apply_started")
+        if is_direct_restore_session(tasks):
+            reply_tr(source, server, "info.restore.direct_apply_started")
+        else:
+            reply_tr(source, server, "info.restore.apply_started")
 
     def start_restore_apply(
         self,
@@ -230,10 +277,18 @@ class RestoreCommands:
         language: str,
         tasks: List[Dict[str, Any]],
     ) -> None:
-        """Persist restore session state and spawn the pre-stop worker thread."""
+        """Persist restore session state and spawn the restore worker thread."""
 
         session = create_restore_session(tasks, cfg, snapshot_cfg, cache_key, language)
         set_restore_session(self.context.app_runtime, session)
+        if is_direct_restore_session(tasks):
+            start_direct_restore_thread(
+                self.context.app_runtime,
+                server,
+                session,
+                clear_restore_tasks,
+            )
+            return
         start_restore_pre_stop_thread(
             self.context.app_runtime,
             server,

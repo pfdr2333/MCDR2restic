@@ -105,7 +105,8 @@ def ensure_restore_tasks_table(conn: sqlite3.Connection):
             created_at_text TEXT NOT NULL,
             snapshot TEXT NOT NULL,
             item_type TEXT NOT NULL,
-            include_path TEXT NOT NULL
+            include_path TEXT NOT NULL,
+            target_directory TEXT NOT NULL DEFAULT ''
         )
         """
     )
@@ -116,10 +117,13 @@ def ensure_restore_tasks_table(conn: sqlite3.Connection):
 
 def ensure_restore_tasks_columns(conn: sqlite3.Connection):
     columns = table_columns(conn, "restore_tasks")
-    if "cache_key" not in columns:
-        conn.execute(
-            "ALTER TABLE restore_tasks ADD COLUMN cache_key TEXT NOT NULL DEFAULT ''"
-        )
+    column_additions = {
+        "cache_key": "ALTER TABLE restore_tasks ADD COLUMN cache_key TEXT NOT NULL DEFAULT ''",
+        "target_directory": "ALTER TABLE restore_tasks ADD COLUMN target_directory TEXT NOT NULL DEFAULT ''",
+    }
+    for column, statement in column_additions.items():
+        if column not in columns:
+            conn.execute(statement)
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_restore_tasks_cache ON restore_tasks (cache_key, id)"
     )

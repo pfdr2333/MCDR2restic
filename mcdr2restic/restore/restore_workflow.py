@@ -23,9 +23,13 @@ from mcdr2restic.core.models import (
 )
 from mcdr2restic.core.runtime import PluginRuntime
 from mcdr2restic.restic.restic_config import (
+    get_backup_source_paths,
+    get_effective_restic_repository,
+    is_local_restic_repository,
     normalize_command_args,
     normalize_filesystem_path,
     path_contains_or_equals,
+    resolve_restic_repository_path,
 )
 from mcdr2restic.restic.restic_constants import (
     RESTIC_CFG_BACKUP_COMMAND,
@@ -123,6 +127,52 @@ def is_strict_filesystem_absolute_path(path: str) -> bool:
     if text.startswith("\\\\") or text.startswith("//"):
         return True
     return False
+
+
+def normalize_restore_target_directory(
+    value: Any, restic_cfg: Dict[str, Any]
+) -> str:
+    raw = str(value or "").strip().strip("\"'")
+    if not raw:
+        raise BackupProblem(i18n_key="error.restore.target_empty")
+    expanded = os.path.expanduser(os.path.expandvars(raw))
+    workdir = get_restic_working_directory(restic_cfg)
+    if os.path.isabs(expanded):
+        target = normalize_filesystem_path(expanded)
+    else:
+        target = normalize_filesystem_path(os.path.join(workdir, expanded))
+    assert_restore_target_allowed(target, restic_cfg)
+    return target
+
+
+def assert_restore_target_allowed(target: str, restic_cfg: Dict[str, Any]):
+    workdir = get_restic_working_directory(restic_cfg)
+    if normalize_filesystem_path(target) == normalize_filesystem_path(workdir):
+        raise BackupProblem(
+            i18n_key="error.restore.target_is_working_directory", path=target
+        )
+    repository = get_effective_restic_repository(restic_cfg)
+    if repository and is_local_restic_repository(repository):
+        repository_path = resolve_restic_repository_path(restic_cfg, repository)
+        if path_contains_or_equals(repository_path, target):
+            raise BackupProblem(
+                i18n_key="error.restore.target_inside_repository",
+                repository_path=repository_path,
+            )
+    for source_path in get_backup_source_paths(restic_cfg):
+        if path_contains_or_equals(source_path, target):
+            raise BackupProblem(
+                i18n_key="error.restore.target_inside_backup_sources",
+                source_path=source_path,
+            )
+
+
+def is_direct_restore_session(tasks: List[Dict[str, Any]]) -> bool:
+    """Direct restore only when every task targets an external directory."""
+
+    return bool(tasks) and all(
+        str(task.get("target_directory") or "").strip() for task in tasks
+    )
 
 
 def get_restore_apply_rejection(
@@ -300,6 +350,54 @@ def run_restore_pre_stop_stage(
         )
     finally:
         release_restore_pre_backup_slot(app_runtime)
+
+
+def start_direct_restore_thread(
+    app_runtime: PluginRuntime,
+    server: PluginServerInterface,
+    session: RestoreSession,
+    clear_restore_tasks_func: Callable[
+        [PluginServerInterface, Dict[str, Any], str], int
+    ],
+):
+    thread = threading.Thread(
+        target=run_direct_restore_stage,
+        args=(app_runtime, server, session, clear_restore_tasks_func),
+        name="MCDR2Restic-Restore-Direct",
+        daemon=True,
+    )
+    app_runtime.restore.thread = thread
+    thread.start()
+
+
+def run_direct_restore_stage(
+    app_runtime: PluginRuntime,
+    server: PluginServerInterface,
+    session: RestoreSession,
+    clear_restore_tasks_func: Callable[
+        [PluginServerInterface, Dict[str, Any], str], int
+    ],
+):
+    try:
+        restic_cfg = get_restore_restic_config(session.cfg)
+        update_restore_phase(app_runtime, RestorePhase.RESTORING)
+        execute_restore_tasks(app_runtime, server, restic_cfg, session)
+    except Exception as exc:
+        finish_restore_workflow(
+            app_runtime,
+            server,
+            server_tr(server, "warn.restore.direct_failed", error=exc),
+            failure=True,
+            expected_session=session,
+        )
+        return
+    clear_completed_restore_tasks(server, session, clear_restore_tasks_func)
+    finish_restore_workflow(
+        app_runtime,
+        server,
+        server_tr(server, "info.restore.direct_completed"),
+        expected_session=session,
+    )
 
 
 def acquire_restore_pre_backup_slot(app_runtime: PluginRuntime) -> bool:
@@ -489,6 +587,9 @@ def run_restore_after_stop_stage(
 
     result = execute_restore_after_stop(app_runtime, server, session)
     if not result.restore_error:
+        server.logger.info(
+            server_tr(server, "info.restore.tasks_completed_starting_server")
+        )
         clear_completed_restore_tasks(server, session, clear_restore_tasks_func)
 
     mark_restore_starting(app_runtime, result)
@@ -535,17 +636,27 @@ def execute_restore_tasks(
             deadline,
         )
         assert_restic_success(restic_cfg, result, command_root)
-        server.logger.info(
-            server_tr(
-                server,
-                "info.restore.task_completed",
-                task_id=task.get("id"),
-                snapshot=task.get("snapshot"),
-                include_path=task.get("include_path"),
-            )
-        )
+        log_restore_task_completed(server, task)
+
+
+def log_restore_task_completed(
+    server: PluginServerInterface, task: Dict[str, Any]
+):
+    target_directory = str(task.get("target_directory") or "").strip()
+    key = (
+        "info.restore.task_completed_to"
+        if target_directory
+        else "info.restore.task_completed"
+    )
     server.logger.info(
-        server_tr(server, "info.restore.tasks_completed_starting_server")
+        server_tr(
+            server,
+            key,
+            task_id=task.get("id"),
+            snapshot=task.get("snapshot"),
+            include_path=task.get("include_path"),
+            target=target_directory,
+        )
     )
 
 
@@ -737,7 +848,8 @@ def build_restore_command(
     restic_cfg: Dict[str, Any], task: Dict[str, Any]
 ) -> List[str]:
     snapshot = normalize_restore_snapshot(task.get("snapshot"))
-    args = build_full_restore_command(restic_cfg, snapshot)
+    target_directory = str(task.get("target_directory") or "").strip()
+    args = build_full_restore_command(restic_cfg, snapshot, target_directory)
     item_type = str(task.get("item_type") or "")
     include_path = str(task.get("include_path") or "").strip()
     if item_type in ("file", "folder"):
@@ -749,8 +861,10 @@ def build_restore_command(
     return args
 
 
-def build_full_restore_command(restic_cfg: Dict[str, Any], snapshot: str) -> List[str]:
-    target = get_restic_working_directory(restic_cfg)
+def build_full_restore_command(
+    restic_cfg: Dict[str, Any], snapshot: str, target_directory: str = ""
+) -> List[str]:
+    target = target_directory or get_restic_working_directory(restic_cfg)
     return [
         RESTIC_COMMAND_RESTORE,
         normalize_restore_snapshot(snapshot),

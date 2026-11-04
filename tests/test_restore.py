@@ -6,8 +6,10 @@ try:
         RestoreSession,
         clear_restore_tasks,
         create_runtime,
+        mock,
         normalize_restore_include_path,
         restore_workflow,
+        tempfile,
         unittest,
     )
 except ImportError:
@@ -18,10 +20,266 @@ except ImportError:
         RestoreSession,
         clear_restore_tasks,
         create_runtime,
+        mock,
         normalize_restore_include_path,
         restore_workflow,
+        tempfile,
         unittest,
     )
+
+
+def build_restore_session(**overrides):
+    fields = dict(
+        tasks=[],
+        cfg={},
+        snapshot_cfg={},
+        cache_key="cache",
+        language="zh_cn",
+        phase="restoring",
+        started_at="now",
+    )
+    fields.update(overrides)
+    return RestoreSession(**fields)
+
+
+class RestoreTargetDirectoryTests(unittest.TestCase):
+    def test_normalize_target_resolves_relative_to_workdir(self):
+        restic_cfg = {"working_directory": str(REPO_ROOT)}
+
+        result = restore_workflow.normalize_restore_target_directory(
+            "restore-out", restic_cfg
+        )
+
+        self.assertEqual(
+            result, str(REPO_ROOT.joinpath("restore-out").resolve())
+        )
+
+    def test_normalize_target_accepts_absolute_path_outside_workdir(self):
+        restic_cfg = {"working_directory": str(REPO_ROOT)}
+
+        with tempfile.TemporaryDirectory() as target:
+            result = restore_workflow.normalize_restore_target_directory(
+                target, restic_cfg
+            )
+
+            self.assertEqual(
+                result, str(REPO_ROOT.joinpath(target).resolve())
+            )
+
+    def test_normalize_target_rejects_empty_value(self):
+        with self.assertRaises(BackupProblem) as error:
+            restore_workflow.normalize_restore_target_directory(
+                "  ", {"working_directory": str(REPO_ROOT)}
+            )
+
+        self.assertEqual(error.exception.i18n_key, "error.restore.target_empty")
+
+    def test_normalize_target_rejects_working_directory_itself(self):
+        restic_cfg = {"working_directory": str(REPO_ROOT)}
+
+        with self.assertRaises(BackupProblem) as error:
+            restore_workflow.normalize_restore_target_directory(
+                str(REPO_ROOT), restic_cfg
+            )
+
+        self.assertEqual(
+            error.exception.i18n_key,
+            "error.restore.target_is_working_directory",
+        )
+
+    def test_normalize_target_rejects_target_inside_repository(self):
+        restic_cfg = {
+            "working_directory": str(REPO_ROOT),
+            "repository": "./restic-repo",
+        }
+        target = REPO_ROOT.joinpath("restic-repo", "data")
+
+        with self.assertRaises(BackupProblem) as error:
+            restore_workflow.normalize_restore_target_directory(
+                str(target), restic_cfg
+            )
+
+        self.assertEqual(
+            error.exception.i18n_key, "error.restore.target_inside_repository"
+        )
+
+    def test_normalize_target_rejects_target_inside_backup_source(self):
+        restic_cfg = {
+            "working_directory": str(REPO_ROOT),
+            "backup_command": ["backup", "./server/world"],
+        }
+        target = REPO_ROOT.joinpath("server", "world", "restore-out")
+
+        with self.assertRaises(BackupProblem) as error:
+            restore_workflow.normalize_restore_target_directory(
+                str(target), restic_cfg
+            )
+
+        self.assertEqual(
+            error.exception.i18n_key,
+            "error.restore.target_inside_backup_sources",
+        )
+
+    def test_normalize_target_allows_sibling_directory_near_repository(self):
+        restic_cfg = {
+            "working_directory": str(REPO_ROOT),
+            "repository": "./restic-repo",
+        }
+
+        result = restore_workflow.normalize_restore_target_directory(
+            "restore-out", restic_cfg
+        )
+
+        self.assertEqual(
+            result, str(REPO_ROOT.joinpath("restore-out").resolve())
+        )
+
+
+class RestoreTargetCommandTests(unittest.TestCase):
+    def test_build_restore_command_uses_task_target_directory(self):
+        restic_cfg = {"working_directory": str(REPO_ROOT)}
+
+        self.assertEqual(
+            restore_workflow.build_restore_command(
+                restic_cfg,
+                {
+                    "snapshot": "abc",
+                    "item_type": "full",
+                    "target_directory": r"D:\restore-out",
+                },
+            ),
+            ["restore", "abc", "--target", r"D:\restore-out"],
+        )
+
+    def test_build_restore_command_keeps_workdir_without_target(self):
+        restic_cfg = {"working_directory": str(REPO_ROOT)}
+
+        self.assertEqual(
+            restore_workflow.build_restore_command(
+                restic_cfg, {"snapshot": "abc", "item_type": "full"}
+            ),
+            ["restore", "abc", "--target", str(REPO_ROOT)],
+        )
+
+    def test_build_restore_command_keeps_include_for_file_tasks(self):
+        restic_cfg = {"working_directory": str(REPO_ROOT)}
+
+        args = restore_workflow.build_restore_command(
+            restic_cfg,
+            {
+                "snapshot": "abc",
+                "item_type": "file",
+                "include_path": "/world/level.dat",
+                "target_directory": r"D:\restore-out",
+            },
+        )
+
+        self.assertEqual(
+            args[-4:], ["--target", r"D:\restore-out", "--include", "/world/level.dat"]
+        )
+
+    def test_is_direct_restore_session_requires_target_on_every_task(self):
+        targeted = {"snapshot": "abc", "item_type": "full", "target_directory": "/out"}
+        plain = {"snapshot": "abc", "item_type": "full"}
+
+        self.assertFalse(restore_workflow.is_direct_restore_session([]))
+        self.assertFalse(restore_workflow.is_direct_restore_session([plain]))
+        self.assertFalse(
+            restore_workflow.is_direct_restore_session([targeted, plain])
+        )
+        self.assertTrue(restore_workflow.is_direct_restore_session([targeted]))
+
+
+class RestoreDirectStageTests(unittest.TestCase):
+    def test_direct_restore_success_clears_session_and_queue(self):
+        runtime = create_runtime()
+        server = FakePluginServer()
+        session = build_restore_session(
+            tasks=[
+                {
+                    "id": 1,
+                    "snapshot": "abc",
+                    "item_type": "full",
+                    "include_path": "/",
+                    "target_directory": r"D:\restore-out",
+                }
+            ]
+        )
+        runtime.restore.lock.acquire()
+        runtime.restore.session = session
+        clear_func = mock.Mock()
+
+        with mock.patch.object(restore_workflow, "execute_restore_tasks"):
+            restore_workflow.run_direct_restore_stage(
+                runtime, server, session, clear_func
+            )
+
+        self.assertIsNone(runtime.restore.session)
+        self.assertFalse(runtime.restore.lock.locked())
+        clear_func.assert_called_once_with(server, session.snapshot_cfg, "cache")
+        self.assertIn("恢复任务全部完成", server.logger.info_messages[-1])
+
+    def test_direct_restore_failure_keeps_queue_and_releases_lock(self):
+        runtime = create_runtime()
+        server = FakePluginServer()
+        session = build_restore_session(
+            tasks=[
+                {
+                    "id": 1,
+                    "snapshot": "abc",
+                    "item_type": "full",
+                    "include_path": "/",
+                    "target_directory": r"D:\restore-out",
+                }
+            ]
+        )
+        runtime.restore.lock.acquire()
+        runtime.restore.session = session
+        clear_func = mock.Mock()
+
+        with mock.patch.object(
+            restore_workflow, "execute_restore_tasks", side_effect=RuntimeError("boom")
+        ):
+            restore_workflow.run_direct_restore_stage(
+                runtime, server, session, clear_func
+            )
+
+        self.assertIsNone(runtime.restore.session)
+        self.assertFalse(runtime.restore.lock.locked())
+        clear_func.assert_not_called()
+        self.assertIn("恢复任务执行失败", server.logger.warning_messages[0])
+        self.assertIn("boom", server.logger.warning_messages[0])
+
+    def test_restore_after_stop_logs_starting_server_after_tasks(self):
+        runtime = create_runtime()
+        server = FakePluginServer()
+        session = build_restore_session(
+            cfg={"restore": {}},
+            tasks=[
+                {"id": 1, "snapshot": "abc", "item_type": "full", "include_path": "/"}
+            ],
+        )
+        runtime.restore.lock.acquire()
+        runtime.restore.session = session
+        clear_func = mock.Mock()
+
+        with mock.patch.object(
+            restore_workflow,
+            "execute_restore_after_stop",
+            return_value=restore_workflow.RestoreStageResult(),
+        ), mock.patch.object(
+            restore_workflow, "start_server_after_restore"
+        ):
+            restore_workflow.run_restore_after_stop_stage(
+                runtime, server, clear_func
+            )
+
+        self.assertTrue(
+            any(
+                "正在启动 Minecraft 服务端" in message
+                for message in server.logger.info_messages
+            )
+        )
 
 
 class RestoreWorkflowTests(unittest.TestCase):

@@ -38,6 +38,7 @@ def install_mcdr_stub():
         "Literal",
         "Integer",
         "Text",
+        "QuotableText",
         "GreedyText",
     ]:
         setattr(api_all, name, type(name, (), {}))
@@ -48,6 +49,7 @@ def install_mcdr_stub():
         "Literal",
         "Integer",
         "Text",
+        "QuotableText",
         "GreedyText",
     ]
 

@@ -149,6 +149,25 @@ class SnapshotDatabaseTests(unittest.TestCase):
                 "{}. [file] abcdef12 -> /world/level.dat".format(task_id), output
             )
 
+    def test_restore_task_target_directory_roundtrip(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            server = FakeServer(temp_dir)
+            snapshot_cfg = {"database": "snapshots.sqlite3"}
+
+            task_id = add_restore_task(
+                server, snapshot_cfg, "cache-a", "abcdef12", "full", "/", "/tmp/out"
+            )
+            rows = list_restore_tasks(server, snapshot_cfg, "cache-a")
+            output = restore_tasks_output(
+                server, snapshot_cfg, "cache-a", "zh_cn", "!!restic"
+            )
+
+            self.assertEqual(rows[0]["target_directory"], "/tmp/out")
+            self.assertIn(
+                "{}. [整份快照] abcdef12 -> / (恢复到 /tmp/out)".format(task_id),
+                output,
+            )
+
     def test_restore_tasks_output_accepts_source_translate(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             server = FakeServer(temp_dir)

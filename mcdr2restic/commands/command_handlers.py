@@ -8,6 +8,7 @@ from mcdreforged.api.all import (
     Integer,
     Literal,
     PluginServerInterface,
+    QuotableText,
     Text,
 )
 
@@ -109,6 +110,26 @@ class CommandHandlers:
             .then(
                 Text("snapshot")
                 .runs(self.restore.command_restore_add_full)
+                .then(
+                    Literal("to").then(
+                        QuotableText("target")
+                        .runs(self.restore.command_restore_add_full_to)
+                        .then(
+                            Literal("file").then(
+                                GreedyText("path").runs(
+                                    self.restore.command_restore_add_file_to
+                                )
+                            )
+                        )
+                        .then(
+                            Literal("folder").then(
+                                GreedyText("path").runs(
+                                    self.restore.command_restore_add_folder_to
+                                )
+                            )
+                        )
+                    )
+                )
                 .then(
                     Literal("file").then(
                         GreedyText("path").runs(self.restore.command_restore_add_file)

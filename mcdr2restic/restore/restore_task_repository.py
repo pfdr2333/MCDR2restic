@@ -19,15 +19,23 @@ def add_restore_task(
     snapshot: str,
     item_type: str,
     include_path: str,
+    target_directory: str = "",
 ) -> int:
     with closing(open_snapshot_db(server, snapshot_cfg)) as conn:
         with conn:
             cursor = conn.execute(
                 """
-                INSERT INTO restore_tasks (cache_key, created_at_text, snapshot, item_type, include_path)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO restore_tasks (cache_key, created_at_text, snapshot, item_type, include_path, target_directory)
+                VALUES (?, ?, ?, ?, ?, ?)
                 """,
-                (cache_key, now_text(), snapshot, item_type, include_path),
+                (
+                    cache_key,
+                    now_text(),
+                    snapshot,
+                    item_type,
+                    include_path,
+                    target_directory,
+                ),
             )
         return int(cursor.lastrowid)
 
@@ -40,7 +48,7 @@ def list_restore_tasks(
     with closing(open_snapshot_db(server, snapshot_cfg)) as conn:
         return conn.execute(
             """
-            SELECT id, cache_key, created_at_text, snapshot, item_type, include_path
+            SELECT id, cache_key, created_at_text, snapshot, item_type, include_path, target_directory
             FROM restore_tasks
             WHERE cache_key = ?
             ORDER BY id ASC
@@ -78,9 +86,16 @@ def clear_restore_tasks(
 def format_restore_task(row: sqlite3.Row, translate_or_language: Any) -> str:
     item_type = str(row["item_type"])
     type_text = localized_restore_item_type(item_type, translate_or_language)
-    return "  {}. [{}] {} -> {}".format(
+    line = "  {}. [{}] {} -> {}".format(
         row["id"], type_text, row["snapshot"], row["include_path"]
     )
+    target_directory = str(row["target_directory"] or "")
+    if target_directory:
+        translate = normalize_translate(translate_or_language)
+        line += " ({})".format(
+            translate("info.restore.task_target", target=target_directory)
+        )
+    return line
 
 
 def localized_restore_item_type(item_type: str, translate_or_language: Any) -> str:
