@@ -76,13 +76,13 @@ MCDReforged 插件：调用 [restic](https://restic.readthedocs.io/en/stable/) �
 
 ## 文档
 
-完整配置说明、调度策略与常见问题见 [docs/zh_CN](docs/zh_CN/index.md)：
+完整配置说明、调度策略与常见问题见[在线文档](https://pfdr2333.github.io/MCDR2restic/)（源文件在 [docs/](docs/index.md)）：
 
-- [快速开始](docs/zh_CN/getting-started.md)
-- [命令说明](docs/zh_CN/commands.md)
-- [配置说明](docs/zh_CN/configuration.md)
-- [状态与恢复](docs/zh_CN/restore-and-status.md)
-- [常见问题](docs/zh_CN/faq.md)
+- [快速开始](docs/getting-started.md)
+- [命令说明](docs/commands.md)
+- [配置说明](docs/configuration.md)
+- [状态与恢复](docs/restore.md)
+- [常见问题](docs/faq.md)
 
 ## 开发与构建
 
@@ -93,9 +93,13 @@ python -m coverage report --fail-under=55
 
 # 打包 .mcdr 归档
 python tools/pack_plugin.py --output-dir dist
+
+# 本地预览文档站（Material for MkDocs）
+pip install -r requirements-docs.txt
+mkdocs serve
 ```
 
-修改 `lang/zh_cn.json` 或 `en_us.json` 后需运行 `python tools/sync_language_resources.py` 重新生成 `zh_tw` 并同步两份语言文件。
+修改 `lang/zh_cn.json` 或 `en_us.json` 后需运行 `python tools/sync_language_resources.py` 重新生成 `zh_tw` 并同步两份语言文件；CI 会校验两份 `lang/` 是否一致，未同步时将失败。
 
 GitHub Actions 会在每次推送时运行测试并保存构建产物；推送形如 `v0.6.0` 的 Git 标签会自动构建并创建 Release。
 

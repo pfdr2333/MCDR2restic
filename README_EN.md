@@ -76,13 +76,13 @@ Queued tasks are not executed immediately. When running `restore apply`:
 
 ## Documentation
 
-Full configuration references, scheduling details, and FAQs live in [docs/zh_CN](docs/zh_CN/index.md) (Chinese):
+Full configuration references, scheduling details, and FAQs live in the [online docs](https://pfdr2333.github.io/MCDR2restic/) (Chinese; sources under [docs/](docs/index.md)):
 
-- [Getting started](docs/zh_CN/getting-started.md)
-- [Commands](docs/zh_CN/commands.md)
-- [Configuration](docs/zh_CN/configuration.md)
-- [Restore & status](docs/zh_CN/restore-and-status.md)
-- [FAQ](docs/zh_CN/faq.md)
+- [Getting started](docs/getting-started.md)
+- [Commands](docs/commands.md)
+- [Configuration](docs/configuration.md)
+- [Restore & status](docs/restore.md)
+- [FAQ](docs/faq.md)
 
 ## Development & Build
 
@@ -93,9 +93,13 @@ python -m coverage report --fail-under=55
 
 # Build the .mcdr archive
 python tools/pack_plugin.py --output-dir dist
+
+# Preview the docs site locally (Material for MkDocs)
+pip install -r requirements-docs.txt
+mkdocs serve
 ```
 
-After editing `lang/zh_cn.json` or `en_us.json`, run `python tools/sync_language_resources.py` to regenerate `zh_tw` and keep both language file copies in sync.
+After editing `lang/zh_cn.json` or `en_us.json`, run `python tools/sync_language_resources.py` to regenerate `zh_tw` and keep both language file copies in sync; CI verifies that both `lang/` copies match and fails when they do not.
 
 GitHub Actions runs the tests and stores build artifacts on every push; pushing a tag like `v0.6.0` builds the archive and publishes a release automatically.
 

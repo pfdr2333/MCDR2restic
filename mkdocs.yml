@@ -1,0 +1,46 @@
+site_name: MCDR2Restic 文档
+site_description: MCDR2Restic 用户文档
+site_url: https://pfdr2333.github.io/MCDR2restic/
+repo_url: https://github.com/pfdr2333/MCDR2restic
+repo_name: pfdr2333/MCDR2restic
+docs_dir: docs
+site_dir: site
+
+theme:
+  name: material
+  language: zh
+  icon:
+    repo: fontawesome/brands/github
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle:
+        icon: material/brightness-7
+        name: 切换到深色模式
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle:
+        icon: material/brightness-4
+        name: 切换到浅色模式
+  features:
+    - content.code.copy
+    - navigation.footer
+    - navigation.top
+    - search.highlight
+    - search.suggest
+
+nav:
+  - 首页: index.md
+  - 快速开始: getting-started.md
+  - 命令: commands.md
+  - 配置: configuration.md
+  - 状态与恢复: restore.md
+  - 常见问题: faq.md
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - tables
+  - toc:
+      permalink: true
