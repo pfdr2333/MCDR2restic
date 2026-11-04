@@ -197,7 +197,7 @@ def refresh_snapshot_cache(
                 tr_error(language, exc),
                 time.monotonic() - started,
             )
-            raise BackupProblem(error)
+            raise BackupProblem(error) from exc
         finally:
             delete_snapshot_temp_rows(conn, temp_key)
 

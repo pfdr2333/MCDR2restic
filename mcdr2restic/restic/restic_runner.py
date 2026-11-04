@@ -150,14 +150,14 @@ def start_restic_process(
 ) -> subprocess.Popen:
     try:
         return subprocess.Popen(command, **build_restic_popen_kwargs(cwd, env))
-    except FileNotFoundError:
+    except FileNotFoundError as exc:
         raise BackupProblem(
             i18n_key="error.restic.executable_not_found", executable=executable
-        )
+        ) from exc
     except Exception as exc:
         raise BackupProblem(
             i18n_key="error.restic.start_failed", phase=phase, error=exc
-        )
+        ) from exc
 
 
 def build_restic_popen_kwargs(
@@ -312,12 +312,12 @@ def append_restic_output_line(
 def wait_for_restic_exit(process: subprocess.Popen, language: str) -> int:
     try:
         return int(process.wait(timeout=RESTIC_PROCESS_WAIT_TIMEOUT_SECONDS))
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as exc:
         result = terminate_process(process)
         raise BackupProblem(
             i18n_key="error.restic.process_still_running_after_output",
             detail=termination_failure_suffix(result, language),
-        )
+        ) from exc
 
 
 def join_restic_reader_threads(reader_threads: Sequence[threading.Thread]):

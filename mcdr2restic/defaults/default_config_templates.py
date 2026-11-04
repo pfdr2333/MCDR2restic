@@ -252,7 +252,7 @@ def validate_rendered_config_template(template: str):
     except yaml.YAMLError as exc:
         raise ValueError(
             "Rendered default config template is invalid YAML: {}".format(exc)
-        )
+        ) from exc
 
     if not isinstance(loaded, dict):
         raise ValueError("Rendered default config template must be a YAML mapping")

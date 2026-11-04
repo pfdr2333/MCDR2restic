@@ -218,7 +218,7 @@ def parse_restic_release_metadata(data: bytes) -> Dict[str, Any]:
     try:
         metadata = json.loads(data.decode("utf-8"))
     except Exception as exc:
-        raise BackupProblem(i18n_key="error.restic.release_parse_failed", error=exc)
+        raise BackupProblem(i18n_key="error.restic.release_parse_failed", error=exc) from exc
     if not isinstance(metadata, dict) or not isinstance(metadata.get("assets"), list):
         raise BackupProblem(i18n_key="error.restic.release_invalid")
     return metadata
@@ -287,7 +287,7 @@ def download_bytes(url: str, timeout: int) -> bytes:
             i18n_key="error.restic.download_failed",
             url=mask_download_url(url),
             error=exc,
-        )
+        ) from exc
 
 
 def install_restic_archive(

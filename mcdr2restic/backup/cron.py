@@ -138,8 +138,8 @@ def split_step(part: str) -> Tuple[str, int]:
     base, step_text = part.split("/", 1)
     try:
         step = int(step_text)
-    except ValueError:
-        raise CronError("error.cron.step_not_integer", value=step_text)
+    except ValueError as exc:
+        raise CronError("error.cron.step_not_integer", value=step_text) from exc
     if step <= 0:
         raise CronError("error.cron.step_positive")
     return base, step

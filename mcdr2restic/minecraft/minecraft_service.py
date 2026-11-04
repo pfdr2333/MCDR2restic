@@ -32,7 +32,7 @@ def execute_mc_command(
     except Exception as exc:
         raise BackupProblem(
             i18n_key="error.minecraft.command_failed", label=label, error=exc
-        )
+        ) from exc
 
 
 def try_force_save_on(
@@ -56,7 +56,7 @@ def try_force_save_on(
         if wait > 0:
             time.sleep(min(wait, 5.0))
     except Exception as exc:
-        raise BackupProblem(i18n_key="error.minecraft.save_on_failed", error=exc)
+        raise BackupProblem(i18n_key="error.minecraft.save_on_failed", error=exc) from exc
 
 
 def request_cancel_current_backup(

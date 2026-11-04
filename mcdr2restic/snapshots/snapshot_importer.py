@@ -202,12 +202,12 @@ def start_restic_snapshot_process(restic_cfg: Dict[str, Any]) -> subprocess.Pope
     ]
     try:
         return subprocess.Popen(command, **build_restic_popen_kwargs(cwd, env))
-    except FileNotFoundError:
+    except FileNotFoundError as exc:
         raise BackupProblem(
             i18n_key="error.restic.executable_not_found", executable=executable
-        )
+        ) from exc
     except Exception as exc:
-        raise BackupProblem(i18n_key="error.snapshot.start_failed", error=exc)
+        raise BackupProblem(i18n_key="error.snapshot.start_failed", error=exc) from exc
 
 
 def build_snapshot_restic_environment(restic_cfg: Dict[str, Any]) -> Dict[str, str]:
@@ -271,9 +271,9 @@ def decode_json_array_buffer(
             continue
         try:
             item, index = decoder.raw_decode(buffer)
-        except json.JSONDecodeError:
+        except json.JSONDecodeError as exc:
             if eof:
-                raise BackupProblem(i18n_key="error.snapshot.parse_failed")
+                raise BackupProblem(i18n_key="error.snapshot.parse_failed") from exc
             return buffer, in_array, items, False
         buffer = buffer[index:]
         items.append(item)
