@@ -10,8 +10,6 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from mcdr2restic.config.state_store import get_config_snapshot
 from mcdr2restic.defaults.default_constants import (
-    DEFAULT_RESTIC_EXECUTABLE_POSIX,
-    DEFAULT_RESTIC_EXECUTABLE_WINDOWS,
     RESTIC_PROGRESS_INTERVAL_SECONDS,
 )
 from mcdr2restic.core.i18n import config_language, tr
@@ -36,6 +34,7 @@ from mcdr2restic.restic.restic_constants import (
     RESTIC_JSON_OUTPUT_PHASES,
     RESTIC_OPTION_JSON,
 )
+from mcdr2restic.restic.restic_download import is_config_folder_default_restic_path
 from mcdr2restic.restic.restic_progress import (
     build_restic_progress_state,
     handle_restic_stream_line,
@@ -65,14 +64,6 @@ def resolve_popen_executable(executable: str, cwd: Optional[str]) -> str:
     if os.sep in text or (os.altsep and os.altsep in text):
         return os.path.abspath(os.path.join(str(cwd), text))
     return text
-
-
-def is_config_folder_default_restic_path(executable: str) -> bool:
-    normalized = executable.replace("\\", "/").lower()
-    return normalized in {
-        DEFAULT_RESTIC_EXECUTABLE_POSIX.replace("\\", "/").lower(),
-        DEFAULT_RESTIC_EXECUTABLE_WINDOWS.replace("\\", "/").lower(),
-    }
 
 
 def run_restic_command(
