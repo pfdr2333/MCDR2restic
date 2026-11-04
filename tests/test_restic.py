@@ -229,11 +229,10 @@ class ResticCommandTests(unittest.TestCase):
         with mock.patch(
             "mcdr2restic.restic.restic_runner.subprocess.Popen",
             side_effect=FileNotFoundError,
-        ):
-            with self.assertRaises(BackupProblem) as error:
-                start_restic_process(
-                    ["missing-restic"], None, {}, "missing-restic", "backup"
-                )
+        ), self.assertRaises(BackupProblem) as error:
+            start_restic_process(
+                ["missing-restic"], None, {}, "missing-restic", "backup"
+            )
 
         self.assertEqual(error.exception.i18n_key, "error.restic.executable_not_found")
 
@@ -241,9 +240,8 @@ class ResticCommandTests(unittest.TestCase):
         with mock.patch(
             "mcdr2restic.restic.restic_runner.subprocess.Popen",
             side_effect=OSError("permission denied"),
-        ):
-            with self.assertRaises(BackupProblem) as error:
-                start_restic_process(["restic"], None, {}, "restic", "backup")
+        ), self.assertRaises(BackupProblem) as error:
+            start_restic_process(["restic"], None, {}, "restic", "backup")
 
         self.assertEqual(error.exception.i18n_key, "error.restic.start_failed")
 

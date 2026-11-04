@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import ctypes
 import errno
 import os
@@ -151,10 +152,8 @@ def current_host_aliases() -> set[str]:
         os.environ.get("HOSTNAME", ""),
     }
     if hasattr(os, "uname"):
-        try:
+        with contextlib.suppress(OSError):
             raw_names.add(os.uname().nodename)
-        except OSError:
-            pass
 
     aliases: set[str] = set()
     for name in raw_names:

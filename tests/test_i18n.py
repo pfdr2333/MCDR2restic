@@ -38,7 +38,6 @@ except ImportError:
         repair_inconsistent_block_scalar_indentation,
         tempfile,
         tr,
-        tr_error,
         unittest,
         yaml,
     )

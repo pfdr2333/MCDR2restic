@@ -9,7 +9,7 @@ except ImportError:
 
 sys.path.insert(0, str(REPO_ROOT))
 
-from tools.check_language_divergence import (  # noqa: E402
+from tools.check_language_divergence import (
     load_semantic_messages,
     normalize_base_sha,
 )

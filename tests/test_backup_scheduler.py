@@ -74,9 +74,8 @@ class BackupSchedulerTests(unittest.TestCase):
         with mock.patch(
             "mcdr2restic.backup.backup_scheduler.compute_wait_seconds",
             side_effect=ValueError("invalid schedule"),
-        ):
-            with mock.patch.object(scheduler, "_wait") as wait:
-                result = scheduler._next_normal_schedule()
+        ), mock.patch.object(scheduler, "_wait") as wait:
+            result = scheduler._next_normal_schedule()
 
         self.assertIsNone(result)
         self.assertEqual(notifier.call_args.args[0], "schedule_config_error")

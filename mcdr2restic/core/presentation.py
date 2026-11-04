@@ -28,6 +28,8 @@ from mcdr2restic.core.utils import non_negative_int
 
 
 RESTIC_TIME_DISPLAY_PATTERN = re.compile(r"^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2}:\d{2})")
+SNAPSHOT_PATHS_PREVIEW_MAX_LENGTH = 80
+SNAPSHOT_PATHS_PREVIEW_TRUNCATE_AT = 77
 
 
 def render_status_output(
@@ -320,8 +322,8 @@ def format_snapshot_line(
     host = str(row["hostname"] or "")
     tags = str(row["tags_text"] or "")
     paths = str(row["paths_text"] or "")
-    if len(paths) > 80:
-        paths = paths[:77] + "..."
+    if len(paths) > SNAPSHOT_PATHS_PREVIEW_MAX_LENGTH:
+        paths = paths[:SNAPSHOT_PATHS_PREVIEW_TRUNCATE_AT] + "..."
     extras = []
     if host:
         extras.append(host)

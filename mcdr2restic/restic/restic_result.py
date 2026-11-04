@@ -25,9 +25,9 @@ def assert_restic_success(
     result: ResticCommandResult,
     command_root: str = "!!restic",
 ):
-    success_codes = set(
+    success_codes = {
         int(code) for code in restic_cfg.get(RESTIC_CFG_SUCCESS_EXIT_CODES, [0])
-    )
+    }
     combined = "{}\n{}".format(result.stdout, result.stderr)
     max_output_chars = int(restic_cfg.get(RESTIC_CFG_MAX_OUTPUT_CHARS, 1800))
 

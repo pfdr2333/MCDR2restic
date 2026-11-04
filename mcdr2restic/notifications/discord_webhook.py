@@ -13,6 +13,11 @@ from mcdr2restic.core.i18n import server_tr
 from mcdr2restic.defaults.default_constants import PLUGIN_ID
 
 
+DISCORD_HTTP_SUCCESS_MIN = 200
+DISCORD_HTTP_SUCCESS_MAX = 300
+DISCORD_CONTENT_MAX_CHARS = 2000
+
+
 class DiscordWebhookClient:
     def __init__(self, server: PluginServerInterface, cfg: Dict[str, Any]):
         self.server = server
@@ -41,7 +46,7 @@ class DiscordWebhookClient:
         try:
             with urllib.request.urlopen(request, timeout=timeout) as response:
                 status = getattr(response, "status", 204)
-                if status < 200 or status >= 300:
+                if status < DISCORD_HTTP_SUCCESS_MIN or status >= DISCORD_HTTP_SUCCESS_MAX:
                     self.server.logger.warning(
                         server_tr(
                             self.server, "warn.discord.status_error", status=status
@@ -122,6 +127,6 @@ def clean_id_list(values: Any) -> List[str]:
 
 def truncate_discord_content(text: str) -> str:
     text = str(text or "")
-    if len(text) <= 2000:
+    if len(text) <= DISCORD_CONTENT_MAX_CHARS:
         return text
     return "{}\n...".format(text[:1996])

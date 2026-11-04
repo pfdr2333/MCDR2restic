@@ -85,11 +85,11 @@ def get_restic_working_directory(restic_cfg: Dict[str, Any]) -> str:
 
 def is_strict_filesystem_absolute_path(path: str) -> bool:
     text = str(path or "")
-    if WINDOWS_ABSOLUTE_PATH_PATTERN.match(text):
-        return True
-    if text.startswith("\\\\") or text.startswith("//"):
-        return True
-    return False
+    return bool(
+        WINDOWS_ABSOLUTE_PATH_PATTERN.match(text)
+        or text.startswith("\\\\")
+        or text.startswith("//")
+    )
 
 
 def normalize_restore_target_directory(

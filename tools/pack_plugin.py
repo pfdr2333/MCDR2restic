@@ -6,7 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
-from typing import Any, Dict, Iterable, Iterator, Sequence
+from typing import Any, Dict, Iterator, Sequence
 from zipfile import ZIP_DEFLATED, ZipFile
 
 PLUGIN_METADATA_FILE = "mcdreforged.plugin.json"

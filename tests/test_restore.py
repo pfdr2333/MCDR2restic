@@ -31,15 +31,15 @@ except ImportError:
 
 
 def build_restore_session(**overrides):
-    fields = dict(
-        tasks=[],
-        cfg={},
-        snapshot_cfg={},
-        cache_key="cache",
-        language="zh_cn",
-        phase="restoring",
-        started_at="now",
-    )
+    fields = {
+        "tasks": [],
+        "cfg": {},
+        "snapshot_cfg": {},
+        "cache_key": "cache",
+        "language": "zh_cn",
+        "phase": "restoring",
+        "started_at": "now",
+    }
     fields.update(overrides)
     return RestoreSession(**fields)
 
@@ -317,7 +317,9 @@ class RestoreWorkflowTests(unittest.TestCase):
     def test_restore_apply_rejection_checks_tasks_backup_and_server_state(self):
         runtime = create_runtime()
         server = FakePluginServer()
-        translate = lambda key: key
+
+        def translate(key):
+            return key
 
         self.assertEqual(
             restore_workflow.get_restore_apply_rejection(

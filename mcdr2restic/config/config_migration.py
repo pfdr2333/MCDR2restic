@@ -487,7 +487,7 @@ def insert_into_top_level_block(
 ) -> List[str]:
     start, end = find_top_level_block(lines, block_key)
     if start is None:
-        block = ["\n", "{}:\n".format(block_key)] + insertions
+        block = ["\n", "{}:\n".format(block_key), *insertions]
         return insert_before_config_version_or_end(lines, block)
     return lines[:end] + insertions + lines[end:]
 

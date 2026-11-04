@@ -56,16 +56,16 @@ def install_mcdr_stub():
 
 install_mcdr_stub()
 
-import mcdr2restic.commands.command_handlers as command_handlers
-import mcdr2restic.core.bootstrap as bootstrap
-import mcdr2restic.core.i18n as i18n
-import mcdr2restic.defaults.config_template_resources as config_template_resources
-import mcdr2restic.restic.restic_lock_recovery as restic_lock_recovery
-import mcdr2restic.restic.restic_service as restic_service
-import mcdr2restic.restore.restore_paths as restore_paths
-import mcdr2restic.restore.restore_workflow as restore_workflow
-import tools.pack_plugin as pack_plugin
-import tools.verify_plugin as verify_plugin
+from mcdr2restic.commands import command_handlers
+from mcdr2restic.core import bootstrap
+from mcdr2restic.core import i18n
+from mcdr2restic.defaults import config_template_resources
+from mcdr2restic.restic import restic_lock_recovery
+from mcdr2restic.restic import restic_service
+from mcdr2restic.restore import restore_paths
+from mcdr2restic.restore import restore_workflow
+from tools import pack_plugin
+from tools import verify_plugin
 from mcdr2restic.backup.backup_scheduler import BackupScheduler
 from mcdr2restic.backup.cron import CronExpression
 from mcdr2restic.backup.scheduling import (
@@ -251,22 +251,23 @@ class CommandServer(FakePluginServer):
 
 
 __all__ = [
+    "DEFAULT_CONFIG",
+    "REPO_ROOT",
     "BackupProblem",
-    "ConfigError",
     "BackupScheduler",
     "CommandContext",
     "CommandServer",
+    "ConfigError",
     "CronExpression",
-    "DEFAULT_CONFIG",
+    "DiscordWebhookClient",
     "FakeCommandSource",
     "FakeLogger",
     "FakePluginServer",
     "FakeServer",
     "Path",
     "PermissiveCommandSource",
-    "ProcessTimeoutState",
-    "REPO_ROOT",
     "ProbeServer",
+    "ProcessTimeoutState",
     "ResticCommandResult",
     "ResticCommands",
     "ResticProgressState",
@@ -284,31 +285,31 @@ __all__ = [
     "classify_restic_failure_output",
     "clear_restore_tasks",
     "closing",
+    "command_handlers",
     "compute_maintenance_wait_seconds",
     "config_template_resources",
     "create_runtime",
-    "command_handlers",
     "datetime",
     "detect_error_lines",
-    "DiscordWebhookClient",
     "format_restic_status",
     "format_restic_summary",
     "get_current_plugin_version",
     "get_default_config_template",
     "get_default_message_template",
     "has_recent_player_activity",
+    "i18n",
     "insert_snapshot_row",
     "io",
-    "i18n",
     "is_default_restic_executable_path",
     "is_newer_version",
+    "iter_json_array_stream",
     "json",
     "list_restore_tasks",
-    "load_yaml_mapping_with_text_repair",
     "load_config_file_mapping",
+    "load_yaml_mapping_with_text_repair",
     "make_source_translate",
-    "migrate_legacy_config",
     "migrate_config_file",
+    "migrate_legacy_config",
     "mock",
     "non_negative_int",
     "normalize_language",
@@ -318,28 +319,27 @@ __all__ = [
     "open_snapshot_db",
     "os",
     "pack_plugin",
-    "verify_plugin",
     "parse_daily_time",
     "parse_online_list_output",
     "read_bundled_plugin_version",
     "read_snapshot_page",
-    "repair_inconsistent_block_scalar_indentation",
-    "replace_or_append_enabled_line",
     "render_message",
     "render_status_output",
+    "repair_inconsistent_block_scalar_indentation",
+    "replace_or_append_enabled_line",
     "resolve_known_online_players",
     "resolve_popen_executable",
-    "start_restic_process",
     "resolve_restic_executable_path",
-    "restore_tasks_output",
-    "restore_paths",
-    "restore_workflow",
     "restic_lock_recovery",
     "restic_service",
+    "restore_paths",
+    "restore_tasks_output",
+    "restore_workflow",
     "runtime_player_set",
     "safe_int",
     "schedule_status_text",
     "server_is_running",
+    "start_restic_process",
     "sys",
     "tail_text",
     "tempfile",
@@ -347,11 +347,11 @@ __all__ = [
     "threading",
     "tr",
     "tr_error",
-    "try_call_bool",
     "truncate_discord_content",
+    "try_call_bool",
     "unittest",
+    "verify_plugin",
     "version_number_tuple",
     "yaml",
     "zipfile",
-    "iter_json_array_stream",
 ]

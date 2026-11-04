@@ -130,7 +130,7 @@ def build_restic_process_command(
     executable = str(restic_cfg.get(RESTIC_CFG_EXECUTABLE, "restic"))
     cwd = restic_cfg.get(RESTIC_CFG_WORKING_DIRECTORY) or None
     env = build_restic_environment(restic_cfg)
-    command = [resolve_popen_executable(executable, cwd)] + args
+    command = [resolve_popen_executable(executable, cwd), *args]
     return executable, cwd, env, command
 
 
@@ -378,7 +378,7 @@ def prepare_restic_args_for_phase(args: List[str], phase: str) -> List[str]:
     ):
         return args
     insert_at = args.index("--") if "--" in args else len(args)
-    return args[:insert_at] + [RESTIC_OPTION_JSON] + args[insert_at:]
+    return [*args[:insert_at], RESTIC_OPTION_JSON, *args[insert_at:]]
 
 
 def get_deadline_remaining(deadline: Optional[float]) -> Optional[float]:

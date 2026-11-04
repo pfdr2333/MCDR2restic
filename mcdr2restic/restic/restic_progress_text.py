@@ -13,6 +13,7 @@ from mcdr2restic.restic.restic_constants import (
 
 
 RESTORE_ITEM_COUNT_PHASES = frozenset({RESTIC_COMMAND_RESTORE, RESTIC_COMMAND_ROLLBACK})
+BYTES_UNIT_STEP = 1024.0
 
 
 def format_restic_progress(progress: ResticProgressState, force: bool = False) -> str:
@@ -241,8 +242,9 @@ def format_bytes(value: int) -> str:
     size = float(max(0, int(value)))
     units = ["B", "KiB", "MiB", "GiB", "TiB"]
     for unit in units:
-        if size < 1024.0 or unit == units[-1]:
+        if size < BYTES_UNIT_STEP or unit == units[-1]:
             if unit == "B":
                 return "{} {}".format(int(size), unit)
             return "{:.1f} {}".format(size, unit)
-        size /= 1024.0
+        size /= BYTES_UNIT_STEP
+    return "{:.1f} {}".format(size, units[-1])

@@ -250,7 +250,8 @@ def insert_snapshot_row(
     conn.execute(
         """
         INSERT OR REPLACE INTO snapshots
-        (cache_key, id, short_id, time_text, time_epoch, hostname, username, tags_text, paths_text, program_version, summary_json)
+        (cache_key, id, short_id, time_text, time_epoch, hostname, username,
+         tags_text, paths_text, program_version, summary_json)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (

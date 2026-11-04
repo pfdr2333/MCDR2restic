@@ -12,10 +12,7 @@ try:
 except ImportError:
     from support import (
         BackupProblem,
-        FakePluginServer,
-        ResticProgressState,
         TerminateResult,
-        create_runtime,
         io,
         mock,
         unittest,
@@ -74,9 +71,8 @@ class ResticRunnerTests(unittest.TestCase):
             restic_runner,
             "terminate_process",
             return_value=TerminateResult(graceful=True),
-        ) as terminate:
-            with self.assertRaises(BackupProblem) as error:
-                restic_runner.wait_for_restic_exit(process, "en_us")
+        ) as terminate, self.assertRaises(BackupProblem) as error:
+            restic_runner.wait_for_restic_exit(process, "en_us")
 
         terminate.assert_called_once_with(process)
         self.assertEqual(

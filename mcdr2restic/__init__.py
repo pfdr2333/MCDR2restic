@@ -69,10 +69,10 @@ del _make_entrypoint_hook
 __all__ = [
     "_shutdown_runtime",
     "on_load",
-    "on_unload",
-    "on_server_startup",
-    "on_server_stop",
     "on_mcdr_stop",
     "on_player_joined",
     "on_player_left",
+    "on_server_startup",
+    "on_server_stop",
+    "on_unload",
 ]

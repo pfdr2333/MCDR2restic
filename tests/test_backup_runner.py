@@ -53,7 +53,7 @@ class BackupRunnerTests(unittest.TestCase):
         self.assertFalse(runtime.backup.lock.locked())
 
     def test_execute_backup_run_classifies_success_cancel_and_failure(self):
-        runtime, runner = self.make_runner()
+        _, runner = self.make_runner()
         server = FakePluginServer()
 
         with mock.patch("mcdr2restic.backup.backup_runner.run_backup_body"):
@@ -76,7 +76,7 @@ class BackupRunnerTests(unittest.TestCase):
         self.assertEqual(failed.detail, "failed")
 
     def test_save_on_failure_changes_success_to_failed(self):
-        runtime, runner = self.make_runner()
+        _, runner = self.make_runner()
         server = FakePluginServer()
         outcome = BackupRunOutcome(BackupRunStatus.SUCCESS, "done", "", 2)
 
@@ -90,7 +90,7 @@ class BackupRunnerTests(unittest.TestCase):
         self.assertIn("save-on failed", result.detail)
 
     def test_save_on_failure_preserves_non_success_status_and_merges_detail(self):
-        runtime, runner = self.make_runner()
+        _, runner = self.make_runner()
         server = FakePluginServer()
         outcome = BackupRunOutcome(BackupRunStatus.CANCELED, "canceled", "original", 2)
 

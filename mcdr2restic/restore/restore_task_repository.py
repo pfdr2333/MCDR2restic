@@ -25,7 +25,8 @@ def add_restore_task(
         with conn:
             cursor = conn.execute(
                 """
-                INSERT INTO restore_tasks (cache_key, created_at_text, snapshot, item_type, include_path, target_directory)
+                INSERT INTO restore_tasks
+                (cache_key, created_at_text, snapshot, item_type, include_path, target_directory)
                 VALUES (?, ?, ?, ?, ?, ?)
                 """,
                 (

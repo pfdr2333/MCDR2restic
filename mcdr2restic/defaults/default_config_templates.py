@@ -169,7 +169,8 @@ def add_windows_session_lock_exclude(template: str, language: str) -> str:
 def rewrite_maintenance_command_comments(template: str) -> str:
     replacements = {
         "# 备份前的仓库维护命令。每一项都会自动在前面加 executable，例如 restic forget ...": (
-            "# 仓库维护命令，由 maintenance_schedule 单独调度执行。每一项都会自动在前面加 executable，例如 restic forget ..."
+            "# 仓库维护命令，由 maintenance_schedule 单独调度执行。"
+            "每一项都会自动在前面加 executable，例如 restic forget ..."
         ),
         "# Repository maintenance commands executed before backup.": (
             "# Repository maintenance commands run from maintenance_schedule, independently of backups."
@@ -201,7 +202,8 @@ def maintenance_schedule_block(language: str) -> str:
         )
     return (
         "\n\nmaintenance_schedule:\n"
-        "  # Repository maintenance schedule. Default: run once per day at 03:00; empty cron_expression keeps this default.\n"
+        "  # Repository maintenance schedule. Default: run once per day at 03:00; "
+        "empty cron_expression keeps this default.\n"
         "  # interval_seconds > 0 uses a fixed interval.\n"
         "  # interval_seconds = 0 with cron_expression = \"0\" disables maintenance scheduling.\n"
         "  interval_seconds: 0\n"
