@@ -27,7 +27,7 @@ except ImportError:
 class BootstrapTests(unittest.TestCase):
     def test_requirements_txt_declares_runtime_dependencies(self):
         with open(REPO_ROOT / "requirements.txt", "r", encoding="utf8") as file:
-            requirements = set(line.strip() for line in file if line.strip())
+            requirements = {line.strip() for line in file if line.strip()}
 
         self.assertIn("PyYAML>=6.0", requirements)
         self.assertIn("websocket-client>=1.8.0", requirements)

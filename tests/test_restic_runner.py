@@ -1,10 +1,7 @@
 try:
     from .support import (
         BackupProblem,
-        FakePluginServer,
-        ResticProgressState,
         TerminateResult,
-        create_runtime,
         io,
         mock,
         unittest,

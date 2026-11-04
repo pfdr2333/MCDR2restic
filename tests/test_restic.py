@@ -18,7 +18,6 @@ try:
         format_restic_summary,
         is_default_restic_executable_path,
         mock,
-        normalize_restore_include_path,
         os,
         resolve_popen_executable,
         resolve_restic_executable_path,
