@@ -523,7 +523,7 @@ def find_top_level_block(lines: List[str], block_key: str) -> Tuple[Optional[int
     start = find_top_level_block_start(lines, block_key)
     if start is None:
         return None, len(lines)
-    return start, find_top_level_block_end(lines, start)
+    return start, find_top_level_block_end_with_preamble(lines, start)
 
 
 def find_top_level_block_start(lines: List[str], block_key: str) -> Optional[int]:
@@ -534,7 +534,9 @@ def find_top_level_block_start(lines: List[str], block_key: str) -> Optional[int
     return None
 
 
-def find_top_level_block_end(lines: List[str], start: int) -> int:
+# 与 config_template.find_top_level_block_end 不同：迁移插入点需把下一顶级键上方的
+# 注释/空行一并视作前块的尾部，故单独命名以示区别。
+def find_top_level_block_end_with_preamble(lines: List[str], start: int) -> int:
     for index in range(start + 1, len(lines)):
         if TOP_LEVEL_KEY_PATTERN.match(lines[index]):
             return find_top_level_block_preamble_start(lines, index)
