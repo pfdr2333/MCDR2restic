@@ -8,6 +8,7 @@ from mcdreforged.api.all import Info, PluginServerInterface
 
 from mcdr2restic.backup.backup_runner import BackupRunner
 from mcdr2restic.backup.backup_scheduler import BackupScheduler
+from mcdr2restic.commands.command_context import CommandContext
 from mcdr2restic.commands.command_handlers import CommandHandlers
 from mcdr2restic.core.runtime import PluginRuntime, create_runtime
 from mcdr2restic.restore.restore_workflow import (
@@ -186,12 +187,14 @@ class PluginEntrypoint:
 
     def create_command_handlers(self) -> CommandHandlers:
         return CommandHandlers(
-            self.runtime,
-            self.create_backup_runner,
-            self.create_maintenance_runner,
-            self.reload_services,
-            self.wake_scheduler,
-            self.invalidate_snapshot_cache,
+            CommandContext(
+                self.runtime,
+                self.create_backup_runner,
+                self.create_maintenance_runner,
+                self.reload_services,
+                self.wake_scheduler,
+                self.invalidate_snapshot_cache,
+            )
         )
 
     def reload_services(self, server: PluginServerInterface):

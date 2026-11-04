@@ -17,7 +17,7 @@ from mcdr2restic.core.i18n import (
     source_error_text,
 )
 from mcdr2restic.core.language import get_source_language
-from mcdr2restic.core.models import BackupProblem
+from mcdr2restic.core.models import BackupProblem, RestoreSession
 from mcdr2restic.minecraft.minecraft_service import is_backup_running, is_mc_ready
 from mcdr2restic.restore.restore_task_repository import (
     add_restore_task as add_restore_task_to_repository,
@@ -264,7 +264,10 @@ class RestoreCommands:
         ]
         if self.reject_restore_apply(source, server, translate, tasks):
             return
-        self.start_restore_apply(server, cfg, snapshot_cfg, cache_key, language, tasks)
+        self.start_restore_apply(
+            server,
+            create_restore_session(tasks, cfg, snapshot_cfg, cache_key, language),
+        )
         if is_direct_restore_session(tasks):
             reply_tr(source, server, "info.restore.direct_apply_started")
         else:
@@ -273,17 +276,12 @@ class RestoreCommands:
     def start_restore_apply(
         self,
         server: PluginServerInterface,
-        cfg: Dict[str, Any],
-        snapshot_cfg: Dict[str, Any],
-        cache_key: str,
-        language: str,
-        tasks: List[Dict[str, Any]],
+        session: RestoreSession,
     ) -> None:
         """Persist restore session state and spawn the restore worker thread."""
 
-        session = create_restore_session(tasks, cfg, snapshot_cfg, cache_key, language)
         set_restore_session(self.context.app_runtime, session)
-        if is_direct_restore_session(tasks):
+        if is_direct_restore_session(session.tasks):
             start_direct_restore_thread(
                 self.context.app_runtime,
                 server,

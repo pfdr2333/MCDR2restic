@@ -13,40 +13,17 @@ from mcdreforged.api.all import (
 )
 
 from mcdr2restic.commands.backup_commands import BackupCommands
-from mcdr2restic.commands.command_context import (
-    BackupRunnerFactory,
-    CommandContext,
-    MaintenanceRunnerFactory,
-    ReloadServices,
-    SnapshotInvalidator,
-    WakeScheduler,
-)
+from mcdr2restic.commands.command_context import CommandContext
 from mcdr2restic.commands.restore_commands import RestoreCommands
 from mcdr2restic.commands.restic_commands import ResticCommands
 from mcdr2restic.core.i18n import server_rtr
-from mcdr2restic.core.runtime import PluginRuntime
 from mcdr2restic.config.state_store import get_config_snapshot
 from mcdr2restic.commands.status_commands import StatusCommands
 
 
 class CommandHandlers:
-    def __init__(
-        self,
-        app_runtime: PluginRuntime,
-        backup_runner_factory: BackupRunnerFactory,
-        maintenance_runner_factory: MaintenanceRunnerFactory,
-        reload_services: ReloadServices,
-        wake_scheduler: WakeScheduler,
-        snapshot_invalidator: SnapshotInvalidator,
-    ):
-        self.context = CommandContext(
-            app_runtime,
-            backup_runner_factory,
-            maintenance_runner_factory,
-            reload_services,
-            wake_scheduler,
-            snapshot_invalidator,
-        )
+    def __init__(self, context: CommandContext):
+        self.context = context
         self.status = StatusCommands(self.context)
         self.backup = BackupCommands(self.context)
         self.restore = RestoreCommands(self.context)
