@@ -1,0 +1,36 @@
+# Ruff 静态检查配置：规则集与项目编码规范对应（命名、异常链、复杂度、简化写法等）
+line-length = 120
+target-version = "py310"
+
+[lint]
+select = [
+    "E",   # pycodestyle 错误
+    "W",   # pycodestyle 警告
+    "F",   # pyflakes（未用导入/变量、未定义名称）
+    "N",   # PEP 8 命名
+    "B",   # flake8-bugbear（常见缺陷，如异常链丢失）
+    "C4",  # flake8-comprehensions
+    "SIM", # flake8-simplify
+    "C90", # mccabe 圈复杂度
+    "PLR", # pylint 重构类（分支/语句数上限）
+    "RET", # return 简化
+    "RUF", # ruff 专属规则
+]
+ignore = [
+    # 模块级函数 + 显式传参是项目既定风格，强行收拢为上下文对象收益有限
+    "PLR0913",
+    # cron 字段边界、协议常量等领域数值有意内联
+    "PLR2004",
+    # 中文文案使用全角标点为有意行为
+    "RUF001",
+    "RUF002",
+    "RUF003",
+    # BackupProblem 表达"无法继续的条件"，语义上不是编程错误
+    "N818",
+]
+
+[lint.per-file-ignores]
+# 先安装 mcdreforged stub，再执行后续导入
+"tests/support.py" = ["E402"]
+# 闭包入口：辅助函数在调用完成后才 del，运行时正确，静态分析误报
+"mcdr2restic/__init__.py" = ["F821"]
