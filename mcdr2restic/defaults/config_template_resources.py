@@ -9,7 +9,7 @@ from typing import Any, Dict
 
 import yaml
 
-from mcdr2restic.core.i18n import FALLBACK_LANGUAGE
+from mcdr2restic.core.i18n import FALLBACK_LANGUAGE, normalize_language_name
 
 
 CONFIG_TEMPLATE_PACKAGE = "mcdr2restic.config_templates"
@@ -65,10 +65,6 @@ def resolve_config_template_language(language: str) -> str:
     ) and config_template_resource_exists("zh_cn"):
         return "zh_cn"
     return FALLBACK_LANGUAGE
-
-
-def normalize_language_name(language: str) -> str:
-    return str(language or "").strip().lower().replace("-", "_")
 
 
 def config_template_resource_exists(language: str) -> bool:

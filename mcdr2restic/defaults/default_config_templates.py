@@ -4,14 +4,13 @@ from __future__ import annotations
 import json
 import os
 import re
-from functools import lru_cache
 from typing import List, Optional
 
 import yaml
 
 from mcdr2restic.defaults.config_template_resources import (
     config_template_text,
-    load_base_config_template as load_config_template_text,
+    load_base_config_template,
 )
 from mcdr2restic.defaults.default_constants import (
     CONFIG_VERSION,
@@ -53,11 +52,6 @@ def get_default_config_template(
     template = render_config_version(template)
     validate_rendered_config_template(template)
     return template
-
-
-@lru_cache(maxsize=None)
-def load_base_config_template(language: str) -> str:
-    return load_config_template_text(language)
 
 
 DEFAULT_CONFIG_TEMPLATE_ZH = load_base_config_template("zh_cn")
