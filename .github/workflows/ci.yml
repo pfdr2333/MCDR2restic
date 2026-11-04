@@ -11,6 +11,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -23,6 +25,11 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install --requirement requirements-dev.txt
           python -c "import opencc; import yaml; print('Sync dependencies imported successfully')"
+
+      - name: Fail when both lang copies were edited and diverged
+        env:
+          BASE_SHA: ${{ github.event.before }}
+        run: python tools/check_language_divergence.py "$BASE_SHA"
 
       - name: Regenerate language resources
         run: python tools/sync_language_resources.py
