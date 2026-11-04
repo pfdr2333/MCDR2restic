@@ -8,6 +8,7 @@ try:
         create_runtime,
         mock,
         normalize_restore_include_path,
+        restore_paths,
         restore_workflow,
         tempfile,
         unittest,
@@ -22,6 +23,7 @@ except ImportError:
         create_runtime,
         mock,
         normalize_restore_include_path,
+        restore_paths,
         restore_workflow,
         tempfile,
         unittest,
@@ -46,7 +48,7 @@ class RestoreTargetDirectoryTests(unittest.TestCase):
     def test_normalize_target_resolves_relative_to_workdir(self):
         restic_cfg = {"working_directory": str(REPO_ROOT)}
 
-        result = restore_workflow.normalize_restore_target_directory(
+        result = restore_paths.normalize_restore_target_directory(
             "restore-out", restic_cfg
         )
 
@@ -58,7 +60,7 @@ class RestoreTargetDirectoryTests(unittest.TestCase):
         restic_cfg = {"working_directory": str(REPO_ROOT)}
 
         with tempfile.TemporaryDirectory() as target:
-            result = restore_workflow.normalize_restore_target_directory(
+            result = restore_paths.normalize_restore_target_directory(
                 target, restic_cfg
             )
 
@@ -68,7 +70,7 @@ class RestoreTargetDirectoryTests(unittest.TestCase):
 
     def test_normalize_target_rejects_empty_value(self):
         with self.assertRaises(BackupProblem) as error:
-            restore_workflow.normalize_restore_target_directory(
+            restore_paths.normalize_restore_target_directory(
                 "  ", {"working_directory": str(REPO_ROOT)}
             )
 
@@ -78,7 +80,7 @@ class RestoreTargetDirectoryTests(unittest.TestCase):
         restic_cfg = {"working_directory": str(REPO_ROOT)}
 
         with self.assertRaises(BackupProblem) as error:
-            restore_workflow.normalize_restore_target_directory(
+            restore_paths.normalize_restore_target_directory(
                 str(REPO_ROOT), restic_cfg
             )
 
@@ -95,7 +97,7 @@ class RestoreTargetDirectoryTests(unittest.TestCase):
         target = REPO_ROOT.joinpath("restic-repo", "data")
 
         with self.assertRaises(BackupProblem) as error:
-            restore_workflow.normalize_restore_target_directory(
+            restore_paths.normalize_restore_target_directory(
                 str(target), restic_cfg
             )
 
@@ -111,7 +113,7 @@ class RestoreTargetDirectoryTests(unittest.TestCase):
         target = REPO_ROOT.joinpath("server", "world", "restore-out")
 
         with self.assertRaises(BackupProblem) as error:
-            restore_workflow.normalize_restore_target_directory(
+            restore_paths.normalize_restore_target_directory(
                 str(target), restic_cfg
             )
 
@@ -126,7 +128,7 @@ class RestoreTargetDirectoryTests(unittest.TestCase):
             "repository": "./restic-repo",
         }
 
-        result = restore_workflow.normalize_restore_target_directory(
+        result = restore_paths.normalize_restore_target_directory(
             "restore-out", restic_cfg
         )
 

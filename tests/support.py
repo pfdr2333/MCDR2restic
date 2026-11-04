@@ -62,6 +62,7 @@ import mcdr2restic.core.i18n as i18n
 import mcdr2restic.defaults.config_template_resources as config_template_resources
 import mcdr2restic.restic.restic_lock_recovery as restic_lock_recovery
 import mcdr2restic.restic.restic_service as restic_service
+import mcdr2restic.restore.restore_paths as restore_paths
 import mcdr2restic.restore.restore_workflow as restore_workflow
 import tools.pack_plugin as pack_plugin
 import tools.verify_plugin as verify_plugin
@@ -145,7 +146,7 @@ from mcdr2restic.restore.restore_task_repository import (
     list_restore_tasks,
     restore_tasks_output,
 )
-from mcdr2restic.restore.restore_workflow import normalize_restore_include_path
+from mcdr2restic.restore.restore_paths import normalize_restore_include_path
 from mcdr2restic.snapshots.snapshot_cache import build_snapshot_cache_key
 from mcdr2restic.snapshots.snapshot_db import (
     insert_snapshot_row,
@@ -331,6 +332,7 @@ __all__ = [
     "start_restic_process",
     "resolve_restic_executable_path",
     "restore_tasks_output",
+    "restore_paths",
     "restore_workflow",
     "restic_lock_recovery",
     "restic_service",

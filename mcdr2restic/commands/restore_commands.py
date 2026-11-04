@@ -26,13 +26,15 @@ from mcdr2restic.restore.restore_task_repository import (
     list_restore_tasks,
     restore_tasks_output as render_restore_tasks_output,
 )
+from mcdr2restic.restore.restore_paths import (
+    normalize_restore_include_path,
+    normalize_restore_snapshot,
+    normalize_restore_target_directory,
+)
 from mcdr2restic.restore.restore_workflow import (
     create_restore_session,
     get_restore_apply_rejection,
     is_direct_restore_session,
-    normalize_restore_include_path,
-    normalize_restore_snapshot,
-    normalize_restore_target_directory,
     set_restore_session,
     start_direct_restore_thread,
     start_restore_pre_stop_thread,
