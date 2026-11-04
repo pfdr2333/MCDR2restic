@@ -60,6 +60,7 @@ from mcdr2restic.commands import command_handlers
 from mcdr2restic.core import bootstrap
 from mcdr2restic.core import i18n
 from mcdr2restic.defaults import config_template_resources
+from mcdr2restic.restic import restic_context
 from mcdr2restic.restic import restic_lock_recovery
 from mcdr2restic.restic import restic_service
 from mcdr2restic.restore import restore_paths
@@ -330,6 +331,7 @@ __all__ = [
     "resolve_known_online_players",
     "resolve_popen_executable",
     "resolve_restic_executable_path",
+    "restic_context",
     "restic_lock_recovery",
     "restic_service",
     "restore_paths",

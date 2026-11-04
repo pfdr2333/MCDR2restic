@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import os
 import time
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Dict, Optional
 
 from mcdreforged.api.all import PluginServerInterface
 
@@ -38,12 +38,13 @@ from mcdr2restic.restic.restic_guidance import command_root_from_config
 from mcdr2restic.restic.restic_lock_recovery import (
     run_restic_command_with_lock_recovery,
 )
+from mcdr2restic.restic.restic_context import (
+    ResticOperationContext,
+    SnapshotCacheInvalidator,
+)
 from mcdr2restic.restic.restic_result import assert_restic_success
 from mcdr2restic.core.runtime import PluginRuntime
 from mcdr2restic.core.utils import safe_int
-
-
-SnapshotCacheInvalidator = Callable[[PluginServerInterface, Dict[str, Any], str], None]
 
 
 def run_backup_body(
@@ -55,24 +56,17 @@ def run_backup_body(
 ) -> str:
     restic_cfg = cfg.get("restic", {})
     command_root = command_root_from_config(cfg)
-    deadline = make_restic_deadline(restic_cfg)
-    prepare_backup_repository(
-        app_runtime,
-        server,
-        restic_cfg,
-        deadline,
-        invalidate_snapshot_cache_func,
-        command_root,
+    ctx = ResticOperationContext(
+        app_runtime=app_runtime,
+        server=server,
+        restic_cfg=restic_cfg,
+        deadline=make_restic_deadline(restic_cfg),
+        invalidate_snapshot_cache=invalidate_snapshot_cache_func,
+        command_root=command_root,
     )
+    prepare_backup_repository(ctx)
     prepare_minecraft_for_backup(app_runtime, server, cfg)
-    return run_backup_command(
-        app_runtime,
-        server,
-        restic_cfg,
-        deadline,
-        invalidate_snapshot_cache_func,
-        command_root,
-    )
+    return run_backup_command(ctx)
 
 
 def run_maintenance_body(
@@ -82,97 +76,47 @@ def run_maintenance_body(
     invalidate_snapshot_cache_func: SnapshotCacheInvalidator,
 ):
     restic_cfg = cfg.get("restic", {})
-    command_root = command_root_from_config(cfg)
-    deadline = make_restic_deadline(restic_cfg)
-    newly_initialized = prepare_maintenance_repository(
-        app_runtime,
-        server,
-        restic_cfg,
-        deadline,
-        invalidate_snapshot_cache_func,
-        command_root,
+    ctx = ResticOperationContext(
+        app_runtime=app_runtime,
+        server=server,
+        restic_cfg=restic_cfg,
+        deadline=make_restic_deadline(restic_cfg),
+        invalidate_snapshot_cache=invalidate_snapshot_cache_func,
+        command_root=command_root_from_config(cfg),
     )
-    run_backup_maintenance(
-        app_runtime,
-        server,
-        restic_cfg,
-        deadline,
-        newly_initialized,
-        invalidate_snapshot_cache_func,
-        command_root,
-    )
+    newly_initialized = prepare_maintenance_repository(ctx)
+    run_backup_maintenance(ctx, newly_initialized)
 
 
-def prepare_backup_repository(
-    app_runtime: PluginRuntime,
-    server: PluginServerInterface,
-    restic_cfg: Dict[str, Any],
-    deadline: Optional[float],
-    invalidate_snapshot_cache_func: SnapshotCacheInvalidator,
-    command_root: str = "!!restic",
-) -> bool:
-    if not is_mc_ready(app_runtime, server):
+def prepare_backup_repository(ctx: ResticOperationContext) -> bool:
+    if not is_mc_ready(ctx.app_runtime, ctx.server):
         raise BackupProblem(i18n_key="error.backup.minecraft_not_ready")
-    assert_backup_sources_do_not_contain_repository(restic_cfg)
-    ensure_default_restic_executable_available(server, restic_cfg)
-    return ensure_restic_repository_initialized(
-        app_runtime,
-        server,
-        restic_cfg,
-        deadline,
-        invalidate_snapshot_cache_func,
-        command_root,
-    )
+    assert_backup_sources_do_not_contain_repository(ctx.restic_cfg)
+    ensure_default_restic_executable_available(ctx.server, ctx.restic_cfg)
+    return ensure_restic_repository_initialized(ctx)
 
 
-def prepare_maintenance_repository(
-    app_runtime: PluginRuntime,
-    server: PluginServerInterface,
-    restic_cfg: Dict[str, Any],
-    deadline: Optional[float],
-    invalidate_snapshot_cache_func: SnapshotCacheInvalidator,
-    command_root: str = "!!restic",
-) -> bool:
-    ensure_default_restic_executable_available(server, restic_cfg)
-    return ensure_restic_repository_initialized(
-        app_runtime,
-        server,
-        restic_cfg,
-        deadline,
-        invalidate_snapshot_cache_func,
-        command_root,
-    )
+def prepare_maintenance_repository(ctx: ResticOperationContext) -> bool:
+    ensure_default_restic_executable_available(ctx.server, ctx.restic_cfg)
+    return ensure_restic_repository_initialized(ctx)
 
 
-def run_backup_maintenance(
-    app_runtime: PluginRuntime,
-    server: PluginServerInterface,
-    restic_cfg: Dict[str, Any],
-    deadline: Optional[float],
-    newly_initialized: bool,
-    invalidate_snapshot_cache_func: SnapshotCacheInvalidator,
-    command_root: str = "!!restic",
-):
+def run_backup_maintenance(ctx: ResticOperationContext, newly_initialized: bool):
     if newly_initialized:
-        server.logger.info(
-            server_tr(server, "info.restic.maintenance_skipped_after_init")
+        ctx.server.logger.info(
+            server_tr(ctx.server, "info.restic.maintenance_skipped_after_init")
         )
         return
-    for command in restic_cfg.get(RESTIC_CFG_MAINTENANCE_COMMANDS, []):
-        check_canceled(app_runtime)
+    for command in ctx.restic_cfg.get(RESTIC_CFG_MAINTENANCE_COMMANDS, []):
+        check_canceled(ctx.app_runtime)
         result = run_restic_command_with_lock_recovery(
-            app_runtime,
-            server,
-            restic_cfg,
+            ctx,
             command,
             RESTIC_PHASE_MAINTENANCE,
-            deadline,
         )
-        assert_restic_success(restic_cfg, result, command_root)
-        invalidate_snapshot_cache_func(
-            server,
-            restic_cfg,
-            server_tr(server, "snapshot.cache.reason.maintenance_finished"),
+        assert_restic_success(ctx.restic_cfg, result, ctx.command_root)
+        invalidate_snapshot_cache_for_operation(
+            ctx, "snapshot.cache.reason.maintenance_finished"
         )
 
 
@@ -205,26 +149,16 @@ def prepare_minecraft_for_backup(
     )
 
 
-def run_backup_command(
-    app_runtime: PluginRuntime,
-    server: PluginServerInterface,
-    restic_cfg: Dict[str, Any],
-    deadline: Optional[float],
-    invalidate_snapshot_cache_func: SnapshotCacheInvalidator,
-    command_root: str = "!!restic",
-) -> str:
-    check_canceled(app_runtime)
+def run_backup_command(ctx: ResticOperationContext) -> str:
+    check_canceled(ctx.app_runtime)
     result = run_restic_command_with_lock_recovery(
-        app_runtime,
-        server,
-        restic_cfg,
-        restic_cfg.get(RESTIC_CFG_BACKUP_COMMAND, []),
+        ctx,
+        ctx.restic_cfg.get(RESTIC_CFG_BACKUP_COMMAND, []),
         RESTIC_COMMAND_BACKUP,
-        deadline,
     )
-    assert_restic_success(restic_cfg, result, command_root)
-    invalidate_snapshot_cache_func(
-        server, restic_cfg, server_tr(server, "snapshot.cache.reason.backup_finished")
+    assert_restic_success(ctx.restic_cfg, result, ctx.command_root)
+    invalidate_snapshot_cache_for_operation(
+        ctx, "snapshot.cache.reason.backup_finished"
     )
     return result.snapshot_id
 
@@ -236,14 +170,9 @@ def make_restic_deadline(restic_cfg: Dict[str, Any]) -> Optional[float]:
     return time.monotonic() + max(1, timeout_seconds)
 
 
-def ensure_restic_repository_initialized(
-    app_runtime: PluginRuntime,
-    server: PluginServerInterface,
-    restic_cfg: Dict[str, Any],
-    deadline: Optional[float],
-    invalidate_snapshot_cache_func: SnapshotCacheInvalidator,
-    command_root: str = "!!restic",
-) -> bool:
+def ensure_restic_repository_initialized(ctx: ResticOperationContext) -> bool:
+    restic_cfg = ctx.restic_cfg
+    server = ctx.server
     if not bool(restic_cfg.get(RESTIC_CFG_AUTO_INIT_LOCAL_REPOSITORY, True)):
         return False
     env = build_restic_environment(restic_cfg)
@@ -275,17 +204,19 @@ def ensure_restic_repository_initialized(
         )
     )
     result = run_restic_command_with_lock_recovery(
-        app_runtime,
-        server,
-        restic_cfg,
+        ctx,
         [RESTIC_COMMAND_INIT],
         RESTIC_COMMAND_INIT,
-        deadline,
     )
-    assert_restic_success(restic_cfg, result, command_root)
-    invalidate_snapshot_cache_func(
-        server,
-        restic_cfg,
-        server_tr(server, "snapshot.cache.reason.repository_initialized"),
+    assert_restic_success(restic_cfg, result, ctx.command_root)
+    invalidate_snapshot_cache_for_operation(
+        ctx, "snapshot.cache.reason.repository_initialized"
     )
     return True
+
+
+def invalidate_snapshot_cache_for_operation(ctx: ResticOperationContext, reason_key: str):
+    invalidate = ctx.invalidate_snapshot_cache
+    if invalidate is None:
+        return
+    invalidate(ctx.server, ctx.restic_cfg, server_tr(ctx.server, reason_key))

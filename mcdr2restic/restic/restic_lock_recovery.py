@@ -11,15 +11,15 @@ import platform
 import re
 import socket
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 from mcdreforged.api.all import PluginServerInterface
 
 from mcdr2restic.core.i18n import server_tr, tr_error
 from mcdr2restic.core.language import get_mcdr_language
 from mcdr2restic.core.models import BackupProblem, ResticCommandResult
-from mcdr2restic.core.runtime import PluginRuntime
 from mcdr2restic.restic.restic_constants import RESTIC_COMMAND_UNLOCK
+from mcdr2restic.restic.restic_context import ResticOperationContext
 from mcdr2restic.restic.restic_result import assert_restic_success
 from mcdr2restic.restic.restic_runner import run_restic_command
 
@@ -44,26 +44,23 @@ class ResticLockInfo:
 
 
 def run_restic_command_with_lock_recovery(
-    app_runtime: PluginRuntime,
-    server: PluginServerInterface,
-    restic_cfg: Dict[str, Any],
+    ctx: ResticOperationContext,
     configured_args: Any,
     phase: str,
-    deadline: Optional[float],
 ) -> ResticCommandResult:
     """Run a restic command and retry once after unlocking a stale local lock."""
 
     result = run_restic_command(
-        app_runtime, restic_cfg, configured_args, phase, deadline
+        ctx.app_runtime, ctx.restic_cfg, configured_args, phase, ctx.deadline
     )
     lock_info = recoverable_stale_lock_info(result)
     if lock_info is None:
         return result
-    if app_runtime.backup.cancel.is_set():
+    if ctx.app_runtime.backup.cancel.is_set():
         return result
 
     log_server_message(
-        server,
+        ctx.server,
         "warning",
         "warn.restic.lock_recovery_started",
         phase=phase,
@@ -71,31 +68,33 @@ def run_restic_command_with_lock_recovery(
         host=lock_info.host,
     )
     unlock_result = run_restic_command(
-        app_runtime,
-        restic_cfg,
+        ctx.app_runtime,
+        ctx.restic_cfg,
         [RESTIC_COMMAND_UNLOCK],
         RESTIC_COMMAND_UNLOCK,
-        deadline,
+        ctx.deadline,
     )
     try:
-        assert_restic_success(restic_cfg, unlock_result)
+        assert_restic_success(ctx.restic_cfg, unlock_result)
     except BackupProblem as exc:
         log_server_message(
-            server,
+            ctx.server,
             "warning",
             "warn.restic.lock_recovery_unlock_failed",
             phase=phase,
-            error=tr_error(get_mcdr_language(server), exc),
+            error=tr_error(get_mcdr_language(ctx.server), exc),
         )
         return result
 
     log_server_message(
-        server,
+        ctx.server,
         "info",
         "info.restic.lock_recovery_completed",
         phase=phase,
     )
-    return run_restic_command(app_runtime, restic_cfg, configured_args, phase, deadline)
+    return run_restic_command(
+        ctx.app_runtime, ctx.restic_cfg, configured_args, phase, ctx.deadline
+    )
 
 
 def recoverable_stale_lock_info(

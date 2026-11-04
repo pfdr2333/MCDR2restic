@@ -21,6 +21,7 @@ try:
         os,
         resolve_popen_executable,
         resolve_restic_executable_path,
+        restic_context,
         restic_lock_recovery,
         restic_service,
         start_restic_process,
@@ -50,6 +51,7 @@ except ImportError:
         os,
         resolve_popen_executable,
         resolve_restic_executable_path,
+        restic_context,
         restic_lock_recovery,
         restic_service,
         start_restic_process,
@@ -202,12 +204,9 @@ class ResticLockRecoveryTests(unittest.TestCase):
             mock.patch.object(restic_lock_recovery, "assert_restic_success"),
         ):
             result = restic_lock_recovery.run_restic_command_with_lock_recovery(
-                runtime,
-                server,
-                {},
+                restic_context.ResticOperationContext(runtime, server, {}),
                 ["forget"],
                 "maintenance",
-                None,
             )
 
         self.assertIs(result, retry_result)
@@ -360,7 +359,7 @@ class BackupFlowTests(unittest.TestCase):
         }
         restic_calls = []
 
-        def fake_run_restic(_runtime, _server, _restic_cfg, args, phase, _deadline):
+        def fake_run_restic(_ctx, args, phase):
             restic_calls.append((phase, list(args)))
             return ResticCommandResult(
                 phase, list(args), 0, "", "", 0, snapshot_id="abc123"
@@ -407,7 +406,7 @@ class BackupFlowTests(unittest.TestCase):
         }
         restic_calls = []
 
-        def fake_run_restic(_runtime, _server, _restic_cfg, args, phase, _deadline):
+        def fake_run_restic(_ctx, args, phase):
             restic_calls.append((phase, list(args)))
             return ResticCommandResult(phase, list(args), 0, "", "", 0)
 
