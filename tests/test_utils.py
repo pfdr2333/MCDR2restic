@@ -2,6 +2,8 @@ try:
     from .support import (
         FakeCommandSource,
         FakePluginServer,
+        RuntimeStatusProviders,
+        StatusViewContext,
         make_source_translate,
         non_negative_int,
         render_status_output,
@@ -15,6 +17,8 @@ except ImportError:
     from support import (
         FakeCommandSource,
         FakePluginServer,
+        RuntimeStatusProviders,
+        StatusViewContext,
         make_source_translate,
         non_negative_int,
         render_status_output,
@@ -62,15 +66,16 @@ class UtilsTests(unittest.TestCase):
         }
 
         output = render_status_output(
+            StatusViewContext.create(
+                cfg, "zh_cn", server, make_source_translate(source, server)
+            ),
+            RuntimeStatusProviders(
+                backup_running=lambda: False,
+                restore_running=lambda: False,
+                mc_ready=lambda _: True,
+            ),
             threading.Lock(),
-            cfg,
-            "zh_cn",
-            server,
             1,
-            backup_running_provider=lambda: False,
-            restore_running_provider=lambda: False,
-            mc_ready_provider=lambda _: True,
-            translate=make_source_translate(source, server),
         )
 
         self.assertIn("MCDR2Restic 状态", output)

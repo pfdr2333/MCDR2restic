@@ -20,6 +20,7 @@ from mcdr2restic.defaults.default_constants import (
     SNAPSHOT_QUERY_TIMEOUT_SECONDS,
 )
 from mcdr2restic.core.models import BackupProblem
+from mcdr2restic.snapshots.snapshot_query import SnapshotQueryContext
 from mcdr2restic.restic.restic_config import (
     get_effective_restic_repository,
     normalize_filesystem_path,
@@ -129,27 +130,18 @@ def get_snapshot_query_timeout(snapshot_cfg: Dict[str, Any]) -> int:
     )
 
 
-def ensure_snapshot_cache_fresh(
-    snapshot_query_lock: threading.Lock,
-    server: PluginServerInterface,
-    restic_cfg: Dict[str, Any],
-    cache_key: str,
-    snapshot_cfg: Dict[str, Any],
-    language: str,
-    command_root: str = "!!restic",
-) -> str:
-    if is_snapshot_cache_valid(server, snapshot_cfg, cache_key):
+def ensure_snapshot_cache_fresh(query: SnapshotQueryContext) -> str:
+    cache_key = build_snapshot_cache_key(query.restic_cfg)
+    if is_snapshot_cache_valid(query.server, query.snapshot_cfg, cache_key):
         return ""
-    if not snapshot_query_lock.acquire(blocking=False):
-        return localized_refresh_running(language)
+    if not query.query_lock.acquire(blocking=False):
+        return localized_refresh_running(query.language)
     try:
-        refresh_snapshot_cache(
-            server, restic_cfg, cache_key, snapshot_cfg, language, command_root
-        )
+        refresh_snapshot_cache(query, cache_key)
     except BackupProblem:
         return ""
     finally:
-        snapshot_query_lock.release()
+        query.query_lock.release()
     return ""
 
 
@@ -167,24 +159,17 @@ def localized_refresh_running(language: str) -> str:
     return tr(language, "snapshot.cache.refresh_running")
 
 
-def refresh_snapshot_cache(
-    server: PluginServerInterface,
-    restic_cfg: Dict[str, Any],
-    cache_key: str,
-    snapshot_cfg: Dict[str, Any],
-    language: str,
-    command_root: str = "!!restic",
-):
+def refresh_snapshot_cache(query: SnapshotQueryContext, cache_key: str):
     temp_key = make_snapshot_refresh_temp_key(cache_key)
     started = time.monotonic()
-    with closing(open_snapshot_db(server, snapshot_cfg)) as conn:
+    with closing(open_snapshot_db(query.server, query.snapshot_cfg)) as conn:
         try:
             count = import_restic_snapshots_to_sql(
-                restic_cfg,
+                query.restic_cfg,
                 conn,
                 temp_key,
-                get_snapshot_query_timeout(snapshot_cfg),
-                command_root,
+                get_snapshot_query_timeout(query.snapshot_cfg),
+                query.command_root,
             )
             commit_refreshed_snapshot_cache(
                 conn, cache_key, temp_key, count, time.monotonic() - started
@@ -194,7 +179,7 @@ def refresh_snapshot_cache(
                 conn,
                 cache_key,
                 temp_key,
-                tr_error(language, exc),
+                tr_error(query.language, exc),
                 time.monotonic() - started,
             )
             raise BackupProblem(error) from exc

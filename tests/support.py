@@ -101,7 +101,12 @@ from mcdr2restic.core.models import (
     ResticProgressState,
     RestoreSession,
 )
-from mcdr2restic.core.presentation import render_status_output, schedule_status_text
+from mcdr2restic.core.presentation import (
+    RuntimeStatusProviders,
+    StatusViewContext,
+    render_status_output,
+    schedule_status_text,
+)
 from mcdr2restic.core.runtime import create_runtime
 from mcdr2restic.core.utils import non_negative_int, safe_int, tail_text
 from mcdr2restic.defaults.default_config import DEFAULT_CONFIG, build_default_config
@@ -326,6 +331,7 @@ __all__ = [
     "read_snapshot_page",
     "render_message",
     "render_status_output",
+    "RuntimeStatusProviders",
     "repair_inconsistent_block_scalar_indentation",
     "replace_or_append_enabled_line",
     "resolve_known_online_players",
@@ -340,6 +346,7 @@ __all__ = [
     "runtime_player_set",
     "safe_int",
     "schedule_status_text",
+    "StatusViewContext",
     "server_is_running",
     "start_restic_process",
     "sys",

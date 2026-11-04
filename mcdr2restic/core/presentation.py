@@ -4,7 +4,8 @@ from __future__ import annotations
 import re
 import sqlite3
 import threading
-from typing import Any, Callable, Dict, List, Optional
+from dataclasses import dataclass
+from typing import Any, Callable, Dict, List, NamedTuple, Optional
 
 from mcdreforged.api.all import PluginServerInterface
 
@@ -24,6 +25,7 @@ from mcdr2restic.snapshots.snapshot_cache import (
 from mcdr2restic.snapshots.snapshot_db import (
     read_snapshot_page,
 )
+from mcdr2restic.snapshots.snapshot_query import SnapshotQueryContext
 from mcdr2restic.core.utils import non_negative_int
 
 
@@ -32,51 +34,66 @@ SNAPSHOT_PATHS_PREVIEW_MAX_LENGTH = 80
 SNAPSHOT_PATHS_PREVIEW_TRUNCATE_AT = 77
 
 
+@dataclass(frozen=True)
+class StatusViewContext:
+    """状态页与快照页共享的渲染上下文。"""
+
+    cfg: Dict[str, Any]
+    language: str
+    translate: Callable[..., str]
+    server: Optional[PluginServerInterface] = None
+
+    @classmethod
+    def create(
+        cls,
+        cfg: Dict[str, Any],
+        language: str,
+        server: Optional[PluginServerInterface],
+        translate: Optional[Callable[..., str]] = None,
+    ) -> "StatusViewContext":
+        return cls(
+            cfg=cfg,
+            language=language,
+            translate=normalize_translate(translate or language),
+            server=server,
+        )
+
+
+class RuntimeStatusProviders(NamedTuple):
+    """状态页所需的运行时状态探针。"""
+
+    backup_running: Callable[[], bool]
+    restore_running: Callable[[], bool]
+    mc_ready: Callable[[Optional[PluginServerInterface]], bool]
+
+
 def render_status_output(
+    ctx: StatusViewContext,
+    providers: RuntimeStatusProviders,
     snapshot_query_lock: threading.Lock,
-    cfg: Dict[str, Any],
-    language: str,
-    server: Optional[PluginServerInterface],
     snapshot_page: int,
-    backup_running_provider: Callable[[], bool],
-    restore_running_provider: Callable[[], bool],
-    mc_ready_provider: Callable[[Optional[PluginServerInterface]], bool],
-    translate: Optional[Callable[..., str]] = None,
 ) -> str:
-    translate = normalize_translate(translate or language)
-    status_view = build_status_view(
-        cfg,
-        translate,
-        language,
-        server,
-        backup_running_provider,
-        restore_running_provider,
-        mc_ready_provider,
-    )
+    status_view = build_status_view(ctx, providers)
     snapshot_lines = render_snapshot_status_lines(
-        snapshot_query_lock, cfg, translate, language, server, snapshot_page
+        ctx, snapshot_query_lock, snapshot_page
     )
-    return "\n".join(format_status_view(status_view, translate) + snapshot_lines)
+    return "\n".join(format_status_view(status_view, ctx.translate) + snapshot_lines)
 
 
 def build_status_view(
-    cfg: Dict[str, Any],
-    translate: Callable[..., str],
-    language: str,
-    server: Optional[PluginServerInterface],
-    backup_running_provider: Callable[[], bool],
-    restore_running_provider: Callable[[], bool],
-    mc_ready_provider: Callable[[Optional[PluginServerInterface]], bool],
+    ctx: StatusViewContext, providers: RuntimeStatusProviders
 ) -> Dict[str, Any]:
-    running = backup_running_provider()
+    cfg = ctx.cfg
+    translate = ctx.translate
+    running = providers.backup_running()
     activity = build_player_activity_view(cfg.get("runtime", {}), translate)
-    schedules = build_schedule_status_view(cfg, translate, language)
+    schedules = build_schedule_status_view(cfg, translate, ctx.language)
     last_backup_status_raw = activity.pop("last_backup_status_raw")
     return {
         "enabled": localized_bool(bool(cfg.get("enabled", True)), translate),
         "backup_running": localized_bool(running, translate),
-        "restore_running": localized_bool(restore_running_provider(), translate),
-        "mc_ready": localized_bool(mc_ready_provider(server), translate),
+        "restore_running": localized_bool(providers.restore_running(), translate),
+        "mc_ready": localized_bool(providers.mc_ready(ctx.server), translate),
         **activity,
         **schedules,
         "last_backup_status": localized_backup_status(
@@ -141,41 +158,40 @@ def format_status_view(
 
 
 def render_snapshot_status_lines(
+    ctx: StatusViewContext,
     snapshot_query_lock: threading.Lock,
-    cfg: Dict[str, Any],
-    translate: Callable[..., str],
-    language: str,
-    server: Optional[PluginServerInterface],
     page: int,
 ) -> List[str]:
+    translate = ctx.translate
+    server = ctx.server
     page = max(1, int(page))
     title = translate("snapshot.title")
     if server is None:
         return render_snapshot_status_message(title, translate, "snapshot.unavailable")
 
-    restic_cfg = cfg.get("restic", {}) if isinstance(cfg.get("restic"), dict) else {}
-    snapshot_cfg = get_snapshot_cache_config(cfg)
+    restic_cfg = ctx.cfg.get("restic", {}) if isinstance(ctx.cfg.get("restic"), dict) else {}
+    snapshot_cfg = get_snapshot_cache_config(ctx.cfg)
     if not bool(snapshot_cfg.get("enabled", True)):
         return render_snapshot_status_message(
             title, translate, "snapshot.cache_disabled"
         )
 
+    query = SnapshotQueryContext(
+        query_lock=snapshot_query_lock,
+        server=server,
+        restic_cfg=restic_cfg,
+        snapshot_cfg=snapshot_cfg,
+        language=ctx.language,
+        command_root=command_root_from_config(ctx.cfg),
+    )
     try:
-        page_context = load_snapshot_status_page(
-            snapshot_query_lock,
-            server,
-            restic_cfg,
-            snapshot_cfg,
-            language,
-            page,
-            command_root_from_config(cfg),
-        )
+        page_context = load_snapshot_status_page(query, page)
     except Exception as exc:
         return render_snapshot_status_message(
-            title, translate, "snapshot.query_failed", error=tr_error(language, exc)
+            title, translate, "snapshot.query_failed", error=tr_error(ctx.language, exc)
         )
 
-    return format_snapshot_status_page(cfg, translate, language, title, page_context)
+    return format_snapshot_status_page(ctx, title, page_context)
 
 
 def render_snapshot_status_message(
@@ -185,33 +201,22 @@ def render_snapshot_status_message(
 
 
 def load_snapshot_status_page(
-    snapshot_query_lock: threading.Lock,
-    server: PluginServerInterface,
-    restic_cfg: Dict[str, Any],
-    snapshot_cfg: Dict[str, Any],
-    language: str,
+    query: SnapshotQueryContext,
     requested_page: int,
-    command_root: str = "!!restic",
 ) -> Dict[str, Any]:
-    page_size = get_snapshot_page_size(snapshot_cfg)
-    cache_key = build_snapshot_cache_key(restic_cfg)
-    refresh_note = ensure_snapshot_cache_fresh(
-        snapshot_query_lock,
-        server,
-        restic_cfg,
-        cache_key,
-        snapshot_cfg,
-        language,
-        command_root,
-    )
+    page_size = get_snapshot_page_size(query.snapshot_cfg)
+    cache_key = build_snapshot_cache_key(query.restic_cfg)
+    refresh_note = ensure_snapshot_cache_fresh(query)
     page_data = read_snapshot_page(
-        server, cache_key, requested_page, page_size, snapshot_cfg
+        query.server, cache_key, requested_page, page_size, query.snapshot_cfg
     )
     total = int(page_data.get("total", 0))
     total_pages = max(1, (total + page_size - 1) // page_size)
     page = min(requested_page, total_pages)
     if page != requested_page:
-        page_data = read_snapshot_page(server, cache_key, page, page_size, snapshot_cfg)
+        page_data = read_snapshot_page(
+            query.server, cache_key, page, page_size, query.snapshot_cfg
+        )
     return {
         "page": page,
         "page_size": page_size,
@@ -223,20 +228,18 @@ def load_snapshot_status_page(
 
 
 def format_snapshot_status_page(
-    cfg: Dict[str, Any],
-    translate: Callable[..., str],
-    language: str,
+    ctx: StatusViewContext,
     title: str,
     page_context: Dict[str, Any],
 ) -> List[str]:
     page = int(page_context["page"])
     page_data = page_context["page_data"]
     lines = ["", "{}:".format(title)]
-    append_snapshot_cache_summary(lines, translate, page_context)
+    append_snapshot_cache_summary(lines, ctx.translate, page_context)
     append_snapshot_cache_notes(
-        lines, translate, page_data, str(page_context.get("refresh_note") or "")
+        lines, ctx.translate, page_data, str(page_context.get("refresh_note") or "")
     )
-    append_snapshot_rows(lines, cfg, translate, language, page, page_context)
+    append_snapshot_rows(lines, ctx, page, page_context)
     return lines
 
 
@@ -281,12 +284,11 @@ def append_snapshot_cache_notes(
 
 def append_snapshot_rows(
     lines: List[str],
-    cfg: Dict[str, Any],
-    translate: Callable[..., str],
-    language: str,
+    ctx: StatusViewContext,
     page: int,
     page_context: Dict[str, Any],
 ):
+    translate = ctx.translate
     page_data = page_context["page_data"]
     rows = page_data.get("rows", [])
     if not rows:
@@ -297,21 +299,20 @@ def append_snapshot_rows(
     for index, row in enumerate(rows, start=(page - 1) * page_size + 1):
         lines.append(format_snapshot_line(index, row, translate))
     append_snapshot_next_page_hint(
-        lines, cfg, translate, page, int(page_context["total_pages"])
+        lines, ctx, page, int(page_context["total_pages"])
     )
 
 
 def append_snapshot_next_page_hint(
     lines: List[str],
-    cfg: Dict[str, Any],
-    translate: Callable[..., str],
+    ctx: StatusViewContext,
     page: int,
     total_pages: int,
 ):
     if page >= total_pages:
         return
-    root = str(cfg.get("command", {}).get("root", "!!restic"))
-    lines.append(translate("snapshot.next_page", root=root, page=page + 1))
+    root = str(ctx.cfg.get("command", {}).get("root", "!!restic"))
+    lines.append(ctx.translate("snapshot.next_page", root=root, page=page + 1))
 
 
 def format_snapshot_line(

@@ -9,7 +9,11 @@ from mcdr2restic.commands.command_context import CommandContext
 from mcdr2restic.core.i18n import make_source_translate
 from mcdr2restic.core.language import get_source_language
 from mcdr2restic.minecraft.minecraft_service import is_backup_running, is_mc_ready
-from mcdr2restic.core.presentation import render_status_output
+from mcdr2restic.core.presentation import (
+    RuntimeStatusProviders,
+    StatusViewContext,
+    render_status_output,
+)
 from mcdr2restic.restore.restore_workflow import is_restore_running
 from mcdr2restic.config.state_store import get_config_snapshot
 from mcdr2restic.core.utils import non_negative_int
@@ -37,14 +41,15 @@ class StatusCommands:
         language = get_source_language(source, server)
         source.reply(
             render_status_output(
+                StatusViewContext.create(
+                    cfg, language, server, make_source_translate(source, server)
+                ),
+                RuntimeStatusProviders(
+                    backup_running=lambda: is_backup_running(app_runtime),
+                    restore_running=lambda: is_restore_running(app_runtime),
+                    mc_ready=lambda target: is_mc_ready(app_runtime, target),
+                ),
                 app_runtime.service.snapshot_query_lock,
-                cfg,
-                language,
-                server,
                 page,
-                backup_running_provider=lambda: is_backup_running(app_runtime),
-                restore_running_provider=lambda: is_restore_running(app_runtime),
-                mc_ready_provider=lambda target: is_mc_ready(app_runtime, target),
-                translate=make_source_translate(source, server),
             )
         )
