@@ -6,7 +6,8 @@ import queue
 import subprocess
 import threading
 import time
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from dataclasses import dataclass, field
+from typing import Any, Dict, List, NamedTuple, Optional, Sequence, Tuple
 
 from mcdr2restic.config.state_store import get_config_snapshot
 from mcdr2restic.defaults.default_constants import (
@@ -53,6 +54,35 @@ RESTIC_PROCESS_WAIT_TIMEOUT_SECONDS = 5
 RESTIC_READER_JOIN_TIMEOUT_SECONDS = 2
 
 
+class ResticProcessOutcome(NamedTuple):
+    """单次 restic 进程执行产生的输出与退出信息。"""
+
+    stdout: str
+    stderr: str
+    return_code: int
+    timed_out: bool
+
+
+@dataclass
+class ResticStreamBuffers:
+    """输出读取过程中累积的流缓冲。"""
+
+    stdout_lines: List[str] = field(default_factory=list)
+    stderr_lines: List[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class ResticStreamSession:
+    """一次 restic 进程输出读取会话的固定上下文。"""
+
+    app_runtime: PluginRuntime
+    process: subprocess.Popen
+    progress: ResticProgressState
+    progress_interval: int
+    deadline: Optional[float]
+    output_queue: "queue.Queue[Tuple[str, Optional[str]]]"
+
+
 def resolve_popen_executable(executable: str, cwd: Optional[str]) -> str:
     text = str(executable or "").strip()
     if not text or os.path.isabs(text):
@@ -84,21 +114,17 @@ def run_restic_command(
     progress_interval = get_restic_progress_interval(restic_cfg)
     app_runtime.backup.current_process = process
     try:
-        stdout, stderr, return_code, timed_out = read_restic_process_output(
+        outcome = read_restic_process_output(
             app_runtime, process, progress, progress_interval, deadline
         )
     finally:
         app_runtime.backup.current_process = None
 
-    assert_restic_process_completed(
-        app_runtime, restic_cfg, phase, started, stdout, stderr, timed_out
-    )
+    assert_restic_process_completed(app_runtime, restic_cfg, phase, started, outcome)
     maybe_emit_restic_progress(
         app_runtime.service.server, progress, progress_interval, force=True
     )
-    return build_restic_command_result(
-        phase, args, return_code, stdout, stderr, started, progress
-    )
+    return build_restic_command_result(phase, args, outcome, started, progress)
 
 
 def assert_restic_process_completed(
@@ -106,14 +132,12 @@ def assert_restic_process_completed(
     restic_cfg: Dict[str, Any],
     phase: str,
     started: float,
-    stdout: str,
-    stderr: str,
-    timed_out: bool,
+    outcome: ResticProcessOutcome,
 ):
     if app_runtime.backup.cancel.is_set():
         raise BackupCanceled(i18n_key="error.backup.cancel_requested")
-    if timed_out:
-        raise_restic_timeout(restic_cfg, phase, started, stdout, stderr)
+    if outcome.timed_out:
+        raise_restic_timeout(restic_cfg, phase, started, outcome.stdout, outcome.stderr)
 
 
 def normalize_restic_phase_args(configured_args: Any, phase: str) -> List[str]:
@@ -188,52 +212,44 @@ def read_restic_process_output(
     progress: ResticProgressState,
     progress_interval: int,
     deadline: Optional[float],
-) -> Tuple[str, str, int, bool]:
+) -> ResticProcessOutcome:
     output_queue: "queue.Queue[Tuple[str, Optional[str]]]" = queue.Queue()
     reader_threads = start_restic_reader_threads(process, output_queue)
+    session = ResticStreamSession(
+        app_runtime=app_runtime,
+        process=process,
+        progress=progress,
+        progress_interval=progress_interval,
+        deadline=deadline,
+        output_queue=output_queue,
+    )
     try:
-        stdout_lines, stderr_lines, timed_out = consume_restic_output(
-            app_runtime,
-            process,
-            progress,
-            progress_interval,
-            deadline,
-            output_queue,
-            len(reader_threads),
-        )
+        buffers, timed_out = consume_restic_output(session, len(reader_threads))
         return_code = wait_for_restic_exit(process, get_runtime_language(app_runtime))
-        return "".join(stdout_lines), "".join(stderr_lines), return_code, timed_out
+        return ResticProcessOutcome(
+            "".join(buffers.stdout_lines),
+            "".join(buffers.stderr_lines),
+            return_code,
+            timed_out,
+        )
     finally:
         join_restic_reader_threads(reader_threads)
 
 
 def consume_restic_output(
-    app_runtime: PluginRuntime,
-    process: subprocess.Popen,
-    progress: ResticProgressState,
-    progress_interval: int,
-    deadline: Optional[float],
-    output_queue: "queue.Queue[Tuple[str, Optional[str]]]",
+    session: ResticStreamSession,
     active_streams: int,
-) -> Tuple[List[str], List[str], bool]:
-    stdout_lines: List[str] = []
-    stderr_lines: List[str] = []
+) -> Tuple[ResticStreamBuffers, bool]:
+    buffers = ResticStreamBuffers()
     timed_out = False
     while active_streams > 0:
-        timed_out = ensure_restic_process_can_continue(app_runtime, process, deadline)
+        timed_out = ensure_restic_process_can_continue(
+            session.app_runtime, session.process, session.deadline
+        )
         if timed_out:
             break
-        active_streams = consume_restic_output_item(
-            app_runtime,
-            progress,
-            progress_interval,
-            output_queue,
-            active_streams,
-            stdout_lines,
-            stderr_lines,
-            deadline,
-        )
-    return stdout_lines, stderr_lines, timed_out
+        active_streams = consume_restic_output_item(session, active_streams, buffers)
+    return buffers, timed_out
 
 
 def ensure_restic_process_can_continue(
@@ -265,30 +281,37 @@ def ensure_restic_process_can_continue(
 
 
 def consume_restic_output_item(
-    app_runtime: PluginRuntime,
-    progress: ResticProgressState,
-    progress_interval: int,
-    output_queue: "queue.Queue[Tuple[str, Optional[str]]]",
+    session: ResticStreamSession,
     active_streams: int,
-    stdout_lines: List[str],
-    stderr_lines: List[str],
-    deadline: Optional[float],
+    buffers: ResticStreamBuffers,
 ) -> int:
     wait = compute_restic_queue_wait(
-        progress, progress_interval, get_deadline_remaining(deadline)
+        session.progress,
+        session.progress_interval,
+        get_deadline_remaining(session.deadline),
     )
     try:
-        stream_name, line = output_queue.get(timeout=wait)
+        stream_name, line = session.output_queue.get(timeout=wait)
     except queue.Empty:
         maybe_emit_restic_progress(
-            app_runtime.service.server, progress, progress_interval
+            session.app_runtime.service.server,
+            session.progress,
+            session.progress_interval,
         )
         return active_streams
     if line is None:
         return active_streams - 1
-    append_restic_output_line(stream_name, line, stdout_lines, stderr_lines)
-    handle_restic_stream_line(app_runtime.service.server, progress, stream_name, line)
-    maybe_emit_restic_progress(app_runtime.service.server, progress, progress_interval)
+    append_restic_output_line(
+        stream_name, line, buffers.stdout_lines, buffers.stderr_lines
+    )
+    handle_restic_stream_line(
+        session.app_runtime.service.server, session.progress, stream_name, line
+    )
+    maybe_emit_restic_progress(
+        session.app_runtime.service.server,
+        session.progress,
+        session.progress_interval,
+    )
     return active_streams
 
 
@@ -346,9 +369,7 @@ def raise_restic_timeout(
 def build_restic_command_result(
     phase: str,
     args: List[str],
-    return_code: int,
-    stdout: str,
-    stderr: str,
+    outcome: ResticProcessOutcome,
     started: float,
     progress: ResticProgressState,
 ) -> ResticCommandResult:
@@ -356,9 +377,9 @@ def build_restic_command_result(
     return ResticCommandResult(
         phase=phase,
         args=args,
-        return_code=int(return_code),
-        stdout=stdout,
-        stderr=stderr,
+        return_code=int(outcome.return_code),
+        stdout=outcome.stdout,
+        stderr=outcome.stderr,
         duration_seconds=time.monotonic() - started,
         summary=summary,
         json_errors=progress.json_errors or [],
