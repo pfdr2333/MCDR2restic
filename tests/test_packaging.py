@@ -37,6 +37,11 @@ class BootstrapTests(unittest.TestCase):
         self.assertFalse(hasattr(bootstrap, "run_pip_command"))
 
 
+def load_plugin_version() -> str:
+    with open(REPO_ROOT / "mcdreforged.plugin.json", "r", encoding="utf8") as file:
+        return json.load(file)["version"]
+
+
 class PackagingTests(unittest.TestCase):
     def test_metadata_declares_root_resources_for_packaging(self):
         with open(REPO_ROOT / "mcdreforged.plugin.json", "r", encoding="utf8") as file:
@@ -54,7 +59,9 @@ class PackagingTests(unittest.TestCase):
             with zipfile.ZipFile(archive_path, "r") as archive:
                 names = archive.namelist()
 
-        self.assertEqual(archive_path.name, "MCDR2Restic_v0.5.0.mcdr")
+        self.assertEqual(
+            archive_path.name, "MCDR2Restic_v{}.mcdr".format(load_plugin_version())
+        )
         self.assertIn("mcdr2restic/__init__.py", names)
         self.assertIn("lang/zh_cn.json", names)
         self.assertIn("lang/zh_tw.json", names)
@@ -72,12 +79,13 @@ class PackagingTests(unittest.TestCase):
         self.assertFalse(any("__pycache__" in name for name in names))
 
     def test_release_verification_checks_tag_and_archive_content(self):
+        version = load_plugin_version()
         with tempfile.TemporaryDirectory() as temp_dir:
             archive_path = pack_plugin.pack_plugin(REPO_ROOT, Path(temp_dir))
             metadata = pack_plugin.load_plugin_metadata(REPO_ROOT)
 
-            verify_plugin.verify_git_tag(metadata, "v0.5.0")
+            verify_plugin.verify_git_tag(metadata, "v{}".format(version))
             verify_plugin.verify_archive(REPO_ROOT, archive_path, metadata)
 
             with self.assertRaises(ValueError):
-                verify_plugin.verify_git_tag(metadata, "v0.5.1")
+                verify_plugin.verify_git_tag(metadata, "v{}.1".format(version))
