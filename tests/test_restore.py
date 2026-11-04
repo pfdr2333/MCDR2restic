@@ -323,25 +323,49 @@ class RestoreWorkflowTests(unittest.TestCase):
 
         self.assertEqual(
             restore_workflow.get_restore_apply_rejection(
-                runtime, server, translate, [], lambda _: False, lambda *_: True
+                runtime,
+                server,
+                translate,
+                [],
+                restore_workflow.RestoreReadinessProviders(
+                    backup_running=lambda _: False, mc_ready=lambda *_: True
+                ),
             ),
             "error.restore.no_tasks",
         )
         self.assertEqual(
             restore_workflow.get_restore_apply_rejection(
-                runtime, server, translate, [{}], lambda _: True, lambda *_: True
+                runtime,
+                server,
+                translate,
+                [{}],
+                restore_workflow.RestoreReadinessProviders(
+                    backup_running=lambda _: True, mc_ready=lambda *_: True
+                ),
             ),
             "error.restore.backup_running",
         )
         self.assertEqual(
             restore_workflow.get_restore_apply_rejection(
-                runtime, server, translate, [{}], lambda _: False, lambda *_: False
+                runtime,
+                server,
+                translate,
+                [{}],
+                restore_workflow.RestoreReadinessProviders(
+                    backup_running=lambda _: False, mc_ready=lambda *_: False
+                ),
             ),
             "error.restore.minecraft_not_ready",
         )
         self.assertEqual(
             restore_workflow.get_restore_apply_rejection(
-                runtime, server, translate, [{}], lambda _: False, lambda *_: True
+                runtime,
+                server,
+                translate,
+                [{}],
+                restore_workflow.RestoreReadinessProviders(
+                    backup_running=lambda _: False, mc_ready=lambda *_: True
+                ),
             ),
             "",
         )

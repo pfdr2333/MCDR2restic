@@ -5,6 +5,7 @@ try:
         FakePluginServer,
         FakeServer,
         ProcessTimeoutState,
+        RestoreTaskRecord,
         TerminateResult,
         add_restore_task,
         assert_snapshot_import_finished,
@@ -30,6 +31,7 @@ except ImportError:
         FakePluginServer,
         FakeServer,
         ProcessTimeoutState,
+        RestoreTaskRecord,
         TerminateResult,
         add_restore_task,
         assert_snapshot_import_finished,
@@ -138,7 +140,10 @@ class SnapshotDatabaseTests(unittest.TestCase):
             snapshot_cfg = {"database": "snapshots.sqlite3"}
 
             task_id = add_restore_task(
-                server, snapshot_cfg, "cache-a", "abcdef12", "file", "/world/level.dat"
+                server,
+                snapshot_cfg,
+                "cache-a",
+                RestoreTaskRecord("abcdef12", "file", "/world/level.dat"),
             )
             output = restore_tasks_output(
                 server, snapshot_cfg, "cache-a", "en_us", "!!restic"
@@ -155,7 +160,10 @@ class SnapshotDatabaseTests(unittest.TestCase):
             snapshot_cfg = {"database": "snapshots.sqlite3"}
 
             task_id = add_restore_task(
-                server, snapshot_cfg, "cache-a", "abcdef12", "full", "/", "/tmp/out"
+                server,
+                snapshot_cfg,
+                "cache-a",
+                RestoreTaskRecord("abcdef12", "full", "/", "/tmp/out"),
             )
             rows = list_restore_tasks(server, snapshot_cfg, "cache-a")
             output = restore_tasks_output(
@@ -176,7 +184,10 @@ class SnapshotDatabaseTests(unittest.TestCase):
             plugin_server = FakePluginServer(language="en_us")
 
             task_id = add_restore_task(
-                server, snapshot_cfg, "cache-a", "abcdef12", "file", "/world/level.dat"
+                server,
+                snapshot_cfg,
+                "cache-a",
+                RestoreTaskRecord("abcdef12", "file", "/world/level.dat"),
             )
             output = restore_tasks_output(
                 server,
@@ -195,8 +206,12 @@ class SnapshotDatabaseTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             server = FakeServer(temp_dir)
             snapshot_cfg = {"database": "snapshots.sqlite3"}
-            add_restore_task(server, snapshot_cfg, "cache-a", "a", "full", "/")
-            add_restore_task(server, snapshot_cfg, "cache-b", "b", "full", "/")
+            add_restore_task(
+                server, snapshot_cfg, "cache-a", RestoreTaskRecord("a", "full", "/")
+            )
+            add_restore_task(
+                server, snapshot_cfg, "cache-b", RestoreTaskRecord("b", "full", "/")
+            )
 
             self.assertEqual(
                 [

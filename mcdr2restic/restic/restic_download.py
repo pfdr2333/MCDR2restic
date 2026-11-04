@@ -13,6 +13,7 @@ import tempfile
 import urllib.error
 import urllib.request
 import zipfile
+from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from mcdreforged.api.all import PluginServerInterface
@@ -140,32 +141,43 @@ def download_and_install_restic(
     install_restic_from_urls(
         server,
         restic_cfg,
-        asset_url,
-        asset_name,
-        asset_keyword,
-        output_name,
-        target_path,
-        timeout,
+        ResticDownloadTarget(
+            asset_url=asset_url,
+            asset_name=asset_name,
+            asset_keyword=asset_keyword,
+            output_name=output_name,
+            target_path=target_path,
+            timeout=timeout,
+        ),
     )
+
+
+@dataclass(frozen=True)
+class ResticDownloadTarget:
+    """一次 restic 下载安装任务的资源描述。"""
+
+    asset_url: str
+    asset_name: str
+    asset_keyword: str
+    output_name: str
+    target_path: str
+    timeout: int
 
 
 def install_restic_from_urls(
     server: PluginServerInterface,
     restic_cfg: Dict[str, Any],
-    asset_url: str,
-    asset_name: str,
-    asset_keyword: str,
-    output_name: str,
-    target_path: str,
-    timeout: int,
+    target: ResticDownloadTarget,
 ):
     urls = build_download_urls(
-        asset_url, restic_cfg.get(RESTIC_CFG_DOWNLOAD_PROXY_PREFIXES, [])
+        target.asset_url, restic_cfg.get(RESTIC_CFG_DOWNLOAD_PROXY_PREFIXES, [])
     )
     last_error = ""
-    os.makedirs(os.path.dirname(target_path) or ".", exist_ok=True)
+    os.makedirs(os.path.dirname(target.target_path) or ".", exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="mcdr2restic-") as temp_dir:
-        archive_path = os.path.join(temp_dir, asset_name or "restic-download")
+        archive_path = os.path.join(
+            temp_dir, target.asset_name or "restic-download"
+        )
         for url in urls:
             try:
                 server.logger.info(
@@ -173,15 +185,18 @@ def install_restic_from_urls(
                         server, "info.restic.downloading", url=mask_download_url(url)
                     )
                 )
-                download_file(url, archive_path, timeout)
+                download_file(url, archive_path, target.timeout)
                 install_restic_archive(
-                    archive_path, asset_keyword, output_name, target_path
+                    archive_path,
+                    target.asset_keyword,
+                    target.output_name,
+                    target.target_path,
                 )
                 server.logger.info(
                     server_tr(
                         server,
                         "info.restic.auto_download.completed",
-                        target_path=target_path,
+                        target_path=target.target_path,
                     )
                 )
                 return
@@ -193,7 +208,8 @@ def install_restic_from_urls(
                     )
                 )
     raise BackupProblem(
-        i18n_key="error.restic.auto_download_failed", error=last_error or asset_url
+        i18n_key="error.restic.auto_download_failed",
+        error=last_error or target.asset_url,
     )
 
 

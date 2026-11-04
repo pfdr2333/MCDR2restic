@@ -6,7 +6,10 @@ from typing import Any, Callable, Dict, Optional
 from mcdr2restic.core.i18n import config_language, server_tr
 from mcdr2restic.core.language import get_mcdr_language
 from mcdr2restic.core.runtime import PluginRuntime
-from mcdr2restic.notifications.message_templates import render_message
+from mcdr2restic.notifications.message_templates import (
+    MessageRenderOptions,
+    render_message,
+)
 
 
 ConfigProvider = Callable[[], Dict[str, Any]]
@@ -27,7 +30,10 @@ class NotificationDispatcher:
         cfg = cfg or self.config_provider()
         language = self._language()
         log_text = render_message(
-            template_key, values, cfg, logger=self._logger(), language=language
+            template_key,
+            values,
+            cfg,
+            MessageRenderOptions(logger=self._logger(), language=language),
         )
         self._log(log_text, failure)
         self._notify_onebot(template_key, values, cfg, language)
@@ -65,9 +71,11 @@ class NotificationDispatcher:
             template_key,
             values,
             cfg,
-            str(onebot_cfg.get("message_prefix", "[MCDR2Restic]")),
-            self._logger(),
-            language,
+            MessageRenderOptions(
+                prefix=str(onebot_cfg.get("message_prefix", "[MCDR2Restic]")),
+                logger=self._logger(),
+                language=language,
+            ),
         )
         for qid in onebot_cfg.get("admin_qqs", []):
             self._send_onebot_message(qid, text)
@@ -97,9 +105,11 @@ class NotificationDispatcher:
             template_key,
             values,
             cfg,
-            str(discord_cfg.get("message_prefix", "[MCDR2Restic]")),
-            self._logger(),
-            language,
+            MessageRenderOptions(
+                prefix=str(discord_cfg.get("message_prefix", "[MCDR2Restic]")),
+                logger=self._logger(),
+                language=language,
+            ),
         )
         try:
             self.app_runtime.service.discord.send_message(text)

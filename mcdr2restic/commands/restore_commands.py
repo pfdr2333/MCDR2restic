@@ -20,6 +20,7 @@ from mcdr2restic.core.language import get_source_language
 from mcdr2restic.core.models import BackupProblem, RestoreSession
 from mcdr2restic.minecraft.minecraft_service import is_backup_running, is_mc_ready
 from mcdr2restic.restore.restore_task_repository import (
+    RestoreTaskRecord,
     add_restore_task as add_restore_task_to_repository,
     clear_restore_tasks,
     delete_restore_task,
@@ -32,6 +33,7 @@ from mcdr2restic.restore.restore_paths import (
     normalize_restore_target_directory,
 )
 from mcdr2restic.restore.restore_workflow import (
+    RestoreReadinessProviders,
     create_restore_session,
     get_restore_apply_rejection,
     is_direct_restore_session,
@@ -141,10 +143,12 @@ class RestoreCommands:
             server,
             self.current_snapshot_cache_config(cfg),
             self.current_restore_cache_key(cfg),
-            snapshot,
-            item_type,
-            include_path,
-            target_directory,
+            RestoreTaskRecord(
+                snapshot=snapshot,
+                item_type=item_type,
+                include_path=include_path,
+                target_directory=target_directory,
+            ),
         )
 
     def restore_target_directory(
@@ -310,8 +314,10 @@ class RestoreCommands:
             server,
             translate,
             tasks,
-            is_backup_running,
-            is_mc_ready,
+            RestoreReadinessProviders(
+                backup_running=is_backup_running,
+                mc_ready=is_mc_ready,
+            ),
         )
         if rejection:
             source.reply(rejection)

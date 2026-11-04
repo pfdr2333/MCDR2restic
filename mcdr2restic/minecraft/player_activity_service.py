@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, NamedTuple, Optional
 
 from mcdreforged.api.all import PluginServerInterface
 
@@ -144,26 +144,37 @@ def query_online_players(
             )
         )
         return None
-    record_online_sample(app_runtime, server, command, result, count, names)
+    record_online_sample(
+        app_runtime, server, OnlineSample(command, result, count, names)
+    )
     return count
+
+
+class OnlineSample(NamedTuple):
+    """一次在线玩家查询采样的原始输入。"""
+
+    command: str
+    result: Any
+    count: int
+    names: list
 
 
 def record_online_sample(
     app_runtime: PluginRuntime,
     server: PluginServerInterface,
-    command: str,
-    result: Any,
-    count: int,
-    names,
+    sample: OnlineSample,
 ):
     with app_runtime.config_state.lock:
         ensure_runtime(app_runtime.config_state.config)
         runtime_state = app_runtime.config_state.config["runtime"]
         runtime_state["known_online_players"] = resolve_known_online_players(
-            runtime_state, count, names
+            runtime_state, sample.count, sample.names
         )
         mark_player_activity_unlocked(
-            runtime_state, count, "rcon {}".format(command), tail_text(str(result), 300)
+            runtime_state,
+            sample.count,
+            "rcon {}".format(sample.command),
+            tail_text(str(sample.result), 300),
         )
         save_config_unlocked(app_runtime, server)
 

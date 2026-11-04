@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import sqlite3
 from contextlib import closing
-from typing import Any, Dict, List
+from typing import Any, Dict, List, NamedTuple
 
 from mcdreforged.api.all import PluginServerInterface
 
@@ -12,14 +12,20 @@ from mcdr2restic.snapshots.snapshot_db import open_snapshot_db
 from mcdr2restic.core.utils import now_text
 
 
+class RestoreTaskRecord(NamedTuple):
+    """待写入 restore_tasks 表的一行任务数据。"""
+
+    snapshot: str
+    item_type: str
+    include_path: str
+    target_directory: str = ""
+
+
 def add_restore_task(
     server: PluginServerInterface,
     snapshot_cfg: Dict[str, Any],
     cache_key: str,
-    snapshot: str,
-    item_type: str,
-    include_path: str,
-    target_directory: str = "",
+    record: RestoreTaskRecord,
 ) -> int:
     with closing(open_snapshot_db(server, snapshot_cfg)) as conn:
         with conn:
@@ -32,10 +38,10 @@ def add_restore_task(
                 (
                     cache_key,
                     now_text(),
-                    snapshot,
-                    item_type,
-                    include_path,
-                    target_directory,
+                    record.snapshot,
+                    record.item_type,
+                    record.include_path,
+                    record.target_directory,
                 ),
             )
         return int(cursor.lastrowid)

@@ -147,6 +147,7 @@ from mcdr2restic.restic.restic_termination import (
     termination_failure_suffix,
 )
 from mcdr2restic.restore.restore_task_repository import (
+    RestoreTaskRecord,
     add_restore_task,
     clear_restore_tasks,
     list_restore_tasks,
@@ -280,6 +281,7 @@ __all__ = [
     "ResticProgressState",
     "RestoreSession",
     "TerminateResult",
+    "RestoreTaskRecord",
     "add_restore_task",
     "apply_config_file_migrations",
     "assert_restic_success",

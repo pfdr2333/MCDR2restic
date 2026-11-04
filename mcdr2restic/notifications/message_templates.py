@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
-from mcdr2restic.core.i18n import tr
+from mcdr2restic.core.i18n import DEFAULT_LANGUAGE, tr
 from mcdr2restic.defaults.default_config import build_default_config
 from mcdr2restic.defaults.message_defaults import get_default_message_template
 
@@ -13,25 +14,33 @@ class SafeFormatDict(dict):
         return "{" + str(key) + "}"
 
 
+@dataclass(frozen=True)
+class MessageRenderOptions:
+    """渲染通知消息时的输出选项。"""
+
+    prefix: Optional[str] = None
+    logger: Optional[Any] = None
+    language: str = DEFAULT_LANGUAGE
+
+
 def render_message(
     template_key: str,
     values: Optional[Dict[str, Any]] = None,
     cfg: Optional[Dict[str, Any]] = None,
-    prefix: Optional[str] = None,
-    logger: Optional[Any] = None,
-    language: str = "zh_cn",
+    options: Optional[MessageRenderOptions] = None,
 ) -> str:
+    options = options or MessageRenderOptions()
     cfg = cfg or build_default_config()
     onebot_cfg = cfg.get("onebot", {})
     template = get_message_template(template_key, cfg)
-    data = build_message_values(template_key, values, onebot_cfg, prefix)
+    data = build_message_values(template_key, values, onebot_cfg, options.prefix)
     try:
         return template.format_map(data)
     except Exception as exc:
-        if logger is not None:
-            logger.warning(
+        if options.logger is not None:
+            options.logger.warning(
                 tr(
-                    language,
+                    options.language,
                     "warn.notify.message_template_format_failed",
                     template_key=template_key,
                     error=exc,

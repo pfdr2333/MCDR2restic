@@ -5,7 +5,7 @@ import copy
 import threading
 import time
 import traceback
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, NamedTuple, Optional
 
 from mcdreforged.api.all import PluginServerInterface
 
@@ -58,20 +58,26 @@ def is_direct_restore_session(tasks: List[Dict[str, Any]]) -> bool:
     )
 
 
+class RestoreReadinessProviders(NamedTuple):
+    """恢复前就绪状态探针。"""
+
+    backup_running: Callable[[PluginRuntime], bool]
+    mc_ready: Callable[[PluginRuntime, PluginServerInterface], bool]
+
+
 def get_restore_apply_rejection(
     app_runtime: PluginRuntime,
     server: PluginServerInterface,
     translate_or_language: Any,
     tasks: List[Dict[str, Any]],
-    backup_running_provider: Callable[[PluginRuntime], bool],
-    mc_ready_provider: Callable[[PluginRuntime, PluginServerInterface], bool],
+    providers: RestoreReadinessProviders,
 ) -> str:
     translate = normalize_translate(translate_or_language)
     if not tasks:
         return translate("error.restore.no_tasks")
-    if backup_running_provider(app_runtime):
+    if providers.backup_running(app_runtime):
         return translate("error.restore.backup_running")
-    if not mc_ready_provider(app_runtime, server):
+    if not providers.mc_ready(app_runtime, server):
         return translate("error.restore.minecraft_not_ready")
     return ""
 
