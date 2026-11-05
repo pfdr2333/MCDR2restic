@@ -52,7 +52,7 @@ class BackupRunnerTests(unittest.TestCase):
         self.assertTrue(thread_factory.call_args.kwargs["daemon"])
         fake_thread.start.assert_called_once_with()
         self.assertTrue(runtime.backup.lock.locked())
-        runner._release_backup_slot()
+        runtime.release_backup_slot()
         self.assertFalse(runtime.backup.lock.locked())
 
     def test_execute_backup_run_classifies_success_cancel_and_failure(self):

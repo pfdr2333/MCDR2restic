@@ -250,7 +250,7 @@ def run_restore_pre_stop_stage(
             app_runtime, server, session, exc, config_snapshot_provider
         )
     finally:
-        release_restore_pre_backup_slot(app_runtime)
+        app_runtime.release_backup_slot()
 
 
 def start_direct_restore_thread(
@@ -394,10 +394,6 @@ def handle_restore_pre_stop_failure(
     )
 
 
-def release_restore_pre_backup_slot(app_runtime: PluginRuntime):
-    app_runtime.backup.label = None
-    if app_runtime.backup.lock.locked():
-        app_runtime.backup.lock.release()
 
 
 def build_pre_restore_backup_command(cfg: Dict[str, Any]) -> List[str]:

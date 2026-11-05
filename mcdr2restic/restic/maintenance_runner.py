@@ -84,11 +84,5 @@ class MaintenanceRunner:
             )
             return False
         finally:
-            self._release_slot()
+            self.app_runtime.release_backup_slot()
 
-    def _release_slot(self):
-        self.app_runtime.backup.label = None
-        self.app_runtime.backup.thread = None
-        self.app_runtime.backup.cancel.clear()
-        if self.app_runtime.backup.lock.locked():
-            self.app_runtime.backup.lock.release()

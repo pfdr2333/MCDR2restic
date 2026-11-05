@@ -59,6 +59,14 @@ class PluginRuntime:
     backup: BackupRuntimeState = field(default_factory=BackupRuntimeState)
     restore: RestoreRuntimeState = field(default_factory=RestoreRuntimeState)
 
+    def release_backup_slot(self):
+        """备份槽位的唯一释放路径：清空状态标记并释放锁（若仍持有）。"""
+        self.backup.label = None
+        self.backup.thread = None
+        self.backup.cancel.clear()
+        if self.backup.lock.locked():
+            self.backup.lock.release()
+
 
 def create_runtime() -> PluginRuntime:
     return PluginRuntime()

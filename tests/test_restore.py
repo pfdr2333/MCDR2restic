@@ -625,7 +625,7 @@ class RestoreSkipSafetyTests(unittest.TestCase):
         ) as create_snapshot, mock.patch.object(
             restore_workflow, "request_minecraft_stop_for_restore"
         ) as request_stop, mock.patch.object(
-            restore_workflow, "release_restore_pre_backup_slot"
+            type(runtime), "release_backup_slot"
         ) as release_slot:
             restore_workflow.run_restore_pre_stop_stage(
                 runtime, server, mock.Mock(), mock.Mock()

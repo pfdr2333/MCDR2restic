@@ -67,7 +67,7 @@ class ResticCommands:
             source.reply(source_error_text(source, server, exc))
             return
         finally:
-            self.release_manual_restic_slot()
+            self.context.app_runtime.release_backup_slot()
 
         self.handle_manual_restic_success(source, server, restic_cfg, command)
 
@@ -81,11 +81,6 @@ class ResticCommands:
         reply_tr(source, server, "error.restic.manual.backup_running")
         return True
 
-    def release_manual_restic_slot(self):
-        self.context.app_runtime.backup.label = None
-        self.context.app_runtime.backup.cancel.clear()
-        if self.context.app_runtime.backup.lock.locked():
-            self.context.app_runtime.backup.lock.release()
 
     def restic_command_args(self, command: str) -> List[str]:
         if command == RESTIC_COMMAND_INIT:

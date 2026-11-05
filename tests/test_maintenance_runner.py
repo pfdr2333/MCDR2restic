@@ -47,7 +47,7 @@ class MaintenanceRunnerTests(unittest.TestCase):
         fake_thread.start.assert_called_once_with()
         self.assertIs(runtime.backup.thread, fake_thread)
         self.assertTrue(runtime.backup.lock.locked())
-        runner._release_slot()
+        runtime.release_backup_slot()
         self.assertIsNone(runtime.backup.thread)
         self.assertFalse(runtime.backup.lock.locked())
 

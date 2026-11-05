@@ -155,7 +155,7 @@ class BackupRunner:
                 ),
             )
         finally:
-            self._release_backup_slot()
+            self.app_runtime.release_backup_slot()
 
     def _notify_safely(self, server: PluginServerInterface, notify: Callable[[], None]):
         try:
@@ -339,12 +339,6 @@ class BackupRunner:
             outcome.failed,
         )
 
-    def _release_backup_slot(self):
-        self.app_runtime.backup.label = None
-        self.app_runtime.backup.thread = None
-        self.app_runtime.backup.cancel.clear()
-        if self.app_runtime.backup.lock.locked():
-            self.app_runtime.backup.lock.release()
 
 
 def should_notify_backup_finished(
