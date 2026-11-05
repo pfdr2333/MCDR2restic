@@ -31,6 +31,7 @@ try:
         tempfile,
         threading,
         unittest,
+        SnapshotRefreshOutcome,
     )
 except ImportError:
     from support import (
@@ -63,6 +64,7 @@ except ImportError:
         tempfile,
         threading,
         unittest,
+        SnapshotRefreshOutcome,
     )
 
 
@@ -303,7 +305,9 @@ class SnapshotDatabaseTests(unittest.TestCase):
                     " VALUES ('now', 's2', 'full', '/', 'pending-key')"
                 )
 
-                commit_refreshed_snapshot_cache(conn, "new-key", temp_key, 1, 0.5)
+                commit_refreshed_snapshot_cache(
+                    conn, "new-key", temp_key, SnapshotRefreshOutcome(1, 0.5)
+                )
 
                 remaining_meta = {
                     str(row[0])
@@ -331,7 +335,10 @@ class SnapshotDatabaseTests(unittest.TestCase):
 
             with closing(open_snapshot_db(server, snapshot_cfg)) as conn:
                 commit_refreshed_snapshot_cache(
-                    conn, cache_key, cache_key + ":refresh:1:1", 1, 0.5
+                    conn,
+                    cache_key,
+                    cache_key + ":refresh:1:1",
+                    SnapshotRefreshOutcome(1, 0.5),
                 )
             with closing(open_snapshot_db(server, snapshot_cfg)) as conn:
                 meta_before = read_snapshot_meta(conn, cache_key)
@@ -342,7 +349,10 @@ class SnapshotDatabaseTests(unittest.TestCase):
 
             with closing(open_snapshot_db(server, snapshot_cfg)) as conn:
                 commit_refreshed_snapshot_cache(
-                    conn, cache_key, cache_key + ":refresh:2:2", 1, 0.5, meta_before
+                    conn,
+                    cache_key,
+                    cache_key + ":refresh:2:2",
+                    SnapshotRefreshOutcome(1, 0.5, meta_before),
                 )
                 meta = read_snapshot_meta(conn, cache_key)
 
@@ -362,7 +372,10 @@ class SnapshotDatabaseTests(unittest.TestCase):
                 meta_before = read_snapshot_meta(conn, "cache-a")
 
                 commit_refreshed_snapshot_cache(
-                    conn, "cache-a", "cache-a:refresh:1:1", 1, 0.5, meta_before
+                    conn,
+                    "cache-a",
+                    "cache-a:refresh:1:1",
+                    SnapshotRefreshOutcome(1, 0.5, meta_before),
                 )
                 meta = read_snapshot_meta(conn, "cache-a")
 

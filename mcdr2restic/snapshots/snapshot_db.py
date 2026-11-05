@@ -8,6 +8,7 @@ import sqlite3
 import threading
 import time
 from contextlib import closing
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict, Optional, Tuple
 
@@ -175,13 +176,23 @@ def read_snapshot_meta(
     ).fetchone()
 
 
+@dataclass(frozen=True)
+class SnapshotRefreshOutcome:
+    """一次快照刷新的结果：新数据统计与刷新起点的 meta 基线。
+
+    meta_before 用于提交时判断失效标记是否产生于本次刷新期间（P1-5）。
+    """
+
+    snapshot_count: int
+    duration_seconds: float
+    meta_before: Optional[sqlite3.Row] = None
+
+
 def commit_refreshed_snapshot_cache(
     conn: sqlite3.Connection,
     cache_key: str,
     temp_key: str,
-    snapshot_count: int,
-    duration_seconds: float,
-    meta_before_refresh: Optional[sqlite3.Row] = None,
+    outcome: SnapshotRefreshOutcome,
 ):
     with conn:
         conn.execute("DELETE FROM snapshots WHERE cache_key = ?", (cache_key,))
@@ -191,7 +202,7 @@ def commit_refreshed_snapshot_cache(
         )
         existing = read_snapshot_meta(conn, cache_key)
         invalidated, invalidation_reason = refreshed_meta_invalidation_state(
-            existing, meta_before_refresh
+            existing, outcome.meta_before
         )
         conn.execute(
             """
@@ -206,10 +217,10 @@ def commit_refreshed_snapshot_cache(
                 cache_key,
                 time.time(),
                 now_text(),
-                snapshot_count,
+                outcome.snapshot_count,
                 invalidated,
                 invalidation_reason,
-                duration_seconds,
+                outcome.duration_seconds,
             ),
         )
         prune_orphan_snapshot_cache_keys(conn, cache_key)

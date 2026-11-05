@@ -134,11 +134,10 @@ class MaintenanceRunnerTests(unittest.TestCase):
         with mock.patch(
             "mcdr2restic.restic.maintenance_runner.get_config_snapshot",
             side_effect=fake_snapshot,
+        ), mock.patch(
+            "mcdr2restic.restic.maintenance_runner.run_maintenance_body"
         ):
-            with mock.patch(
-                "mcdr2restic.restic.maintenance_runner.run_maintenance_body"
-            ):
-                self.assertTrue(runner.run_waiting(server))
+            self.assertTrue(runner.run_waiting(server))
 
         # 首次快照发生在拿锁前（run_waiting 读语言），拿锁后的快照必须已带标记
         self.assertEqual(labels_at_snapshot[-1], "maintenance")

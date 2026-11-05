@@ -190,6 +190,7 @@ from mcdr2restic.snapshots.snapshot_cache import (
     mark_snapshot_cache_invalid,
 )
 from mcdr2restic.snapshots.snapshot_db import (
+    SnapshotRefreshOutcome,
     commit_refreshed_snapshot_cache,
     execute_column_addition,
     insert_snapshot_row,
@@ -329,6 +330,7 @@ __all__ = [
     "SaveFlushWatcher",
     "SchedulerDependencies",
     "SimpleNamespace",
+    "SnapshotRefreshOutcome",
     "StatusViewContext",
     "TerminateResult",
     "add_restore_task",

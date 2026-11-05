@@ -34,6 +34,7 @@ from mcdr2restic.restic.restic_constants import (
     RESTIC_CFG_WORKING_DIRECTORY,
 )
 from mcdr2restic.snapshots.snapshot_db import (
+    SnapshotRefreshOutcome,
     commit_refreshed_snapshot_cache,
     delete_snapshot_temp_rows,
     open_snapshot_db,
@@ -178,9 +179,11 @@ def refresh_snapshot_cache(query: SnapshotQueryContext, cache_key: str):
                 conn,
                 cache_key,
                 temp_key,
-                count,
-                time.monotonic() - started,
-                meta_before_refresh,
+                SnapshotRefreshOutcome(
+                    snapshot_count=count,
+                    duration_seconds=time.monotonic() - started,
+                    meta_before=meta_before_refresh,
+                ),
             )
         except Exception as exc:
             error = record_snapshot_refresh_failure(
