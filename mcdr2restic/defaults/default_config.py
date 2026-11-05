@@ -19,6 +19,7 @@ from mcdr2restic.defaults.default_constants import (
     SNAPSHOT_QUERY_TIMEOUT_SECONDS,
 )
 from mcdr2restic.defaults.message_defaults import build_default_messages
+from mcdr2restic.defaults.restic_release_defaults import get_default_restic_version
 
 
 ConfigDict: TypeAlias = Dict[str, Any]
@@ -144,7 +145,7 @@ def build_default_restic_config() -> ConfigDict:
         "password": "123456",
         "password_file": "",
         "auto_download": True,
-        "download_version": "latest",
+        "download_version": get_default_restic_version(),
         "download_proxy_prefixes": list(DEFAULT_PROXY_PREFIXES),
         "download_timeout_seconds": 120,
         "auto_init_local_repository": True,

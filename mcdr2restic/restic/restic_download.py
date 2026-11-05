@@ -150,6 +150,7 @@ def download_and_install_restic(
             target_path=target_path,
             timeout=timeout,
             version=resolve_restic_release_version(release, version),
+            sha256=str(asset.get("sha256") or ""),
         ),
     )
 
@@ -171,6 +172,7 @@ class ResticDownloadTarget:
     target_path: str
     timeout: int
     version: str = ""
+    sha256: str = ""
 
 
 def install_restic_from_urls(
@@ -224,12 +226,16 @@ def install_restic_from_urls(
 
 
 def fetch_restic_release_metadata(version: str, timeout: int) -> Dict[str, Any]:
+    # 内置信任版本直接使用清单数据，无需访问 GitHub API
+    trusted = build_restic_fallback_release()
+    if trusted and version.lower() == str(trusted.get("tag_name") or "").lower():
+        return trusted
     url = restic_release_url(version)
     try:
         data = download_bytes(url, timeout)
     except Exception:
         if version.lower() == "latest":
-            return build_restic_fallback_release()
+            return trusted
         raise
     return parse_restic_release_metadata(data)
 
@@ -340,6 +346,8 @@ def verify_restic_download(target: ResticDownloadTarget, archive_path: str):
 
 
 def expected_restic_sha256(target: ResticDownloadTarget) -> str:
+    if target.sha256:
+        return target.sha256
     return fetch_official_sha256(target.asset_name, target.version, target.timeout)
 
 

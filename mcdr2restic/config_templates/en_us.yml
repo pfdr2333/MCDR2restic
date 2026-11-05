@@ -83,8 +83,8 @@ config_template: |-
     password_file: ""
     # Download restic automatically when missing (Linux/Windows amd64 only).
     auto_download: true
-    # Download version: latest or a tag such as v0.18.0.
-    download_version: "latest"
+    # Download version: the version trusted by this plugin release by default; latest follows upstream.
+    download_version: "v0.19.1"
     # Download proxy prefixes: official GitHub first, then these in order.
     download_proxy_prefixes:
       - "https://gh.llkk.cc/"

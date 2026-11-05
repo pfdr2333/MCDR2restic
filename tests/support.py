@@ -116,6 +116,7 @@ from mcdr2restic.core.utils import non_negative_int, safe_int, tail_text
 from mcdr2restic.defaults.default_config import build_default_config
 from mcdr2restic.defaults.default_config_templates import get_default_config_template
 from mcdr2restic.defaults.message_defaults import get_default_message_template
+from mcdr2restic.defaults.restic_release_defaults import get_default_restic_version
 from mcdr2restic.minecraft.minecraft_service import server_is_running, try_call_bool
 from mcdr2restic.minecraft.player_activity import (
     parse_online_list_output,
@@ -140,8 +141,14 @@ from mcdr2restic.notifications.discord_webhook import (
 )
 from mcdr2restic.notifications.notification_dispatcher import NotificationDispatcher
 from mcdr2restic.restic.restic_download import (
+    ResticDownloadTarget,
+    expected_restic_sha256,
+    extract_sha256_from_sums,
+    fetch_restic_release_metadata,
+    install_restic_from_urls,
     is_default_restic_executable_path,
     resolve_restic_executable_path,
+    verify_restic_download,
 )
 from mcdr2restic.restic.restic_guidance import classify_restic_failure_output
 from mcdr2restic.restic.restic_progress_text import (
@@ -293,6 +300,7 @@ __all__ = [
     "ProcessTimeoutState",
     "ResticCommandResult",
     "ResticCommands",
+    "ResticDownloadTarget",
     "ResticProgressState",
     "RestoreSession",
     "RestoreTaskRecord",
@@ -321,14 +329,19 @@ __all__ = [
     "create_runtime",
     "datetime",
     "detect_error_lines",
+    "expected_restic_sha256",
+    "extract_sha256_from_sums",
+    "fetch_restic_release_metadata",
     "format_restic_status",
     "format_restic_summary",
     "get_current_plugin_version",
     "get_default_config_template",
     "get_default_message_template",
+    "get_default_restic_version",
     "has_recent_player_activity",
     "i18n",
     "insert_snapshot_row",
+    "install_restic_from_urls",
     "io",
     "is_default_restic_executable_path",
     "is_newer_version",
@@ -383,6 +396,7 @@ __all__ = [
     "try_call_bool",
     "unittest",
     "verify_plugin",
+    "verify_restic_download",
     "version_number_tuple",
     "yaml",
     "zipfile",

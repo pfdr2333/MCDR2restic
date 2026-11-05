@@ -83,8 +83,8 @@ config_template: |-
     password_file: ""
     # 找不到 restic 時自動下載，僅支援 Linux/Windows amd64。
     auto_download: true
-    # 下載版本：latest 或 v0.18.0 這類版本號。
-    download_version: "latest"
+    # 下載版本：預設使用外掛內建信任的版本；latest 表示跟隨官方最新版。
+    download_version: "v0.19.1"
     # 下載代理字首，先官方 GitHub，再按順序嘗試。
     download_proxy_prefixes:
       - "https://gh.llkk.cc/"

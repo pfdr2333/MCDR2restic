@@ -237,7 +237,7 @@ restic:
   password: "请改成你自己的强密码"
   password_file: ""
   auto_download: true
-  download_version: "latest"
+  download_version: "v0.19.1"
   download_proxy_prefixes:
     - "https://gh.llkk.cc/"
     - "https://gh-proxy.com/"
@@ -315,6 +315,12 @@ restic:
 
 - Linux amd64
 - Windows amd64
+
+自动下载会校验产物完整性：
+
+- 默认下载插件内置信任的 `restic` 版本（`download_version`），并对照插件内置的官方 SHA256 校验，内置信任版本无需访问 GitHub
+- 改为 `latest` 或其他版本时，会从 `github.com` 获取该版本官方 `SHA256SUMS` 校验；校验失败或无法获取校验文件时不会安装，此时可配置下载代理或改回内置信任版本
+- `download_proxy_prefixes` 仅用于加速二进制下载，不参与校验
 
 ### `auto_init_local_repository`
 
