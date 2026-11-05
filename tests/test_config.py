@@ -8,12 +8,14 @@ try:
         ConfigError,
         FakeLogger,
         FakeServer,
+        get_default_config_template,
         load_config_file_mapping,
         migrate_config_file,
         migrate_legacy_config,
         replace_or_append_enabled_line,
         tempfile,
         unittest,
+        WHOLE_BLOCK_SECTIONS,
         yaml,
     )
 except ImportError:
@@ -24,12 +26,14 @@ except ImportError:
         ConfigError,
         FakeLogger,
         FakeServer,
+        get_default_config_template,
         load_config_file_mapping,
         migrate_config_file,
         migrate_legacy_config,
         replace_or_append_enabled_line,
         tempfile,
         unittest,
+        WHOLE_BLOCK_SECTIONS,
         yaml,
     )
 
@@ -125,6 +129,33 @@ class ConfigurationTests(unittest.TestCase):
         self.assertEqual(migrated.count("update_check:"), 1)
         self.assertEqual(migrated.count("snapshot_cache:"), 1)
         self.assertEqual(migrated.count("restore:"), 1)
+
+    def test_apply_config_file_migrations_inserts_all_registered_top_level_blocks(
+        self,
+    ):
+        lines = ["enabled: true\n", "schedule:\n", "  interval_seconds: 0\n"]
+        cfg = build_default_config("en_us")
+
+        migrated = "".join(apply_config_file_migrations(lines, "en_us", cfg))
+        migrated_cfg = yaml.safe_load(migrated)
+
+        for section in WHOLE_BLOCK_SECTIONS:
+            self.assertIn(section, migrated_cfg)
+        self.assertEqual(
+            migrated_cfg["custom_webhook"],
+            build_default_config("en_us")["custom_webhook"],
+        )
+
+    def test_config_template_registered_sections_match_default_config(self):
+        for language in ("zh_cn", "en_us"):
+            template_cfg = yaml.safe_load(get_default_config_template(language))
+            default_cfg = build_default_config(language)
+            for section in WHOLE_BLOCK_SECTIONS:
+                self.assertEqual(
+                    template_cfg[section],
+                    default_cfg[section],
+                    "template drift for {} in {}".format(section, language),
+                )
 
     def test_apply_config_file_migrations_keeps_top_level_comments_with_following_block(
         self,

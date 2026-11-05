@@ -12,10 +12,7 @@ from mcdreforged.api.all import PluginServerInterface
 from mcdr2restic.config.config_paths import get_data_file_path
 from mcdr2restic.core.i18n import server_tr
 from mcdr2restic.config.config_template import (
-    get_discord_block_lines,
-    get_force_schedule_lines,
     get_language_lines,
-    get_maintenance_schedule_lines,
     get_restic_auto_download_lines,
     get_restic_auto_init_lines,
     get_restic_download_proxy_lines,
@@ -26,11 +23,10 @@ from mcdr2restic.config.config_template import (
     get_restic_progress_interval_lines,
     get_restic_repository_lines,
     get_restic_timeout_lines,
-    get_restore_block_lines,
     get_schedule_activity_lines,
     get_schedule_online_command_lines,
-    get_snapshot_cache_block_lines,
-    get_update_check_lines,
+    get_top_level_block_lines,
+    template_top_level_keys,
     yaml_scalar,
 )
 from mcdr2restic.defaults.config_template_resources import (
@@ -188,12 +184,7 @@ def apply_config_file_migrations(
     lines = remove_deprecated_schedule_lines(lines)
     lines = ensure_restic_migration_lines(lines, language, cfg)
     lines = ensure_restic_timeout_value(lines, cfg)
-    lines = ensure_force_schedule_block(lines, language, cfg)
-    lines = ensure_maintenance_schedule_block(lines, language, cfg)
-    lines = ensure_update_check_block(lines, language, cfg)
-    lines = ensure_discord_block(lines, language, cfg)
-    lines = ensure_snapshot_cache_block(lines, language, cfg)
-    lines = ensure_restore_block(lines, language, cfg)
+    lines = ensure_missing_top_level_blocks(lines, language)
     return ensure_config_version_tail(lines, language)
 
 
@@ -226,55 +217,40 @@ def ensure_schedule_migration_lines(
     return insert_into_top_level_block(lines, "schedule", insertions)
 
 
-def ensure_force_schedule_block(
-    lines: List[str],
-    language: str,
-    cfg: Dict[str, Any],
+# 顶级配置块迁移注册表：新增配置段时必须把键名加入此列表并保持模板顺序，
+# test_apply_config_file_migrations_inserts_all_registered_top_level_blocks 兜底防漏。
+WHOLE_BLOCK_SECTIONS = (
+    "force_schedule",
+    "maintenance_schedule",
+    "update_check",
+    "discord",
+    "custom_webhook",
+    "snapshot_cache",
+    "restore",
+)
+
+
+def ensure_missing_top_level_blocks(lines: List[str], language: str) -> List[str]:
+    # 逆模板序处理：先插入靠后的段，靠前的段才能以它们为锚点紧贴插入。
+    for section in reversed(WHOLE_BLOCK_SECTIONS):
+        if has_top_level_key(lines, section):
+            continue
+        block = get_top_level_block_lines(language, section)
+        if not block:
+            continue
+        lines = insert_block_at_template_position(lines, language, section, block)
+    return lines
+
+
+def insert_block_at_template_position(
+    lines: List[str], language: str, section: str, block: List[str]
 ) -> List[str]:
-    if has_top_level_key(lines, "force_schedule"):
-        return lines
-    force_schedule = (
-        cfg.get("force_schedule", {})
-        if isinstance(cfg.get("force_schedule"), dict)
-        else {}
-    )
-    return insert_before_config_version_or_end(
-        lines, get_force_schedule_lines(language, force_schedule)
-    )
-
-
-def ensure_maintenance_schedule_block(
-    lines: List[str],
-    language: str,
-    cfg: Dict[str, Any],
-) -> List[str]:
-    if has_top_level_key(lines, "maintenance_schedule"):
-        return lines
-    maintenance_schedule = (
-        cfg.get("maintenance_schedule", {})
-        if isinstance(cfg.get("maintenance_schedule"), dict)
-        else {}
-    )
-    return insert_before_top_level_key(
-        lines,
-        "update_check",
-        get_maintenance_schedule_lines(language, maintenance_schedule),
-    )
-
-
-def ensure_update_check_block(
-    lines: List[str],
-    language: str,
-    cfg: Dict[str, Any],
-) -> List[str]:
-    if has_top_level_key(lines, "update_check"):
-        return lines
-    update_check = (
-        cfg.get("update_check", {}) if isinstance(cfg.get("update_check"), dict) else {}
-    )
-    return insert_before_top_level_key(
-        lines, "minecraft", get_update_check_lines(language, update_check)
-    )
+    template_keys = template_top_level_keys(language)
+    successors = template_keys[template_keys.index(section) + 1 :]
+    for successor in successors:
+        if has_top_level_key(lines, successor):
+            return insert_before_top_level_key(lines, successor, block)
+    return insert_before_config_version_or_end(lines, block)
 
 
 def ensure_restic_migration_lines(
@@ -327,43 +303,6 @@ def ensure_restic_timeout_value(lines: List[str], cfg: Dict[str, Any]) -> List[s
 def rewrite_yaml_value_line(line: str, prefix: str, value: Any) -> str:
     newline = "\n" if line.endswith("\n") else ""
     return "{}{}{}".format(prefix, yaml_scalar(value), newline)
-
-
-def ensure_discord_block(
-    lines: List[str], language: str, cfg: Dict[str, Any]
-) -> List[str]:
-    if has_top_level_key(lines, "discord"):
-        return lines
-    discord = cfg.get("discord", {}) if isinstance(cfg.get("discord"), dict) else {}
-    return insert_before_top_level_key(
-        lines, "notification", get_discord_block_lines(language, discord)
-    )
-
-
-def ensure_snapshot_cache_block(
-    lines: List[str], language: str, cfg: Dict[str, Any]
-) -> List[str]:
-    if has_top_level_key(lines, "snapshot_cache"):
-        return lines
-    snapshot_cache = (
-        cfg.get("snapshot_cache", {})
-        if isinstance(cfg.get("snapshot_cache"), dict)
-        else {}
-    )
-    return insert_before_top_level_key(
-        lines, "messages", get_snapshot_cache_block_lines(language, snapshot_cache)
-    )
-
-
-def ensure_restore_block(
-    lines: List[str], language: str, cfg: Dict[str, Any]
-) -> List[str]:
-    if has_top_level_key(lines, "restore"):
-        return lines
-    restore_cfg = cfg.get("restore", {}) if isinstance(cfg.get("restore"), dict) else {}
-    return insert_before_top_level_key(
-        lines, "messages", get_restore_block_lines(language, restore_cfg)
-    )
 
 
 def ensure_config_version_tail(lines: List[str], language: str) -> List[str]:

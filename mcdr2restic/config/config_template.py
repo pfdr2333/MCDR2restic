@@ -36,54 +36,11 @@ def get_schedule_online_command_lines(
     )
 
 
-def get_force_schedule_lines(
-    language: str, force_schedule: Dict[str, Any]
-) -> List[str]:
-    values = section_values(language, "force_schedule", force_schedule)
-    lines = get_top_level_block_lines(language, "force_schedule")
-    lines = rewrite_nested_scalar(
-        lines, "interval_seconds", values.get("interval_seconds")
-    )
-    return rewrite_nested_scalar(
-        lines, "cron_expression", values.get("cron_expression")
-    )
-
-
-def get_maintenance_schedule_lines(
-    language: str, maintenance_schedule: Dict[str, Any]
-) -> List[str]:
-    values = section_values(language, "maintenance_schedule", maintenance_schedule)
-    lines = get_top_level_block_lines(language, "maintenance_schedule")
-    lines = rewrite_nested_scalar(
-        lines, "interval_seconds", values.get("interval_seconds")
-    )
-    return rewrite_nested_scalar(
-        lines, "cron_expression", values.get("cron_expression")
-    )
-
-
 def get_language_lines(language: str, configured_language: str) -> List[str]:
     return rewrite_top_level_scalar(
         get_top_level_block_lines(language, "language"),
         "language",
         configured_language,
-    )
-
-
-def get_update_check_lines(language: str, update_check: Dict[str, Any]) -> List[str]:
-    values = section_values(language, "update_check", update_check)
-    lines = get_top_level_block_lines(language, "update_check")
-    for key in [
-        "enabled",
-        "check_on_startup",
-        "daily_time",
-        "api_url",
-        "release_page_url",
-        "timeout_seconds",
-    ]:
-        lines = rewrite_nested_scalar(lines, key, values.get(key))
-    return rewrite_nested_sequence(
-        lines, "proxy_prefixes", values.get("proxy_prefixes")
     )
 
 
@@ -135,49 +92,6 @@ def get_restic_progress_interval_lines(
     language: str, restic: Dict[str, Any]
 ) -> List[str]:
     return get_restic_scalar_lines(language, restic, "progress_interval_seconds")
-
-
-def get_discord_block_lines(language: str, discord: Dict[str, Any]) -> List[str]:
-    values = section_values(language, "discord", discord)
-    lines = get_top_level_block_lines(language, "discord")
-    for key in [
-        "enabled",
-        "webhook_url",
-        "username",
-        "avatar_url",
-        "message_prefix",
-        "mention_everyone",
-        "send_timeout_seconds",
-    ]:
-        lines = rewrite_nested_scalar(lines, key, values.get(key))
-    lines = rewrite_nested_sequence(
-        lines, "mention_user_ids", values.get("mention_user_ids")
-    )
-    return rewrite_nested_sequence(
-        lines, "mention_role_ids", values.get("mention_role_ids")
-    )
-
-
-def get_snapshot_cache_block_lines(
-    language: str, snapshot_cache: Dict[str, Any]
-) -> List[str]:
-    values = section_values(language, "snapshot_cache", snapshot_cache)
-    lines = get_top_level_block_lines(language, "snapshot_cache")
-    for key in ["enabled", "page_size", "query_timeout_seconds", "database"]:
-        lines = rewrite_nested_scalar(lines, key, values.get(key))
-    return lines
-
-
-def get_restore_block_lines(language: str, restore_cfg: Dict[str, Any]) -> List[str]:
-    values = section_values(language, "restore", restore_cfg)
-    lines = get_top_level_block_lines(language, "restore")
-    for key in [
-        "pre_restore_backup_tag",
-        "stop_timeout_seconds",
-        "start_timeout_seconds",
-    ]:
-        lines = rewrite_nested_scalar(lines, key, values.get(key))
-    return lines
 
 
 def get_restic_scalar_lines(
@@ -236,6 +150,15 @@ def get_nested_entry_lines(language: str, block_key: str, nested_key: str) -> Li
 
 def default_template_lines(language: str) -> List[str]:
     return get_default_config_template(language).splitlines(keepends=True)
+
+
+def template_top_level_keys(language: str) -> List[str]:
+    keys: List[str] = []
+    for line in default_template_lines(language):
+        match = TOP_LEVEL_KEY_PATTERN.match(line)
+        if match:
+            keys.append(match.group(0).strip().rstrip(":").strip())
+    return keys
 
 
 def find_top_level_key_index(lines: List[str], key: str) -> Optional[int]:

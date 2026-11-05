@@ -83,6 +83,7 @@ from mcdr2restic.config.config_loader import (
     replace_or_append_enabled_line,
 )
 from mcdr2restic.config.config_migration import (
+    WHOLE_BLOCK_SECTIONS,
     apply_config_file_migrations,
     migrate_config_file,
     migrate_legacy_config,
@@ -380,6 +381,7 @@ __all__ = [
     "unittest",
     "verify_plugin",
     "version_number_tuple",
+    "WHOLE_BLOCK_SECTIONS",
     "yaml",
     "zipfile",
 ]
