@@ -198,6 +198,16 @@ class ConfigurationTests(unittest.TestCase):
                     "template drift for {} in {}".format(section, language),
                 )
 
+    def test_config_template_maintenance_commands_match_default_config(self):
+        # 模板与默认值漂移会让全新安装与缺键补默认的用户维护策略不一致（P1-3）
+        for language in ("zh_cn", "en_us", "zh_tw"):
+            template_cfg = yaml.safe_load(get_default_config_template(language))
+            self.assertEqual(
+                template_cfg["restic"]["maintenance_commands"],
+                build_default_config(language)["restic"]["maintenance_commands"],
+                "maintenance_commands drift for {}".format(language),
+            )
+
     def test_default_template_messages_match_config_texts(self):
         # messages 块必须由标记行从 texts 注入；残留内联文案时 sync 无法自愈（P0-1）
         for language in ("zh_cn", "en_us"):

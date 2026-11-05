@@ -164,8 +164,9 @@ def build_default_restic_config() -> ConfigDict:
 def build_default_maintenance_commands() -> CommandList:
     """Return the default maintenance command pipeline."""
 
+    # 与三份配置模板保持一致：缺 --keep-within 时旧快照永不过期，--prune 不释放空间
     return [
-        ["forget", "--keep-daily", "7", "--prune"],
+        ["forget", "--keep-within", "1d", "--keep-daily", "7", "--prune"],
     ]
 
 
