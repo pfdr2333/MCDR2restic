@@ -80,6 +80,26 @@ class ResticConfigTests(unittest.TestCase):
             restic_config.normalize_command_args(["backup", 1]), ["backup", "1"]
         )
 
+    def test_command_string_keeps_backslash_paths_on_windows(self):
+        with mock.patch("os.name", "nt"):
+            args = restic_config.normalize_command_args("backup C:\\server\\world")
+
+        self.assertEqual(args, ["backup", "C:\\server\\world"])
+
+    def test_command_string_strips_quotes_but_keeps_inner_backslashes_on_windows(self):
+        with mock.patch("os.name", "nt"):
+            args = restic_config.normalize_command_args(
+                'backup "C:\\Program Files\\world"'
+            )
+
+        self.assertEqual(args, ["backup", "C:\\Program Files\\world"])
+
+    def test_command_string_uses_posix_semantics_off_windows(self):
+        with mock.patch("os.name", "posix"):
+            args = restic_config.normalize_command_args("backup ./server/world")
+
+        self.assertEqual(args, ["backup", "./server/world"])
+
     def test_invalid_command_arguments_raise_backup_problem(self):
         with self.assertRaises(BackupProblem) as error:
             restic_config.normalize_command_args({"backup": True})

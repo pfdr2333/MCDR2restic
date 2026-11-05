@@ -206,7 +206,22 @@ def path_contains_or_equals(parent: str, child: str) -> bool:
 
 def normalize_command_args(value: Any) -> List[str]:
     if isinstance(value, str):
-        return shlex.split(value)
+        return split_command_string(value)
     if isinstance(value, Sequence):
         return [str(item) for item in value]
     raise BackupProblem(i18n_key="error.restic.command_args_invalid", value=value)
+
+
+def split_command_string(value: str) -> List[str]:
+    # Windows 命令行不是 POSIX 语法：反斜杠是路径分隔符，不能当转义符吞掉
+    posix = os.name != "nt"
+    parts = shlex.split(str(value), posix=posix)
+    if posix:
+        return parts
+    return [strip_surrounding_quotes(part) for part in parts]
+
+
+def strip_surrounding_quotes(part: str) -> str:
+    if len(part) >= 2 and part[0] == part[-1] and part[0] in ("'", '"'):
+        return part[1:-1]
+    return part
