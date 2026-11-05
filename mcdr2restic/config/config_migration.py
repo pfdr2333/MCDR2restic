@@ -139,16 +139,26 @@ DEPRECATED_SCHEDULE_KEYS = (
     "online_check_interval_seconds",
 )
 
+DEPRECATED_RESTORE_KEYS = ("stop_timeout_seconds",)
+
 
 def collect_deprecated_config_keys(cfg: Dict[str, Any]) -> List[str]:
+    keys: List[str] = []
     schedule = cfg.get("schedule")
-    if not isinstance(schedule, dict):
-        return []
-    return [
-        "schedule.{}".format(key)
-        for key in DEPRECATED_SCHEDULE_KEYS
-        if key in schedule
-    ]
+    if isinstance(schedule, dict):
+        keys.extend(
+            "schedule.{}".format(key)
+            for key in DEPRECATED_SCHEDULE_KEYS
+            if key in schedule
+        )
+    restore = cfg.get("restore")
+    if isinstance(restore, dict):
+        keys.extend(
+            "restore.{}".format(key)
+            for key in DEPRECATED_RESTORE_KEYS
+            if key in restore
+        )
+    return keys
 
 
 def warn_deprecated_config_keys(
@@ -209,6 +219,7 @@ def apply_config_file_migrations(
     lines = ensure_language_line(lines, language, cfg)
     lines = ensure_schedule_migration_lines(lines, language, cfg)
     lines = remove_deprecated_schedule_lines(lines)
+    lines = remove_deprecated_restore_lines(lines)
     lines = ensure_restic_migration_lines(lines, language, cfg)
     lines = ensure_restic_timeout_value(lines, cfg)
     lines = ensure_missing_top_level_blocks(lines, language)
@@ -381,6 +392,22 @@ def remove_deprecated_schedule_lines(lines: List[str]) -> List[str]:
         return lines
 
     remove_indexes = deprecated_schedule_line_indexes(lines, start, end)
+    if not remove_indexes:
+        return lines
+    return [line for index, line in enumerate(lines) if index not in remove_indexes]
+
+
+def remove_deprecated_restore_lines(lines: List[str]) -> List[str]:
+    start, end = find_top_level_block(lines, "restore")
+    if start is None:
+        return lines
+
+    key_pattern = re.compile(r"^\s+([A-Za-z_][A-Za-z0-9_-]*)\s*:")
+    remove_indexes: Set[int] = set()
+    for index in range(start + 1, end):
+        match = key_pattern.match(lines[index])
+        if match and match.group(1) in DEPRECATED_RESTORE_KEYS:
+            remove_indexes.add(index)
     if not remove_indexes:
         return lines
     return [line for index, line in enumerate(lines) if index not in remove_indexes]

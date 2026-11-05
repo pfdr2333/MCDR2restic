@@ -110,6 +110,37 @@ class ConfigurationTests(unittest.TestCase):
         self.assertNotIn("  online_check_interval_seconds:", migrated)
         self.assertIn("config_version: 10", migrated)
 
+    def test_apply_config_file_migrations_removes_deprecated_restore_key(self):
+        lines = [
+            "restore:\n",
+            "  stop_timeout_seconds: 120\n",
+            "  start_timeout_seconds: 120\n",
+        ]
+        cfg = build_default_config("en_us")
+
+        migrated = "".join(apply_config_file_migrations(lines, "en_us", cfg))
+
+        self.assertNotIn("stop_timeout_seconds", migrated)
+        self.assertIn("start_timeout_seconds: 120", migrated)
+
+    def test_config_migration_warns_about_removed_restore_timeout(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            server = FakeServer(temp_dir)
+            server.logger = FakeLogger()
+            config_path = os.path.join(temp_dir, "config.yml")
+            with open(config_path, "w", encoding="utf8") as file:
+                file.write(
+                    "restore:\n"
+                    "  stop_timeout_seconds: 120\n"
+                    "  start_timeout_seconds: 120\n"
+                    "config_version: 10\n"
+                )
+
+            migrate_config_file(server, "en_us", build_default_config("en_us"))
+
+        warnings = "\n".join(server.logger.warning_messages)
+        self.assertIn("restore.stop_timeout_seconds", warnings)
+
     def test_apply_config_file_migrations_is_idempotent(self):
         lines = [
             "enabled: true\n",

@@ -202,7 +202,6 @@ config_template: |-
     # 恢复前自动创建的保护快照使用的 tag。
     pre_restore_backup_tag: "mcdr2restic-pre-restore"
     # 恢复流程中停止/启动 Minecraft 的超时（秒）。
-    stop_timeout_seconds: 120
     start_timeout_seconds: 120
   
   messages:

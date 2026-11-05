@@ -541,7 +541,6 @@ snapshot_cache:
 ```yaml
 restore:
   pre_restore_backup_tag: "mcdr2restic-pre-restore"
-  stop_timeout_seconds: 120
   start_timeout_seconds: 120
 ```
 
