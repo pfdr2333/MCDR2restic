@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import re
+
+from mcdr2restic.core.utils import get_config_section
 from typing import Any, Dict
 
 
@@ -29,7 +31,7 @@ def classify_restic_failure_output(text: str) -> str:
 
 
 def command_root_from_config(cfg: Dict[str, Any]) -> str:
-    command_cfg = cfg.get("command", {}) if isinstance(cfg.get("command"), dict) else {}
+    command_cfg = get_config_section(cfg, "command")
     return str(command_cfg.get("root", "!!restic") or "!!restic").strip() or "!!restic"
 
 

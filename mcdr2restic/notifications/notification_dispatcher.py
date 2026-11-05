@@ -6,6 +6,7 @@ from typing import Any, Callable, Dict, Optional
 from mcdr2restic.core.i18n import config_language, server_tr
 from mcdr2restic.core.language import get_mcdr_language
 from mcdr2restic.core.runtime import PluginRuntime
+from mcdr2restic.core.utils import get_config_section
 from mcdr2restic.notifications.message_templates import (
     MessageRenderOptions,
     render_message,
@@ -60,7 +61,7 @@ class NotificationDispatcher:
         cfg: Dict[str, Any],
         language: str,
     ):
-        onebot_cfg = cfg.get("onebot", {})
+        onebot_cfg = get_config_section(cfg, "onebot")
         if not onebot_cfg.get("enabled", False):
             return
         if self.app_runtime.service.onebot is None:
@@ -94,7 +95,7 @@ class NotificationDispatcher:
         cfg: Dict[str, Any],
         language: str,
     ):
-        discord_cfg = cfg.get("discord", {})
+        discord_cfg = get_config_section(cfg, "discord")
         if not discord_cfg.get("enabled", False):
             return
         if self.app_runtime.service.discord is None:
@@ -124,8 +125,8 @@ class NotificationDispatcher:
         cfg: Dict[str, Any],
         language: str,
     ):
-        webhook_cfg = cfg.get("custom_webhook", {})
-        if not isinstance(webhook_cfg, dict) or not webhook_cfg.get("enabled", False):
+        webhook_cfg = get_config_section(cfg, "custom_webhook")
+        if not webhook_cfg.get("enabled", False):
             return
         if self.app_runtime.service.custom_webhook is None:
             self._warn_server(

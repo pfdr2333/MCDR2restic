@@ -83,3 +83,42 @@ class BackupSchedulerTests(unittest.TestCase):
         self.assertEqual(notifier.call_args.args[0], "schedule_config_error")
         self.assertTrue(notifier.call_args.args[3])
         wait.assert_called_once_with(60)
+
+    def test_schedule_loop_survives_trigger_crash(self):
+        scheduler, _, _, _ = self.make_scheduler(
+            cfg={"enabled": True, "notification": True}
+        )
+        state = {"calls": 0}
+
+        def provider():
+            state["calls"] += 1
+            if state["calls"] == 1:
+                return (0.01, "soon")
+            scheduler.stop_event.set()
+            return None
+
+        trigger = mock.Mock(
+            side_effect=AttributeError("'bool' object has no attribute 'get'")
+        )
+        with mock.patch.object(
+            scheduler, "_next_normal_schedule", side_effect=provider
+        ), mock.patch.object(
+            scheduler, "_trigger_normal_backup", trigger
+        ), mock.patch.object(scheduler, "_wait", return_value=False):
+            scheduler._run_schedule_loop(
+                "schedule.normal",
+                scheduler._next_normal_schedule,
+                scheduler._trigger_normal_backup,
+            )
+
+        trigger.assert_called_once()
+        self.assertTrue(scheduler.server.logger.error_messages)
+
+    def test_handle_no_player_activity_skip_tolerates_scalar_notification(self):
+        scheduler, _, _, notifier = self.make_scheduler(
+            cfg={"enabled": True, "notification": True}
+        )
+
+        scheduler._handle_no_player_activity_skip({"notification": True})
+
+        notifier.assert_not_called()

@@ -16,7 +16,12 @@ from mcdr2restic.minecraft.player_activity import (
 )
 from mcdr2restic.minecraft.minecraft_service import server_is_running
 from mcdr2restic.core.runtime import PluginRuntime
-from mcdr2restic.core.utils import non_negative_int, now_text, tail_text
+from mcdr2restic.core.utils import (
+    get_config_section,
+    non_negative_int,
+    now_text,
+    tail_text,
+)
 
 
 def handle_player_joined(
@@ -110,7 +115,7 @@ def sample_online_players(
 
 
 def get_online_check_command(cfg: Dict[str, Any]) -> str:
-    schedule = cfg.get("schedule", {})
+    schedule = get_config_section(cfg, "schedule")
     return str(schedule.get("online_check_command", "list") or "").strip()
 
 

@@ -247,3 +247,18 @@ class CustomWebhookTests(unittest.TestCase):
         client.send_message.assert_called_once()
         text = client.send_message.call_args.args[0]
         self.assertIn("备份开始", text)
+
+    def test_notify_admins_tolerates_scalar_channel_sections(self):
+        app_runtime = create_runtime()
+        dispatcher = NotificationDispatcher(app_runtime, dict)
+        server = FakePluginServer()
+        app_runtime.service.server = server
+
+        dispatcher.notify_admins(
+            "backup_start",
+            {"label": "manual"},
+            {"onebot": "xx", "discord": 1, "custom_webhook": True},
+        )
+
+        self.assertTrue(server.logger.info_messages)
+        self.assertEqual(server.logger.warning_messages, [])

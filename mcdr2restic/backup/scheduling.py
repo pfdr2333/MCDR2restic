@@ -7,6 +7,7 @@ from typing import Any, Dict, Optional, Tuple
 from mcdr2restic.backup.cron import CronExpression
 from mcdr2restic.core.i18n import FALLBACK_LANGUAGE, tr
 from mcdr2restic.core.models import LocalizedValueError
+from mcdr2restic.core.utils import get_config_section
 from mcdr2restic.defaults.default_constants import DEFAULT_MAINTENANCE_CRON
 
 
@@ -16,7 +17,7 @@ DISABLED_CRON = "0"
 
 def compute_update_check_wait_seconds(cfg: Dict[str, Any]) -> Tuple[float, str]:
     update_cfg = (
-        cfg.get("update_check", {}) if isinstance(cfg.get("update_check"), dict) else {}
+        get_config_section(cfg, "update_check")
     )
     daily_time = parse_daily_time(str(update_cfg.get("daily_time", "00:00") or "00:00"))
     now = datetime.now()
@@ -41,7 +42,7 @@ def compute_wait_seconds(
     cfg: Dict[str, Any], language: str = FALLBACK_LANGUAGE
 ) -> Tuple[float, str]:
     return compute_schedule_wait_seconds(
-        cfg.get("schedule", {}),
+        get_config_section(cfg, "schedule"),
         DEFAULT_NORMAL_CRON,
         disabled_when_zero_cron=False,
         language=language,
@@ -52,7 +53,7 @@ def compute_force_wait_seconds(
     cfg: Dict[str, Any], language: str = FALLBACK_LANGUAGE
 ) -> Optional[Tuple[float, str]]:
     return compute_schedule_wait_seconds(
-        cfg.get("force_schedule", {}),
+        get_config_section(cfg, "force_schedule"),
         DISABLED_CRON,
         disabled_when_zero_cron=True,
         language=language,
@@ -63,7 +64,7 @@ def compute_maintenance_wait_seconds(
     cfg: Dict[str, Any], language: str = FALLBACK_LANGUAGE
 ) -> Optional[Tuple[float, str]]:
     return compute_schedule_wait_seconds(
-        cfg.get("maintenance_schedule", {}),
+        get_config_section(cfg, "maintenance_schedule"),
         DEFAULT_MAINTENANCE_CRON,
         disabled_when_zero_cron=True,
         language=language,

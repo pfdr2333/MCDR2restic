@@ -12,7 +12,7 @@ from mcdr2restic.config.config_loader import get_command_root
 from mcdr2restic.core.i18n import reply_tr
 from mcdr2restic.core.runtime import PluginRuntime
 from mcdr2restic.config.state_store import get_config_snapshot
-from mcdr2restic.core.utils import safe_int
+from mcdr2restic.core.utils import get_config_section, safe_int
 
 
 BackupRunnerFactory = Callable[[], BackupRunner]
@@ -49,7 +49,7 @@ class CommandContext:
 
     def get_command_permission_level(self) -> int:
         cfg = get_config_snapshot(self.app_runtime)
-        return safe_int(cfg.get("command", {}).get("permission_level", 3), 3)
+        return safe_int(get_config_section(cfg, "command").get("permission_level", 3), 3)
 
     def get_command_root(self) -> str:
         return get_command_root(self.app_runtime)

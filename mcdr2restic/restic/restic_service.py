@@ -45,7 +45,7 @@ from mcdr2restic.restic.restic_context import (
 )
 from mcdr2restic.restic.restic_result import assert_restic_success
 from mcdr2restic.core.runtime import PluginRuntime
-from mcdr2restic.core.utils import safe_int
+from mcdr2restic.core.utils import get_config_section, safe_int
 
 
 def run_backup_body(
@@ -55,7 +55,7 @@ def run_backup_body(
     label: str,
     invalidate_snapshot_cache_func: SnapshotCacheInvalidator,
 ) -> str:
-    restic_cfg = cfg.get("restic", {})
+    restic_cfg = get_config_section(cfg, "restic")
     command_root = command_root_from_config(cfg)
     ctx = ResticOperationContext(
         app_runtime=app_runtime,
@@ -76,7 +76,7 @@ def run_maintenance_body(
     cfg: Dict[str, Any],
     invalidate_snapshot_cache_func: SnapshotCacheInvalidator,
 ):
-    restic_cfg = cfg.get("restic", {})
+    restic_cfg = get_config_section(cfg, "restic")
     ctx = ResticOperationContext(
         app_runtime=app_runtime,
         server=server,
@@ -125,7 +125,7 @@ def prepare_minecraft_for_backup(
     app_runtime: PluginRuntime, server: PluginServerInterface, cfg: Dict[str, Any]
 ):
     minecraft_cfg = (
-        cfg.get("minecraft", {}) if isinstance(cfg.get("minecraft"), dict) else {}
+        get_config_section(cfg, "minecraft")
     )
     check_canceled(app_runtime)
     execute_mc_command(

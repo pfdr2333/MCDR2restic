@@ -48,7 +48,7 @@ from mcdr2restic.restore.restore_paths import (
     get_restic_working_directory,
     normalize_restore_snapshot,
 )
-from mcdr2restic.core.utils import now_text
+from mcdr2restic.core.utils import get_config_section, now_text
 
 
 def is_direct_restore_session(tasks: List[Dict[str, Any]]) -> bool:
@@ -344,11 +344,7 @@ def create_restore_safety_snapshot(
 
 def build_pre_restore_backup_config(cfg: Dict[str, Any]) -> Dict[str, Any]:
     backup_cfg = copy.deepcopy(cfg)
-    restic_cfg = (
-        backup_cfg.get("restic", {})
-        if isinstance(backup_cfg.get("restic"), dict)
-        else {}
-    )
+    restic_cfg = get_config_section(backup_cfg, "restic")
     restic_cfg[RESTIC_CFG_BACKUP_COMMAND] = build_pre_restore_backup_command(backup_cfg)
     restic_cfg[RESTIC_CFG_MAINTENANCE_COMMANDS] = []
     backup_cfg["restic"] = restic_cfg
@@ -520,7 +516,7 @@ def execute_restore_after_stop(
 
 
 def get_restore_restic_config(cfg: Dict[str, Any]) -> Dict[str, Any]:
-    return cfg.get("restic", {}) if isinstance(cfg.get("restic"), dict) else {}
+    return get_config_section(cfg, "restic")
 
 
 def execute_restore_tasks(

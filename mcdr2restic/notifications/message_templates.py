@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
 from mcdr2restic.core.i18n import DEFAULT_LANGUAGE, tr
+from mcdr2restic.core.utils import get_config_section
 from mcdr2restic.defaults.default_config import build_default_config
 from mcdr2restic.defaults.message_defaults import get_default_message_template
 
@@ -31,7 +32,7 @@ def render_message(
 ) -> str:
     options = options or MessageRenderOptions()
     cfg = cfg or build_default_config()
-    onebot_cfg = cfg.get("onebot", {})
+    onebot_cfg = get_config_section(cfg, "onebot")
     template = get_message_template(template_key, cfg)
     data = build_message_values(template_key, values, onebot_cfg, options.prefix)
     try:
@@ -50,7 +51,7 @@ def render_message(
 
 
 def get_message_template(template_key: str, cfg: Dict[str, Any]) -> str:
-    messages = cfg.get("messages", {})
+    messages = get_config_section(cfg, "messages")
     template = messages.get(template_key) if isinstance(messages, dict) else None
     if isinstance(template, str):
         return template

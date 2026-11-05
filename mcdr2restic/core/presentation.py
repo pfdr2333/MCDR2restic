@@ -26,7 +26,7 @@ from mcdr2restic.snapshots.snapshot_db import (
     read_snapshot_page,
 )
 from mcdr2restic.snapshots.snapshot_query import SnapshotQueryContext
-from mcdr2restic.core.utils import non_negative_int
+from mcdr2restic.core.utils import get_config_section, non_negative_int
 
 
 RESTIC_TIME_DISPLAY_PATTERN = re.compile(r"^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2}:\d{2})")
@@ -86,7 +86,7 @@ def build_status_view(
     cfg = ctx.cfg
     translate = ctx.translate
     running = providers.backup_running()
-    activity = build_player_activity_view(cfg.get("runtime", {}), translate)
+    activity = build_player_activity_view(get_config_section(cfg, "runtime"), translate)
     schedules = build_schedule_status_view(cfg, translate, ctx.language)
     last_backup_status_raw = activity.pop("last_backup_status_raw")
     return {
@@ -169,7 +169,7 @@ def render_snapshot_status_lines(
     if server is None:
         return render_snapshot_status_message(title, translate, "snapshot.unavailable")
 
-    restic_cfg = ctx.cfg.get("restic", {}) if isinstance(ctx.cfg.get("restic"), dict) else {}
+    restic_cfg = get_config_section(ctx.cfg, "restic")
     snapshot_cfg = get_snapshot_cache_config(ctx.cfg)
     if not bool(snapshot_cfg.get("enabled", True)):
         return render_snapshot_status_message(
@@ -311,7 +311,7 @@ def append_snapshot_next_page_hint(
 ):
     if page >= total_pages:
         return
-    root = str(ctx.cfg.get("command", {}).get("root", "!!restic"))
+    root = str(get_config_section(ctx.cfg, "command").get("root", "!!restic"))
     lines.append(ctx.translate("snapshot.next_page", root=root, page=page + 1))
 
 

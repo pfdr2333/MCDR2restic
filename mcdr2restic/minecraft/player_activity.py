@@ -4,7 +4,7 @@ from __future__ import annotations
 import re
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-from mcdr2restic.core.utils import non_negative_int, now_text
+from mcdr2restic.core.utils import get_config_section, non_negative_int, now_text
 
 
 MC_COLOR_CODE_PATTERN = re.compile(r"§.")
@@ -30,7 +30,7 @@ MC_LIST_PLAYER_COUNT_PATTERNS = (
 
 
 def player_activity_required(cfg: Dict[str, Any]) -> bool:
-    schedule = cfg.get("schedule", {})
+    schedule = get_config_section(cfg, "schedule")
     if "require_player_activity_in_wait_period" in schedule:
         return bool(schedule.get("require_player_activity_in_wait_period", True))
     return bool(schedule.get("require_player_joined_in_wait_period", True))

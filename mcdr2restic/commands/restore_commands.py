@@ -18,6 +18,7 @@ from mcdr2restic.core.i18n import (
 )
 from mcdr2restic.core.language import get_source_language
 from mcdr2restic.core.models import BackupProblem, RestoreSession
+from mcdr2restic.core.utils import get_config_section
 from mcdr2restic.minecraft.minecraft_service import is_backup_running, is_mc_ready
 from mcdr2restic.restore.restore_task_repository import (
     RestoreTaskRecord,
@@ -166,7 +167,7 @@ class RestoreCommands:
         if not to_dir:
             return ""
         return normalize_restore_target_directory(
-            context.get("target"), cfg.get("restic", {}), data_dir
+            context.get("target"), get_config_section(cfg, "restic"), data_dir
         )
 
     def restore_include_path(
@@ -178,7 +179,7 @@ class RestoreCommands:
             return "/"
         return normalize_restore_include_path(
             context.get("path"),
-            cfg.get("restic", {}),
+            get_config_section(cfg, "restic"),
             get_command_root(self.context.app_runtime),
         )
 
@@ -370,7 +371,7 @@ class RestoreCommands:
 
         cfg = cfg or get_config_snapshot(self.context.app_runtime)
         restic_cfg = (
-            cfg.get("restic", {}) if isinstance(cfg.get("restic"), dict) else {}
+            get_config_section(cfg, "restic")
         )
         return build_snapshot_cache_key(restic_cfg)
 

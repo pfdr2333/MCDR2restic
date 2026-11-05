@@ -48,7 +48,7 @@ from mcdr2restic.snapshots.snapshot_cache import (
     invalidate_snapshot_cache as invalidate_snapshot_cache_impl,
 )
 from mcdr2restic.update.update_check import UpdateChecker
-from mcdr2restic.core.utils import now_text
+from mcdr2restic.core.utils import get_config_section, now_text
 
 
 class PluginEntrypoint:
@@ -234,7 +234,7 @@ class PluginEntrypoint:
         self.stop_onebot()
         self.runtime.service.onebot = OneBotClient(
             server,
-            get_config_snapshot(self.runtime).get("onebot", {}),
+            get_config_section(get_config_snapshot(self.runtime), "onebot"),
             self.bootstrap_result.websocket_client,
         )
         self.runtime.service.onebot.start()

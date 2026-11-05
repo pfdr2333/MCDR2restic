@@ -35,7 +35,7 @@ from mcdr2restic.defaults.config_template_resources import (
 )
 from mcdr2restic.defaults.default_constants import CONFIG_NAME, CONFIG_VERSION
 from mcdr2restic.core.models import ConfigError
-from mcdr2restic.core.utils import safe_int
+from mcdr2restic.core.utils import get_config_section, safe_int
 
 
 ResticLineBuilder = Callable[[str, Dict[str, Any]], List[str]]
@@ -233,7 +233,7 @@ def ensure_schedule_migration_lines(
     language: str,
     cfg: Dict[str, Any],
 ) -> List[str]:
-    schedule = cfg.get("schedule", {}) if isinstance(cfg.get("schedule"), dict) else {}
+    schedule = get_config_section(cfg, "schedule")
     insertions: List[str] = []
     if not has_nested_key(lines, "schedule", "require_player_activity_in_wait_period"):
         insertions.extend(get_schedule_activity_lines(language, schedule))
@@ -285,7 +285,7 @@ def ensure_restic_migration_lines(
     language: str,
     cfg: Dict[str, Any],
 ) -> List[str]:
-    restic = cfg.get("restic", {}) if isinstance(cfg.get("restic"), dict) else {}
+    restic = get_config_section(cfg, "restic")
     insertions: List[str] = []
     for key, builder in restic_migration_builders():
         if not has_nested_key(lines, "restic", key):
@@ -311,7 +311,7 @@ def restic_migration_builders() -> List[Tuple[str, ResticLineBuilder]]:
 
 
 def ensure_restic_timeout_value(lines: List[str], cfg: Dict[str, Any]) -> List[str]:
-    restic = cfg.get("restic", {}) if isinstance(cfg.get("restic"), dict) else {}
+    restic = get_config_section(cfg, "restic")
     start, end = find_top_level_block(lines, "restic")
     if start is None:
         return lines

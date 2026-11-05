@@ -1,7 +1,7 @@
 try:
-    from .support import FakePluginServer, create_runtime, mock, unittest
+    from .support import FakePluginServer, create_runtime, mock, tempfile, unittest
 except ImportError:
-    from support import FakePluginServer, create_runtime, mock, unittest
+    from support import FakePluginServer, create_runtime, mock, tempfile, unittest
 
 from mcdr2restic.backup.backup_runner import BackupRunner
 from mcdr2restic.core.models import BackupCanceled, BackupRunOutcome, BackupRunStatus
@@ -103,3 +103,26 @@ class BackupRunnerTests(unittest.TestCase):
         self.assertEqual(result.status, BackupRunStatus.CANCELED)
         self.assertTrue(result.detail.startswith("original; "))
         self.assertIn("save-on failed", result.detail)
+
+    def test_run_with_acquired_lock_survives_notify_crash(self):
+        runtime, runner = self.make_runner()
+        runner.admin_notifier = mock.Mock(side_effect=RuntimeError("onebot broken"))
+        server = FakePluginServer()
+
+        with tempfile.TemporaryDirectory() as data_dir:
+            server.get_data_folder = lambda: data_dir
+            runtime.backup.lock.acquire()
+            try:
+                with mock.patch("mcdr2restic.backup.backup_runner.run_backup_body"):
+                    runner._run_with_acquired_lock(server, "manual")
+            finally:
+                pass
+
+        self.assertFalse(runtime.backup.lock.locked())
+        self.assertEqual(
+            runtime.config_state.config["runtime"]["last_backup_status"],
+            BackupRunStatus.SUCCESS.value,
+        )
+        self.assertTrue(
+            any("onebot broken" in m for m in server.logger.warning_messages)
+        )

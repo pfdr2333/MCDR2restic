@@ -20,6 +20,7 @@ from mcdr2restic.defaults.default_constants import CONFIG_NAME
 from mcdr2restic.core.i18n import config_language, set_active_language, tr
 from mcdr2restic.core.language import get_mcdr_language
 from mcdr2restic.core.models import ConfigError
+from mcdr2restic.core.utils import get_config_section
 from mcdr2restic.core.runtime import PluginRuntime
 from mcdr2restic.config.state_store import (
     ensure_runtime,
@@ -125,4 +126,4 @@ def replace_or_append_enabled_line(lines: list, enabled: bool) -> list:
 
 def get_command_root(app_runtime: PluginRuntime) -> str:
     cfg = get_config_snapshot(app_runtime)
-    return str(cfg.get("command", {}).get("root", "!!restic"))
+    return str(get_config_section(cfg, "command").get("root", "!!restic"))

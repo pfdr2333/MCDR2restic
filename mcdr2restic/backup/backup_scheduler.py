@@ -15,6 +15,7 @@ from mcdr2restic.backup.scheduling import (
 from mcdr2restic.core.i18n import config_language, tr, tr_error
 from mcdr2restic.core.language import get_mcdr_language
 from mcdr2restic.core.models import BackupTrigger
+from mcdr2restic.core.utils import get_config_section
 
 
 ConfigProvider = Callable[[], Dict[str, Any]]
@@ -113,22 +114,30 @@ class BackupScheduler:
         label = tr(language, label_key)
         self.server.logger.info(tr(language, "log.scheduler.started", label=label))
         while not self.stop_event.is_set():
-            schedule = schedule_provider()
-            if schedule is None:
-                continue
-            wait_seconds, due_text = schedule
-            self.server.logger.info(
-                tr(
-                    language,
-                    "log.scheduler.next_run",
-                    label=label,
-                    seconds=int(wait_seconds),
-                    due_text=due_text,
+            try:
+                schedule = schedule_provider()
+                if schedule is None:
+                    continue
+                wait_seconds, due_text = schedule
+                self.server.logger.info(
+                    tr(
+                        language,
+                        "log.scheduler.next_run",
+                        label=label,
+                        seconds=int(wait_seconds),
+                        due_text=due_text,
+                    )
                 )
-            )
-            if self._wait(wait_seconds) or self.stop_event.is_set():
-                continue
-            schedule_trigger()
+                if self._wait(wait_seconds) or self.stop_event.is_set():
+                    continue
+                schedule_trigger()
+            except Exception as exc:
+                # 循环兜底：坏配置等异常只允许跳过本轮，不允许杀死调度线程
+                detail = tr_error(language, exc)
+                self.server.logger.error(
+                    "{}: {}".format(tr(language, "error.scheduler.unexpected"), detail)
+                )
+                self._wait(30)
         self.server.logger.info(tr(language, "log.scheduler.stopped", label=label))
 
     def _next_normal_schedule(self) -> Optional[Tuple[float, str]]:
@@ -227,7 +236,7 @@ class BackupScheduler:
             self._language(cfg), "info.backup.skip_no_player_activity"
         )
         self.server.logger.info(message)
-        if cfg.get("notification", {}).get("notify_on_skip", False):
+        if get_config_section(cfg, "notification").get("notify_on_skip", False):
             self.admin_notifier(
                 "backup_skip_no_player", {"message": message}, cfg, False
             )

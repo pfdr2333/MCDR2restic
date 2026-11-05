@@ -25,7 +25,7 @@ from mcdr2restic.core.models import (
 from mcdr2restic.minecraft.minecraft_service import try_force_save_on
 from mcdr2restic.restic.restic_service import run_backup_body
 from mcdr2restic.core.runtime import PluginRuntime
-from mcdr2restic.core.utils import now_text
+from mcdr2restic.core.utils import get_config_section, now_text
 
 
 RestoreRunningProvider = Callable[[PluginRuntime], bool]
@@ -106,14 +106,35 @@ class BackupRunner:
         cfg = get_config_snapshot(self.app_runtime)
         try:
             self._record_backup_started(server, label, start_time)
-            self._notify_backup_started(cfg, label, start_time)
+            # 通知失败不允许中断备份生命周期，否则状态会卡在 running
+            self._notify_safely(
+                server,
+                lambda: self._notify_backup_started(cfg, label, start_time),
+            )
             outcome = self._execute_backup_run(server, cfg, label, started)
             outcome = self._include_save_on_result(server, outcome)
             finished = now_text()
             self._record_backup_finished(server, outcome, finished)
-            self._notify_backup_finished(cfg, label, start_time, finished, outcome)
+            self._notify_safely(
+                server,
+                lambda: self._notify_backup_finished(
+                    cfg, label, start_time, finished, outcome
+                ),
+            )
         finally:
             self._release_backup_slot()
+
+    def _notify_safely(self, server: PluginServerInterface, notify: Callable[[], None]):
+        try:
+            notify()
+        except Exception as exc:
+            server.logger.warning(
+                tr(
+                    self._language(server),
+                    "warn.notify.backup_notify_failed",
+                    error=exc,
+                )
+            )
 
     def _language(self, server: PluginServerInterface) -> str:
         return config_language(
@@ -138,11 +159,7 @@ class BackupRunner:
             save_config_unlocked(self.app_runtime, server)
 
     def _notify_backup_started(self, cfg: Dict[str, Any], label: str, start_time: str):
-        notification_cfg = (
-            cfg.get("notification", {})
-            if isinstance(cfg.get("notification"), dict)
-            else {}
-        )
+        notification_cfg = get_config_section(cfg, "notification")
         if not bool(notification_cfg.get("notify_on_start", True)):
             return
         self.admin_notifier(
@@ -297,9 +314,7 @@ class BackupRunner:
 def should_notify_backup_finished(
     cfg: Dict[str, Any], outcome: BackupRunOutcome
 ) -> bool:
-    notification_cfg = (
-        cfg.get("notification", {}) if isinstance(cfg.get("notification"), dict) else {}
-    )
+    notification_cfg = get_config_section(cfg, "notification")
     if outcome.status == BackupRunStatus.SUCCESS:
         return bool(notification_cfg.get("notify_on_success", True))
     return bool(notification_cfg.get("notify_on_failure", True))
