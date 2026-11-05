@@ -112,8 +112,13 @@ class NotificationDispatcher:
         text: str,
         values: Optional[Dict[str, Any]],
     ):
+        admin_qqs = channel_cfg.get("admin_qqs", [])
+        if not isinstance(admin_qqs, (list, tuple)):
+            # 字符串会被逐字符拆分并向错误 QQ 号真实发送，标量则 TypeError
+            self._warn_server("warn.notify.onebot_admin_qqs_invalid")
+            return
         # 每个QQ的发送失败已单独告警，不中断其余收件人
-        for qid in channel_cfg.get("admin_qqs", []):
+        for qid in admin_qqs:
             self._send_onebot_message(qid, text)
 
     def _deliver_client(

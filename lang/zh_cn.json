@@ -191,6 +191,7 @@
   "mcdr2restic.warn.discord.send_failed": "Discord Webhook 发送失败：{error}",
   "mcdr2restic.warn.notify.onebot_not_started": "OneBot 未启动，无法发送通知：{template_key}",
   "mcdr2restic.warn.notify.onebot_send_failed": "发送 OneBot 通知到 QQ {user_id} 失败：{error}",
+  "mcdr2restic.warn.notify.onebot_admin_qqs_invalid": "OneBot admin_qqs 配置应为 QQ 号列表，当前值类型无效，已跳过本次管理员通知",
   "mcdr2restic.warn.notify.discord_not_initialized": "Discord 未初始化，无法发送通知：{template_key}",
   "mcdr2restic.warn.notify.discord_send_failed": "发送 Discord 通知失败：{error}",
   "mcdr2restic.warn.notify.message_template_format_failed": "消息模板 {template_key} 格式化失败：{error}",

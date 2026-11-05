@@ -193,6 +193,7 @@
   "mcdr2restic.warn.discord.send_failed": "Discord webhook send failed: {error}",
   "mcdr2restic.warn.notify.onebot_not_started": "OneBot is not started, cannot send notification: {template_key}",
   "mcdr2restic.warn.notify.onebot_send_failed": "Failed to send OneBot notification to QQ {user_id}: {error}",
+  "mcdr2restic.warn.notify.onebot_admin_qqs_invalid": "OneBot admin_qqs must be a list of QQ numbers; the current value type is invalid. Admin notification skipped this time.",
   "mcdr2restic.warn.notify.discord_not_initialized": "Discord is not initialized, cannot send notification: {template_key}",
   "mcdr2restic.warn.notify.discord_send_failed": "Failed to send Discord notification: {error}",
   "mcdr2restic.warn.notify.message_template_format_failed": "Failed to format message template {template_key}: {error}",

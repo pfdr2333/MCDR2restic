@@ -193,6 +193,7 @@
   "warn.discord.send_failed": "Discord webhook send failed: {error}",
   "warn.notify.onebot_not_started": "OneBot is not started, cannot send notification: {template_key}",
   "warn.notify.onebot_send_failed": "Failed to send OneBot notification to QQ {user_id}: {error}",
+  "warn.notify.onebot_admin_qqs_invalid": "OneBot admin_qqs must be a list of QQ numbers; the current value type is invalid. Admin notification skipped this time.",
   "warn.notify.discord_not_initialized": "Discord is not initialized, cannot send notification: {template_key}",
   "warn.notify.discord_send_failed": "Failed to send Discord notification: {error}",
   "warn.notify.message_template_format_failed": "Failed to format message template {template_key}: {error}",

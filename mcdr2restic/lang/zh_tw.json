@@ -191,6 +191,7 @@
   "warn.discord.send_failed": "Discord Webhook 傳送失敗：{error}",
   "warn.notify.onebot_not_started": "OneBot 未啟動，無法傳送通知：{template_key}",
   "warn.notify.onebot_send_failed": "傳送 OneBot 通知到 QQ {user_id} 失敗：{error}",
+  "warn.notify.onebot_admin_qqs_invalid": "OneBot admin_qqs 配置應為 QQ 號列表，當前值型別無效，已跳過本次管理員通知",
   "warn.notify.discord_not_initialized": "Discord 未初始化，無法傳送通知：{template_key}",
   "warn.notify.discord_send_failed": "傳送 Discord 通知失敗：{error}",
   "warn.notify.message_template_format_failed": "訊息模板 {template_key} 格式化失敗：{error}",

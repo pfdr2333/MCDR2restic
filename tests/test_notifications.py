@@ -279,3 +279,38 @@ class CustomWebhookTests(unittest.TestCase):
 
         self.assertTrue(server.logger.info_messages)
         self.assertEqual(server.logger.warning_messages, [])
+
+    def test_onebot_admin_qqs_invalid_type_warns_without_sending(self):
+        # 字符串会被逐字符拆分并向错误 QQ 号真实发送，非列表必须告警跳过（P0-4）
+        app_runtime = create_runtime()
+        dispatcher = NotificationDispatcher(app_runtime, dict)
+        server = FakePluginServer()
+        app_runtime.service.server = server
+        onebot = mock.Mock()
+        app_runtime.service.onebot = onebot
+
+        for bad in ("123456789", 123456789, {"1": "2"}):
+            dispatcher._deliver_onebot(
+                onebot, {"enabled": True, "admin_qqs": bad}, "text", None
+            )
+
+        onebot.send_private_msg.assert_not_called()
+        self.assertEqual(len(server.logger.warning_messages), 3)
+        self.assertTrue(
+            all("admin_qqs" in m for m in server.logger.warning_messages)
+        )
+
+    def test_onebot_admin_qqs_list_sends_to_each_number(self):
+        app_runtime = create_runtime()
+        dispatcher = NotificationDispatcher(app_runtime, dict)
+        app_runtime.service.server = FakePluginServer()
+        onebot = mock.Mock()
+        app_runtime.service.onebot = onebot
+
+        dispatcher._deliver_onebot(
+            onebot, {"admin_qqs": [111, 222]}, "text", None
+        )
+
+        onebot.send_private_msg.assert_has_calls(
+            [mock.call(111, "text"), mock.call(222, "text")]
+        )
