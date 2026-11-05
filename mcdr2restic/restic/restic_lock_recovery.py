@@ -102,6 +102,9 @@ def recoverable_stale_lock_info(
 ) -> Optional[ResticLockInfo]:
     """Return lock metadata when the error clearly points to a dead local process."""
 
+    if result.return_code == 0:
+        # 命令已成功却再触发解锁重跑会让同一命令执行两次
+        return None
     combined_output = combine_restic_output(result)
     if LOCKED_REPOSITORY_HINT not in combined_output.lower():
         return None

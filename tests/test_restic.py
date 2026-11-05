@@ -194,6 +194,26 @@ class ResticLockRecoveryTests(unittest.TestCase):
             info, restic_lock_recovery.ResticLockInfo(pid=69916, host="T6A-x")
         )
 
+    def test_recoverable_stale_lock_info_ignores_successful_command(self):
+        # 成功命令的输出即使提及锁也不允许触发解锁重跑，防止同一命令执行两次
+        result = ResticCommandResult(
+            "maintenance", ["forget"], 0, self.LOCK_ERROR_OUTPUT, "", 1
+        )
+
+        with (
+            mock.patch.object(
+                restic_lock_recovery,
+                "lock_belongs_to_current_host",
+                return_value=True,
+            ),
+            mock.patch.object(
+                restic_lock_recovery, "process_exists", return_value=False
+            ),
+        ):
+            info = restic_lock_recovery.recoverable_stale_lock_info(result)
+
+        self.assertIsNone(info)
+
     def test_run_restic_command_with_lock_recovery_unlocks_and_retries_once(self):
         runtime = create_runtime()
         server = FakePluginServer()
