@@ -20,8 +20,11 @@ def ensure_config_file_exists(server: PluginServerInterface, language: str):
     if os.path.exists(config_path):
         return
 
-    with open(config_path, "w", encoding="utf8") as file:
-        file.write(get_default_config_template(language))
+    # 函数内导入避免与 state_store 的模块级循环依赖（state_store 导入本模块）
+    from mcdr2restic.config.state_store import save_text_file_atomically
+
+    # 首次生成同样走原子写：中断留下的半截 YAML 会让下次启动报 yaml_invalid（P1-8）
+    save_text_file_atomically(config_path, get_default_config_template(language))
     warn_about_legacy_config_if_needed(server)
 
 

@@ -50,6 +50,7 @@ except ImportError:
         yaml,
     )
 
+from mcdr2restic.config.config_paths import ensure_config_file_exists
 from mcdr2restic.defaults.message_defaults import build_default_messages
 
 
@@ -323,6 +324,30 @@ class ConfigurationTests(unittest.TestCase):
                 load_config_file_mapping(server)
 
         self.assertEqual(error.exception.i18n_key, "error.config.yaml_invalid")
+
+    def test_first_config_generation_is_atomic(self):
+        server = FakePluginServer()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            server.get_data_folder = lambda: temp_dir
+
+            ensure_config_file_exists(server, "en_us")
+
+            with open(os.path.join(temp_dir, "config.yml"), "r", encoding="utf8") as file:
+                self.assertIn("config_version:", file.read())
+
+    def test_interrupted_first_config_generation_leaves_no_partial_file(self):
+        # 首次生成 config.yml 中断时不得留下半截 YAML，否则下次启动报 yaml_invalid（P1-8）
+        server = FakePluginServer()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            server.get_data_folder = lambda: temp_dir
+            config_path = os.path.join(temp_dir, "config.yml")
+            with mock.patch(
+                "mcdr2restic.config.state_store.save_text_file_atomically",
+                side_effect=RuntimeError("interrupted"),
+            ), self.assertRaises(RuntimeError):
+                ensure_config_file_exists(server, "en_us")
+
+            self.assertFalse(os.path.exists(config_path))
 
 
 class StateFileDurabilityTests(unittest.TestCase):
