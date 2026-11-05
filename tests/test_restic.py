@@ -9,6 +9,8 @@ try:
         ResticCommandResult,
         ResticCommands,
         ResticProgressState,
+        SaveFlushWatcher,
+        SimpleNamespace,
         TerminateResult,
         assert_restic_success,
         classify_restic_failure_output,
@@ -39,6 +41,8 @@ except ImportError:
         ResticCommandResult,
         ResticCommands,
         ResticProgressState,
+        SaveFlushWatcher,
+        SimpleNamespace,
         TerminateResult,
         assert_restic_success,
         classify_restic_failure_output,
@@ -476,3 +480,150 @@ class ResticTerminationTests(unittest.TestCase):
             "kill failed",
             termination_failure_suffix(TerminateResult(error="kill failed")),
         )
+
+
+class SaveFlushWatcherTests(unittest.TestCase):
+    def test_notify_output_sets_event_on_completion_match(self):
+        watcher = SaveFlushWatcher()
+        watcher.arm(["Saved the game"])
+
+        watcher.notify_output(
+            SimpleNamespace(
+                is_user=False,
+                content="[23:49:23 INFO]: Saved the game",
+            )
+        )
+
+        self.assertTrue(watcher.wait(0.0))
+
+    def test_notify_output_ignores_user_input_and_unmatched_lines(self):
+        watcher = SaveFlushWatcher()
+        watcher.arm(["Saved the game"])
+
+        watcher.notify_output(SimpleNamespace(is_user=True, content=">save-all flush"))
+        watcher.notify_output(SimpleNamespace(is_user=False, content="Saving chunks"))
+        self.assertFalse(watcher.wait(0.0))
+
+        watcher.notify_output(SimpleNamespace(is_user=False, content="Saved the game"))
+        self.assertTrue(watcher.wait(0.0))
+
+    def test_notify_output_does_nothing_when_not_armed(self):
+        watcher = SaveFlushWatcher()
+
+        watcher.notify_output(SimpleNamespace(is_user=False, content="Saved the game"))
+
+        self.assertFalse(watcher.wait(0.0))
+        self.assertFalse(watcher.is_armed())
+
+    def test_disarm_clears_patterns_and_event(self):
+        watcher = SaveFlushWatcher()
+        watcher.arm(["Saved the game"])
+
+        watcher.disarm()
+
+        self.assertFalse(watcher.is_armed())
+        watcher.notify_output(SimpleNamespace(is_user=False, content="Saved the game"))
+        self.assertFalse(watcher.wait(0.0))
+
+    def test_wait_returns_false_after_timeout(self):
+        watcher = SaveFlushWatcher()
+        watcher.arm(["Saved the game"])
+
+        self.assertFalse(watcher.wait(0.05))
+
+
+class WaitForSaveAllFlushTests(unittest.TestCase):
+    def build_cfg(self, **overrides):
+        cfg = {
+            "save_all_command": "save-all flush",
+            "wait_after_save_off_seconds": 0,
+            "wait_after_save_all_seconds": 10,
+            "wait_for_save_all_completion": True,
+            "save_all_done_patterns": ["Saved the game"],
+        }
+        cfg.update(overrides)
+        return cfg
+
+    def test_flush_completion_releases_backup_immediately(self):
+        runtime = create_runtime()
+        server = CommandServer()
+        executed = []
+
+        def fake_execute(_runtime, _server, command, label):
+            executed.append(command)
+            if label == "save-all":
+                runtime.save_flush_watcher.notify_output(
+                    SimpleNamespace(is_user=False, content="Saved the game")
+                )
+
+        with mock.patch.object(
+            restic_service, "execute_mc_command", side_effect=fake_execute
+        ):
+            restic_service.wait_for_save_all_flush(
+                runtime, server, self.build_cfg()
+            )
+
+        self.assertEqual(executed, ["save-all flush"])
+        self.assertIn("已完成", server.logger.info_messages[0])
+        self.assertFalse(runtime.save_flush_watcher.is_armed())
+
+    def test_flush_wait_timeout_falls_back_with_warning(self):
+        runtime = create_runtime()
+        server = CommandServer()
+
+        with mock.patch.object(restic_service, "execute_mc_command"):
+            restic_service.wait_for_save_all_flush(
+                runtime, server, self.build_cfg(wait_after_save_all_seconds=0.05)
+            )
+
+        self.assertIn("未检测到完成提示", server.logger.warning_messages[0])
+
+    def test_disabled_completion_uses_fixed_sleep(self):
+        runtime = create_runtime()
+        server = CommandServer()
+        slept = []
+
+        with mock.patch.object(restic_service, "execute_mc_command"), mock.patch.object(
+            restic_service,
+            "sleep_or_cancel",
+            side_effect=lambda _runtime, seconds: slept.append(seconds),
+        ):
+            restic_service.wait_for_save_all_flush(
+                runtime, server, self.build_cfg(wait_for_save_all_completion=False)
+            )
+
+        self.assertEqual(slept, [10])
+        self.assertFalse(runtime.save_flush_watcher.is_armed())
+
+    def test_zero_timeout_still_sends_save_all_without_waiting(self):
+        runtime = create_runtime()
+        server = CommandServer()
+        executed = []
+
+        with mock.patch.object(
+            restic_service,
+            "execute_mc_command",
+            side_effect=lambda _r, _s, command, _label: executed.append(command),
+        ), mock.patch.object(restic_service, "sleep_or_cancel"):
+            restic_service.wait_for_save_all_flush(
+                runtime, server, self.build_cfg(wait_after_save_all_seconds=0)
+            )
+
+        self.assertEqual(executed, ["save-all flush"])
+        self.assertFalse(runtime.save_flush_watcher.is_armed())
+
+    def test_empty_patterns_uses_fixed_sleep(self):
+        runtime = create_runtime()
+        server = CommandServer()
+        slept = []
+
+        with mock.patch.object(restic_service, "execute_mc_command"), mock.patch.object(
+            restic_service,
+            "sleep_or_cancel",
+            side_effect=lambda _runtime, seconds: slept.append(seconds),
+        ):
+            restic_service.wait_for_save_all_flush(
+                runtime, server, self.build_cfg(save_all_done_patterns=[])
+            )
+
+        self.assertEqual(slept, [10])

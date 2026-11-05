@@ -9,6 +9,9 @@ import tempfile
 import threading
 import types
 import unittest
+
+
+SimpleNamespace = types.SimpleNamespace
 import zipfile
 from contextlib import closing, nullcontext
 from datetime import datetime
@@ -121,6 +124,7 @@ from mcdr2restic.minecraft.player_activity_service import (
     has_recent_player_activity,
     resolve_known_online_players,
 )
+from mcdr2restic.minecraft.save_flush_watcher import SaveFlushWatcher
 from mcdr2restic.notifications import render_message
 from mcdr2restic.notifications.custom_webhook import (
     CustomWebhookClient,
@@ -289,7 +293,9 @@ __all__ = [
     "RestoreSession",
     "RestoreTaskRecord",
     "RuntimeStatusProviders",
+    "SaveFlushWatcher",
     "SchedulerDependencies",
+    "SimpleNamespace",
     "StatusViewContext",
     "TerminateResult",
     "add_restore_task",

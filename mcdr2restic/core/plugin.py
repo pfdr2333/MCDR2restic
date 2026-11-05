@@ -135,6 +135,9 @@ class PluginEntrypoint:
     def on_mcdr_stop(self, server: PluginServerInterface):
         self.shutdown_runtime(server, server_tr(server, "reason.mcdr_stop"))
 
+    def on_info(self, server: PluginServerInterface, info: Info):
+        self.runtime.save_flush_watcher.notify_output(info)
+
     def on_player_joined(self, server: PluginServerInterface, player: str, info: Info):
         handle_player_joined(self.runtime, server, player)
 

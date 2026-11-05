@@ -10,6 +10,7 @@ from mcdr2restic.defaults.default_constants import (
     DEFAULT_MAINTENANCE_CRON,
     DEFAULT_RESTIC_EXECUTABLE_POSIX,
     DEFAULT_PROXY_PREFIXES,
+    DEFAULT_SAVE_ALL_DONE_PATTERNS,
     DEFAULT_UPDATE_API_URL,
     PLUGIN_REPOSITORY_URL,
     RESTIC_PROGRESS_INTERVAL_SECONDS,
@@ -129,6 +130,8 @@ def build_default_minecraft_config() -> ConfigDict:
         "wait_after_save_off_seconds": 2,
         "wait_after_save_all_seconds": 10,
         "wait_after_save_on_seconds": 1,
+        "wait_for_save_all_completion": True,
+        "save_all_done_patterns": list(DEFAULT_SAVE_ALL_DONE_PATTERNS),
     }
 
 

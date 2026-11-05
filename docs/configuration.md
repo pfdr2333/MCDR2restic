@@ -202,6 +202,10 @@ minecraft:
   wait_after_save_off_seconds: 2
   wait_after_save_all_seconds: 10
   wait_after_save_on_seconds: 1
+  wait_for_save_all_completion: true
+  save_all_done_patterns:
+    - "Saved the game"
+    - "Saved the world"
 ```
 
 说明：
@@ -209,6 +213,15 @@ minecraft:
 - Java 版常见配置是 `save-all flush`
 - 如果你的服务端不支持 `flush`，可改成 `save-all`
 - 维护流程不会使用这些命令
+
+### 等待 save-all 完成
+
+`wait_after_save_all_seconds` 是等待 `save-all` 落盘的**最长时限**，不是固定等待时间。默认情况下插件会监听服务端输出，一旦出现 `save_all_done_patterns` 里的关键词（原版服务端完成时输出 `Saved the game`）就立刻继续备份，并记录实际耗时；超大世界不需要再按最坏情况预估等待时间。
+
+如果达到时限仍未检测到完成提示，会记录一条 warning 后照常继续，行为与旧版的固定等待一致。
+
+- `wait_for_save_all_completion: false` 可以关掉这个检测，完全回到固定等待
+- 模组端或整合包如果输出文案不同，把实际的关键词加进 `save_all_done_patterns` 即可，留空则退回固定等待
 
 ## 6. restic 核心配置
 

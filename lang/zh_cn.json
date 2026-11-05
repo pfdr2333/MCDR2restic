@@ -114,6 +114,8 @@
   "mcdr2restic.error.process.termination_failed_suffix": "；终止失败：{error}",
   "mcdr2restic.error.process.termination_unknown": "未知错误",
   "mcdr2restic.error.minecraft.command_server_not_running": "执行 {label} 前检测到 Minecraft 服务端不在运行状态",
+  "mcdr2restic.log.minecraft.save_flush_completed": "save-all flush 已完成，用时 {seconds} 秒",
+  "mcdr2restic.warn.minecraft.save_flush_wait_timeout": "save-all flush 等待 {seconds} 秒未检测到完成提示，继续执行",
   "mcdr2restic.log.minecraft.command_execute": "执行 Minecraft 命令: {label}",
   "mcdr2restic.error.minecraft.command_failed": "执行 Minecraft 命令 {label} 失败: {error}",
   "mcdr2restic.log.minecraft.restore_save_on": "尝试恢复自动保存 save-on ({reason})",

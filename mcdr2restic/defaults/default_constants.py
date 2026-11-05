@@ -38,6 +38,11 @@ SNAPSHOT_QUERY_TIMEOUT_SECONDS: Final[int] = 30
 
 RESTIC_PROGRESS_INTERVAL_SECONDS: Final[int] = 5
 
+DEFAULT_SAVE_ALL_DONE_PATTERNS: Final[tuple[str, ...]] = (
+    "Saved the game",
+    "Saved the world",
+)
+
 DEFAULT_RESTIC_EXECUTABLE_POSIX: Final[str] = "./config/mcdr2restic/restic"
 
 DEFAULT_RESTIC_EXECUTABLE_WINDOWS: Final[str] = ".\\config\\mcdr2restic\\restic.exe"

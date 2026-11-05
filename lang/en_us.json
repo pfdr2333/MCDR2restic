@@ -112,6 +112,8 @@
   "mcdr2restic.error.process.termination_failed_suffix": "; termination failed: {error}",
   "mcdr2restic.error.process.termination_unknown": "unknown error",
   "mcdr2restic.error.minecraft.command_server_not_running": "Minecraft is not running before {label}",
+  "mcdr2restic.log.minecraft.save_flush_completed": "save-all flush completed in {seconds}s",
+  "mcdr2restic.warn.minecraft.save_flush_wait_timeout": "No save-all flush completion hint detected within {seconds}s, continuing",
   "mcdr2restic.log.minecraft.command_execute": "Running Minecraft command: {label}",
   "mcdr2restic.error.minecraft.command_failed": "Minecraft command {label} failed: {error}",
   "mcdr2restic.log.minecraft.restore_save_on": "Trying to restore save-on ({reason})",

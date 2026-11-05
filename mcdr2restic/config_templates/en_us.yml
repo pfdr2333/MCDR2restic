@@ -60,7 +60,14 @@ config_template: |-
     save_all_command: "save-all flush"
     save_on_command: "save-on"
     wait_after_save_off_seconds: 2
+    # Maximum time (seconds) to wait for save-all completion before backing up; finishes early once the completion hint is detected.
     wait_after_save_all_seconds: 10
+    # Whether to confirm save-all completion from server output; when disabled, always waits the full time above.
+    wait_for_save_all_completion: true
+    # Output keywords that mark save-all completion; adjust to match your server's log.
+    save_all_done_patterns:
+      - "Saved the game"
+      - "Saved the world"
     wait_after_save_on_seconds: 1
   
   restic:

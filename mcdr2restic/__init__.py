@@ -14,6 +14,7 @@ _HOOK_METHODS: Final[tuple[tuple[str, str], ...]] = (
     ("on_server_startup", "on_server_startup"),
     ("on_server_stop", "on_server_stop"),
     ("on_mcdr_stop", "on_mcdr_stop"),
+    ("on_info", "on_info"),
     ("on_player_joined", "on_player_joined"),
     ("on_player_left", "on_player_left"),
 )
@@ -58,6 +59,7 @@ def _build_hooks() -> tuple[Callable[..., Any], ...]:
     on_server_startup,
     on_server_stop,
     on_mcdr_stop,
+    on_info,
     on_player_joined,
     on_player_left,
 ) = _build_hooks()
@@ -68,6 +70,7 @@ del _make_entrypoint_hook
 
 __all__ = [
     "_shutdown_runtime",
+    "on_info",
     "on_load",
     "on_mcdr_stop",
     "on_player_joined",

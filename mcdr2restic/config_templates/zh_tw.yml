@@ -60,7 +60,14 @@ config_template: |-
     save_all_command: "save-all flush"
     save_on_command: "save-on"
     wait_after_save_off_seconds: 2
+    # 備份前等待 save-all 完成的最長時限（秒）；檢測到完成提示會提前繼續。
     wait_after_save_all_seconds: 10
+    # 是否透過服務端輸出確認 save-all 完成；關閉則固定等待上面的時限。
+    wait_for_save_all_completion: true
+    # 判定 save-all 完成的輸出關鍵詞，可按服務端實際日誌調整。
+    save_all_done_patterns:
+      - "Saved the game"
+      - "Saved the world"
     wait_after_save_on_seconds: 1
   
   restic:

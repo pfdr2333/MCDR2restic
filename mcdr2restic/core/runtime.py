@@ -8,6 +8,8 @@ from typing import Any, Dict, Optional
 
 from mcdreforged.api.all import PluginServerInterface
 
+from mcdr2restic.minecraft.save_flush_watcher import SaveFlushWatcher
+
 
 @dataclass
 class ConfigRuntimeState:
@@ -29,6 +31,7 @@ class ServiceRuntimeState:
     custom_webhook: Optional[Any] = None
     stopping: threading.Event = field(default_factory=threading.Event)
     snapshot_query_lock: threading.Lock = field(default_factory=threading.Lock)
+    save_flush_watcher: SaveFlushWatcher = field(default_factory=SaveFlushWatcher)
 
 
 @dataclass
@@ -152,6 +155,10 @@ class PluginRuntime:
     @property
     def snapshot_query_lock(self) -> threading.Lock:
         return self.service.snapshot_query_lock
+
+    @property
+    def save_flush_watcher(self) -> SaveFlushWatcher:
+        return self.service.save_flush_watcher
 
     @property
     def backup_lock(self) -> threading.Lock:

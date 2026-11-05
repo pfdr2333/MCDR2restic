@@ -3,11 +3,12 @@ from __future__ import annotations
 
 import os
 import time
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from mcdreforged.api.all import PluginServerInterface
 
 from mcdr2restic.core.i18n import server_tr
+from mcdr2restic.defaults.default_constants import DEFAULT_SAVE_ALL_DONE_PATTERNS
 from mcdr2restic.minecraft.minecraft_service import (
     check_canceled,
     execute_mc_command,
@@ -138,15 +139,71 @@ def prepare_minecraft_for_backup(
     )
 
     check_canceled(app_runtime)
-    execute_mc_command(
-        app_runtime,
-        server,
-        minecraft_cfg.get("save_all_command", "save-all flush"),
-        "save-all",
+    wait_for_save_all_flush(app_runtime, server, minecraft_cfg)
+
+
+def wait_for_save_all_flush(
+    app_runtime: PluginRuntime,
+    server: PluginServerInterface,
+    minecraft_cfg: Dict[str, Any],
+):
+    """发送 save-all 并等待落盘完成提示，未启用或超时时退回固定等待。"""
+
+    timeout = float(minecraft_cfg.get("wait_after_save_all_seconds", 10))
+    patterns = save_all_done_patterns(minecraft_cfg)
+    use_completion = bool(minecraft_cfg.get("wait_for_save_all_completion", True))
+
+    if not use_completion or not patterns or timeout <= 0:
+        execute_mc_command(
+            app_runtime,
+            server,
+            minecraft_cfg.get("save_all_command", "save-all flush"),
+            "save-all",
+        )
+        if timeout > 0:
+            sleep_or_cancel(app_runtime, timeout)
+        return
+
+    watcher = app_runtime.save_flush_watcher
+    watcher.arm(patterns)
+    started = time.monotonic()
+    try:
+        execute_mc_command(
+            app_runtime,
+            server,
+            minecraft_cfg.get("save_all_command", "save-all flush"),
+            "save-all",
+        )
+        completed = watcher.wait(
+            timeout, check_canceled=lambda: check_canceled(app_runtime)
+        )
+    finally:
+        watcher.disarm()
+    if completed:
+        server.logger.info(
+            server_tr(
+                server,
+                "log.minecraft.save_flush_completed",
+                seconds=max(1, int(time.monotonic() - started)),
+            )
+        )
+    else:
+        server.logger.warning(
+            server_tr(
+                server,
+                "warn.minecraft.save_flush_wait_timeout",
+                seconds=int(timeout),
+            )
+        )
+
+
+def save_all_done_patterns(minecraft_cfg: Dict[str, Any]) -> List[str]:
+    patterns = minecraft_cfg.get(
+        "save_all_done_patterns", list(DEFAULT_SAVE_ALL_DONE_PATTERNS)
     )
-    sleep_or_cancel(
-        app_runtime, float(minecraft_cfg.get("wait_after_save_all_seconds", 10))
-    )
+    if not isinstance(patterns, list):
+        return []
+    return [str(pattern) for pattern in patterns if str(pattern)]
 
 
 def run_backup_command(ctx: ResticOperationContext) -> str:
