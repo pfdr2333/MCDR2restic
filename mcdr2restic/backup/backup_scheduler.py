@@ -56,8 +56,19 @@ class BackupScheduler:
         self.skip_predicate = dependencies.skip_predicate
         self.admin_notifier = dependencies.admin_notifier
         self.stop_event = threading.Event()
-        self.wakeup_event = threading.Event()
         self._wakeup_state_lock = threading.Lock()
+        # 每个调度线程持有独立唤醒事件：共享单事件时一次唤醒只能被一个线程
+        # 消费，其余线程要睡满原超时才重新读配置（P5-3）。
+        # 非调度线程（测试等外部调用方）退回共享兜底事件。
+        self._wakeup_events = {
+            name: threading.Event()
+            for name in (
+                "MCDR2Restic-Scheduler-Normal",
+                "MCDR2Restic-Scheduler-Force",
+                "MCDR2Restic-Scheduler-Maintenance",
+            )
+        }
+        self._foreign_wakeup_event = threading.Event()
         self.thread = threading.Thread(
             target=self._normal_main, name="MCDR2Restic-Scheduler-Normal", daemon=True
         )
@@ -77,7 +88,7 @@ class BackupScheduler:
 
     def stop(self):
         self.stop_event.set()
-        self.wakeup_event.set()
+        self._set_all_wakeup_events()
         if self.thread.is_alive():
             self.thread.join(timeout=5)
         if self.force_thread.is_alive():
@@ -86,8 +97,13 @@ class BackupScheduler:
             self.maintenance_thread.join(timeout=5)
 
     def wakeup(self):
+        self._set_all_wakeup_events()
+
+    def _set_all_wakeup_events(self):
         with self._wakeup_state_lock:
-            self.wakeup_event.set()
+            for event in self._wakeup_events.values():
+                event.set()
+            self._foreign_wakeup_event.set()
 
     def _normal_main(self):
         self._run_schedule_loop(
@@ -243,21 +259,27 @@ class BackupScheduler:
                 "backup_skip_no_player", {"message": message}, cfg, False
             )
 
-    def _wait(self, seconds: float) -> bool:
+    def _wait(self, seconds: float, wakeup_event: Optional[threading.Event] = None) -> bool:
+        event = (
+            wakeup_event
+            or self._wakeup_events.get(
+                threading.current_thread().name, self._foreign_wakeup_event
+            )
+        )
         end = time.monotonic() + max(0.0, seconds)
         # 先取走等待开始前已到达的唤醒再清事件，否则两次 _wait 之间的 wakeup 会被抹掉
         with self._wakeup_state_lock:
-            pending_wakeup = self.wakeup_event.is_set()
-            self.wakeup_event.clear()
+            pending_wakeup = event.is_set()
+            event.clear()
         while not self.stop_event.is_set():
             if pending_wakeup:
                 return True
             remaining = end - time.monotonic()
             if remaining <= 0:
                 return False
-            if self.wakeup_event.wait(timeout=min(30.0, remaining)):
+            if event.wait(timeout=min(30.0, remaining)):
                 with self._wakeup_state_lock:
-                    self.wakeup_event.clear()
+                    event.clear()
                 return True
         return True
 

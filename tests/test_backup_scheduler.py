@@ -131,10 +131,22 @@ class BackupSchedulerTests(unittest.TestCase):
 
         scheduler.wakeup()
 
+        normal_event = scheduler._wakeup_events["MCDR2Restic-Scheduler-Normal"]
         started = time.monotonic()
-        self.assertTrue(scheduler._wait(30.0))
+        self.assertTrue(scheduler._wait(30.0, normal_event))
         self.assertLess(time.monotonic() - started, 1.0)
-        self.assertFalse(scheduler.wakeup_event.is_set())
+        self.assertFalse(normal_event.is_set())
+
+    def test_wakeup_sets_every_scheduler_thread_event(self):
+        # 一次 wakeup 必须同时唤醒全部三个调度线程，而非被其中一个独占（P5-3）
+        scheduler, _, _, _ = self.make_scheduler()
+
+        scheduler.wakeup()
+
+        started = time.monotonic()
+        for event in scheduler._wakeup_events.values():
+            self.assertTrue(scheduler._wait(30.0, event))
+        self.assertLess(time.monotonic() - started, 1.0)
 
     def test_wait_returns_false_when_deadline_reached_without_wakeup(self):
         scheduler, _, _, _ = self.make_scheduler()
@@ -142,4 +154,4 @@ class BackupSchedulerTests(unittest.TestCase):
         started = time.monotonic()
         self.assertFalse(scheduler._wait(0.05))
         self.assertGreaterEqual(time.monotonic() - started, 0.05)
-        self.assertFalse(scheduler.wakeup_event.is_set())
+        self.assertFalse(scheduler._foreign_wakeup_event.is_set())
