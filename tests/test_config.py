@@ -272,14 +272,22 @@ class ConfigurationTests(unittest.TestCase):
                     "schedule:\n"
                     "  require_player_joined_in_wait_period: true\n"
                     "  online_check_interval_seconds: 60\n"
+                    "runtime:\n"
+                    "  last_backup_status: success\n"
                     "config_version: 8\n"
                 )
 
             migrate_config_file(server, "en_us", build_default_config("en_us"))
 
+            with open(config_path, "r", encoding="utf8") as file:
+                migrated = file.read()
+
         warnings = "\n".join(server.logger.warning_messages)
         self.assertIn("schedule.require_player_joined_in_wait_period", warnings)
         self.assertIn("schedule.online_check_interval_seconds", warnings)
+        # runtime 顶级块从文件剥离并给出废弃告警（P3-7）
+        self.assertIn("runtime", warnings)
+        self.assertNotIn("runtime:", migrated)
 
     def test_config_migration_stays_silent_on_clean_config(self):
         with tempfile.TemporaryDirectory() as temp_dir:

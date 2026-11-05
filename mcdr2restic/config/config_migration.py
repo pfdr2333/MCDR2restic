@@ -144,6 +144,8 @@ DEPRECATED_RESTORE_KEYS = ("stop_timeout_seconds",)
 
 def collect_deprecated_config_keys(cfg: Dict[str, Any]) -> List[str]:
     keys: List[str] = []
+    if "runtime" in cfg:
+        keys.append("runtime")
     schedule = cfg.get("schedule")
     if isinstance(schedule, dict):
         keys.extend(
@@ -220,6 +222,8 @@ def apply_config_file_migrations(
     lines = ensure_schedule_migration_lines(lines, language, cfg)
     lines = remove_deprecated_schedule_lines(lines)
     lines = remove_deprecated_restore_lines(lines)
+    # runtime 顶级块是内存生成态，文件里的残留块早已无任何效果（P3-7）
+    lines = remove_deprecated_runtime_lines(lines)
     lines = ensure_restic_migration_lines(lines, language, cfg)
     lines = ensure_restic_timeout_value(lines, cfg)
     lines = ensure_missing_top_level_blocks(lines, language)
@@ -411,6 +415,13 @@ def remove_deprecated_restore_lines(lines: List[str]) -> List[str]:
     if not remove_indexes:
         return lines
     return [line for index, line in enumerate(lines) if index not in remove_indexes]
+
+
+def remove_deprecated_runtime_lines(lines: List[str]) -> List[str]:
+    start, end = find_top_level_block(lines, "runtime")
+    if start is None:
+        return lines
+    return lines[:start] + lines[end:]
 
 
 def deprecated_schedule_line_indexes(
