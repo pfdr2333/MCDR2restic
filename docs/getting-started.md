@@ -15,6 +15,8 @@
 
 ## 第一步：安装插件
 
+自动安装：在MCDR终端中输入`!!MCDR plugin install mcdr2restic`以进行自动安装
+
 手动安装：在 [GitHub Releases](https://github.com/pfdr2333/MCDR2restic/releases/latest) 中下载最新版本，然后将其放入 MCDR 的 `plugins` 文件夹中，使用 `!!MCDR plugin load mcdr2restic.mcdr` 加载插件。
 
 重载后，如果 `config/mcdr2restic/config.yml` 不存在，插件会自动生成一份示例配置。
