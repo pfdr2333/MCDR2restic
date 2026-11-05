@@ -62,11 +62,13 @@ class MaintenanceRunner:
         return self._run_with_acquired_lock(server)
 
     def _run_with_acquired_lock(self, server: PluginServerInterface) -> bool:
-        cfg = get_config_snapshot(self.app_runtime)
-        language = config_language(cfg, get_mcdr_language(server))
+        # 先登记 maintenance 标记再取配置快照：等待方（定时备份）轮询 give_up_when
+        # 依赖该标记，取快照的耗时窗口内不得让它误判维护未在运行（P1-6）
         self.app_runtime.backup.label = "maintenance"
-        self.app_runtime.backup.cancel.clear()
         try:
+            cfg = get_config_snapshot(self.app_runtime)
+            language = config_language(cfg, get_mcdr_language(server))
+            self.app_runtime.backup.cancel.clear()
             server.logger.info(tr(language, "info.maintenance.started"))
             run_maintenance_body(
                 self.app_runtime, server, cfg, self.snapshot_invalidator

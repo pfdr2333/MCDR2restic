@@ -99,6 +99,29 @@ class MaintenanceRunnerTests(unittest.TestCase):
             runtime.backup.lock.release()
         self.assertTrue(any("stopping" in m for m in server.logger.info_messages))
 
+    def test_label_set_before_config_snapshot(self):
+        # 等待方轮询 give_up_when 依赖 label，取快照窗口内必须已标记 maintenance（P1-6）
+        runtime, runner = self.make_runner()
+        runtime.config_state.config = {"language": "en_us"}
+        server = FakePluginServer(language="en_us")
+        labels_at_snapshot = []
+
+        def fake_snapshot(app_runtime):
+            labels_at_snapshot.append(app_runtime.backup.label)
+            return {"language": "en_us"}
+
+        with mock.patch(
+            "mcdr2restic.restic.maintenance_runner.get_config_snapshot",
+            side_effect=fake_snapshot,
+        ):
+            with mock.patch(
+                "mcdr2restic.restic.maintenance_runner.run_maintenance_body"
+            ):
+                self.assertTrue(runner.run_waiting(server))
+
+        # 首次快照发生在拿锁前（run_waiting 读语言），拿锁后的快照必须已带标记
+        self.assertEqual(labels_at_snapshot[-1], "maintenance")
+
     def test_waiting_maintenance_thread_never_runs_after_stop(self):
         runtime, runner = self.make_runner()
         runtime.config_state.config = {"language": "en_us"}
