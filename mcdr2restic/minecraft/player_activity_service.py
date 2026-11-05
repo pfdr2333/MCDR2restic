@@ -222,7 +222,11 @@ def should_skip_for_no_player_activity(
     if not player_activity_required(cfg):
         return False
     sample_online_players(
-        app_runtime, app_runtime.service.server, cfg, "schedule trigger"
+        app_runtime,
+        app_runtime.service.server,
+        cfg,
+        # reason 会拼进 debug 文案，不能直出内部英文标识（P3-17）
+        server_tr(app_runtime.service.server, "reason.schedule_trigger"),
     )
     with app_runtime.config_state.lock:
         ensure_runtime(app_runtime.config_state.config)

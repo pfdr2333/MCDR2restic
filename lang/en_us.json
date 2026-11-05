@@ -230,6 +230,7 @@
   "mcdr2restic.reason.backup_finally": "backup finalization",
   "mcdr2restic.reason.restore_stop_failed": "restore server stop failed",
   "mcdr2restic.reason.restore_pre_backup_failed": "restore pre-backup failed",
+  "mcdr2restic.reason.schedule_trigger": "scheduled trigger",
   "mcdr2restic.log.plugin.stopped": "MCDR2Restic stopped: {reason}",
   "mcdr2restic.log.update.disabled": "MCDR2Restic update checks are disabled",
   "mcdr2restic.help.command_description": "Restic backup, snapshot list, and restore queue management",

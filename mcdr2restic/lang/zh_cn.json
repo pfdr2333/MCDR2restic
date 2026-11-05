@@ -228,6 +228,7 @@
   "reason.backup_finally": "备份收尾",
   "reason.restore_stop_failed": "恢复停服失败",
   "reason.restore_pre_backup_failed": "恢复前置备份失败",
+  "reason.schedule_trigger": "定时调度触发",
   "log.plugin.stopped": "MCDR2Restic 已停止：{reason}",
   "log.update.disabled": "MCDR2Restic 版本更新检查已关闭",
   "help.command_description": "Restic 备份、快照列表与恢复队列管理",
