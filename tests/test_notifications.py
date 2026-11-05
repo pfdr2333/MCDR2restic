@@ -5,6 +5,7 @@ try:
         DiscordWebhookClient,
         FakePluginServer,
         NotificationDispatcher,
+        MessageRenderOptions,
         build_discord_mentions,
         build_discord_request,
         build_webhook_request,
@@ -23,6 +24,7 @@ except ImportError:
         DiscordWebhookClient,
         FakePluginServer,
         NotificationDispatcher,
+        MessageRenderOptions,
         build_discord_mentions,
         build_discord_request,
         build_webhook_request,
@@ -116,6 +118,17 @@ class NotificationTests(unittest.TestCase):
         self.assertEqual(
             render_message("custom", {"name": "ok"}, cfg), "[MCDR2Restic] ok"
         )
+
+    def test_missing_message_key_falls_back_to_render_language(self):
+        # messages 删键后兜底模板须跟随渲染语言，en_us 不得收到中文（P3-6）
+        cfg = {"onebot": {"message_prefix": "[T]"}, "messages": {}}
+        rendered = render_message(
+            "backup_failure",
+            {"label": "manual", "status": "success", "message": "m", "detail": "d"},
+            cfg,
+            MessageRenderOptions(language="en_us"),
+        )
+        self.assertTrue(rendered.startswith("[T] Backup problem"))
 
     def test_discord_mentions_are_explicit_and_ordered(self):
         cfg = {

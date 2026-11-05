@@ -135,7 +135,7 @@ from mcdr2restic.minecraft.player_activity_service import (
     resolve_known_online_players,
 )
 from mcdr2restic.minecraft.save_flush_watcher import SaveFlushWatcher
-from mcdr2restic.notifications import render_message
+from mcdr2restic.notifications import MessageRenderOptions, render_message
 from mcdr2restic.notifications.custom_webhook import (
     CustomWebhookClient,
     build_webhook_request,
@@ -313,6 +313,7 @@ __all__ = [
     "FakeLogger",
     "FakePluginServer",
     "FakeServer",
+    "MessageRenderOptions",
     "NotificationDispatcher",
     "OneBotClient",
     "Path",

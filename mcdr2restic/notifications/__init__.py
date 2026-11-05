@@ -10,6 +10,7 @@ from mcdr2restic.notifications.discord_webhook import (
     truncate_discord_content,
 )
 from mcdr2restic.notifications.message_templates import (
+    MessageRenderOptions,
     SafeFormatDict,
     build_message_values,
     get_message_template,
@@ -22,6 +23,7 @@ from mcdr2restic.notifications.onebot_client import OneBotClient
 __all__ = [
     "CustomWebhookClient",
     "DiscordWebhookClient",
+    "MessageRenderOptions",
     "NotificationDispatcher",
     "OneBotClient",
     "SafeFormatDict",

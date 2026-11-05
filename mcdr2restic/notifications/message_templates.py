@@ -33,7 +33,7 @@ def render_message(
     options = options or MessageRenderOptions()
     cfg = cfg or build_default_config()
     onebot_cfg = get_config_section(cfg, "onebot")
-    template = get_message_template(template_key, cfg)
+    template = get_message_template(template_key, cfg, options.language)
     data = build_message_values(template_key, values, onebot_cfg, options.prefix)
     try:
         return template.format_map(data)
@@ -50,12 +50,15 @@ def render_message(
         return "{} {}".format(data["prefix"], template_key)
 
 
-def get_message_template(template_key: str, cfg: Dict[str, Any]) -> str:
+def get_message_template(
+    template_key: str, cfg: Dict[str, Any], language: str = DEFAULT_LANGUAGE
+) -> str:
     messages = get_config_section(cfg, "messages")
     template = messages.get(template_key) if isinstance(messages, dict) else None
     if isinstance(template, str):
         return template
-    return get_default_message_template(template_key)
+    # messages 缺键时按渲染语言取默认模板，en_us 用户不得收到中文兜底（P3-6）
+    return get_default_message_template(template_key, language)
 
 
 def build_message_values(
