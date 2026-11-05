@@ -480,6 +480,27 @@ class StateFileDurabilityTests(unittest.TestCase):
                 self.assertNotIn("      first", file.read())
         self.assertTrue(server.logger.warning_messages)
 
+    def test_load_state_file_repairs_clip_block_scalar_header(self):
+        # safe_dump 对以换行结尾的多行值产出 |（clip）头，修复须同样覆盖（P5-2）
+        server = FakePluginServer()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            server.get_data_folder = lambda: temp_dir
+            path = os.path.join(temp_dir, "state.yml")
+            with open(path, "w", encoding="utf8") as file:
+                file.write(
+                    "runtime:\n"
+                    "  last_backup_message: |\n"
+                    "      first\n"
+                    "    second\n"
+                )
+
+            state = load_state_file(server)
+
+            self.assertIn("first", state["runtime"]["last_backup_message"])
+            with open(path, "r", encoding="utf8") as file:
+                self.assertNotIn("      first", file.read())
+        self.assertTrue(server.logger.warning_messages)
+
     def test_persist_player_state_throttles_file_writes(self):
         runtime = create_runtime()
         server = FakePluginServer()

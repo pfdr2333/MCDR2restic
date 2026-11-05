@@ -22,7 +22,8 @@ from mcdr2restic.core.runtime import PluginRuntime
 
 
 BLOCK_SCALAR_HEADER_PATTERN = re.compile(
-    r"^(?P<indent>[ ]*)(?P<key>[A-Za-z_][A-Za-z0-9_-]*)\s*:\s*\|-\s*$"
+    # safe_dump 对以换行结尾的多行值产出 |（clip）头，修复须同样识别（P5-2）
+    r"^(?P<indent>[ ]*)(?P<key>[A-Za-z_][A-Za-z0-9_-]*)\s*:\s*\|[-+]?\s*$"
 )
 
 
