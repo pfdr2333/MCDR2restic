@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, List
 
+from mcdr2restic.core.i18n import tr
+
 
 class TextEnum(str, Enum):
     def __str__(self) -> str:
@@ -52,6 +54,23 @@ def backup_trigger_label(trigger: Any) -> str:
     if isinstance(trigger, BackupTrigger):
         return trigger.value
     return str(trigger or BackupTrigger.MANUAL.value)
+
+
+# 触发标签的展示映射：中文消息中不直出英文枚举值；未映射值（如内部状态标记）保持原样
+TRIGGER_DISPLAY_LABEL_KEYS = {
+    BackupTrigger.MANUAL.value: "label.trigger.manual",
+    BackupTrigger.SCHEDULED.value: "label.trigger.scheduled",
+    BackupTrigger.FORCED.value: "label.trigger.forced",
+    BackupTrigger.RESTORE_PRE_BACKUP.value: "label.trigger.restore_pre_backup",
+}
+
+
+def backup_trigger_display_label(trigger: Any, language: str) -> str:
+    text = backup_trigger_label(trigger)
+    key = TRIGGER_DISPLAY_LABEL_KEYS.get(text)
+    if key is None:
+        return text
+    return tr(language, key)
 
 
 class BackupProblem(Exception):

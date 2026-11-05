@@ -20,6 +20,7 @@ from mcdr2restic.core.models import (
     BackupRunStatus,
     BackupRunOutcome,
     BackupTrigger,
+    backup_trigger_display_label,
     backup_trigger_label,
 )
 from mcdr2restic.minecraft.minecraft_service import try_force_save_on
@@ -89,8 +90,9 @@ class BackupRunner:
         label: Union[BackupTrigger, str],
         wait_for_slot: bool = False,
     ) -> bool:
-        label_text = backup_trigger_label(label)
+        raw_label = backup_trigger_label(label)
         language = self._language(server)
+        label_text = backup_trigger_display_label(label, language)
         if self.restore_running_provider(self.app_runtime):
             server.logger.warning(
                 tr(language, "warn.backup.restore_running", label=label_text)
@@ -106,7 +108,7 @@ class BackupRunner:
                     tr(language, "warn.backup.already_running", label=label_text)
                 )
             return False
-        self._run_with_acquired_lock(server, label_text)
+        self._run_with_acquired_lock(server, raw_label)
         return True
 
     def _acquire_backup_slot(self, wait_for_maintenance: bool) -> bool:
@@ -131,21 +133,25 @@ class BackupRunner:
         started = time.monotonic()
         start_time = now_text()
         cfg = get_config_snapshot(self.app_runtime)
+        # backup.label 是内部状态标记，消息与通知里的标签按配置语言渲染
+        label_text = backup_trigger_display_label(
+            label, config_language(cfg, get_mcdr_language(server))
+        )
         try:
-            self._record_backup_started(server, label, start_time)
+            self._record_backup_started(server, label_text, start_time)
             # 通知失败不允许中断备份生命周期，否则状态会卡在 running
             self._notify_safely(
                 server,
-                lambda: self._notify_backup_started(cfg, label, start_time),
+                lambda: self._notify_backup_started(cfg, label_text, start_time),
             )
-            outcome = self._execute_backup_run(server, cfg, label, started)
+            outcome = self._execute_backup_run(server, cfg, label_text, started)
             outcome = self._include_save_on_result(server, outcome)
             finished = now_text()
             self._record_backup_finished(server, outcome, finished)
             self._notify_safely(
                 server,
                 lambda: self._notify_backup_finished(
-                    cfg, label, start_time, finished, outcome
+                    cfg, label_text, start_time, finished, outcome
                 ),
             )
         finally:
