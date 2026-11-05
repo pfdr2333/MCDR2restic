@@ -18,7 +18,7 @@
   "error.backup.already_running": "当前已有备份在执行，拒绝重复启动",
   "error.backup.save_on_failed": "备份结束阶段执行 save-on 失败: {error}",
   "error.backup.save_on_detail": "save-on 恢复失败：{error}",
-  "runtime.backup.started": "{label} backup started",
+  "runtime.backup.started": "正在执行 {label} 备份",
   "schedule.normal": "正常",
   "schedule.forced": "强制",
   "schedule.maintenance": "维护",

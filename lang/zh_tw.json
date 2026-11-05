@@ -18,7 +18,7 @@
   "mcdr2restic.error.backup.already_running": "當前已有備份在執行，拒絕重複啟動",
   "mcdr2restic.error.backup.save_on_failed": "備份結束階段執行 save-on 失敗: {error}",
   "mcdr2restic.error.backup.save_on_detail": "save-on 恢復失敗：{error}",
-  "mcdr2restic.runtime.backup.started": "{label} backup started",
+  "mcdr2restic.runtime.backup.started": "正在執行 {label} 備份",
   "mcdr2restic.schedule.normal": "正常",
   "mcdr2restic.schedule.forced": "強制",
   "mcdr2restic.schedule.maintenance": "維護",

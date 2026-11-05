@@ -13,7 +13,7 @@ from mcdr2restic.config.state_store import (
     get_config_snapshot,
     save_config_unlocked,
 )
-from mcdr2restic.core.i18n import FALLBACK_LANGUAGE, config_language, tr
+from mcdr2restic.core.i18n import config_language, tr
 from mcdr2restic.core.language import get_mcdr_language
 from mcdr2restic.core.models import (
     BackupCanceled,
@@ -181,7 +181,12 @@ class BackupRunner:
             runtime_state["last_backup_end_time"] = None
             runtime_state["last_backup_status"] = BackupRunStatus.RUNNING.value
             runtime_state["last_backup_message"] = tr(
-                FALLBACK_LANGUAGE, "runtime.backup.started", label=label
+                config_language(
+                    self.app_runtime.config_state.config,
+                    get_mcdr_language(server),
+                ),
+                "runtime.backup.started",
+                label=label,
             )
             save_config_unlocked(self.app_runtime, server)
 
