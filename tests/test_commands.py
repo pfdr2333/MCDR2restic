@@ -32,3 +32,25 @@ class CommandHandlerTests(unittest.TestCase):
             server.register_command.call_args_list,
             [mock.call("restic"), mock.call("backup")],
         )
+
+    def test_register_commands_tolerates_scalar_or_empty_command_section(self):
+        handlers = command_handlers.CommandHandlers.__new__(
+            command_handlers.CommandHandlers
+        )
+        handlers.context = mock.Mock()
+        handlers.context.get_command_root.return_value = "restic"
+        handlers.build_command_tree = mock.Mock(side_effect=lambda root: root)
+        server = mock.Mock()
+
+        for section in ("xx", None, 1):
+            with mock.patch.object(
+                command_handlers,
+                "get_config_snapshot",
+                return_value={"command": section},
+            ):
+                handlers.register_commands(server)
+
+        self.assertEqual(
+            handlers.build_command_tree.call_args_list,
+            [mock.call("restic")] * 3,
+        )

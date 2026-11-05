@@ -850,5 +850,16 @@ class RestoreApplyRollbackTests(unittest.TestCase):
         self.assertFalse(runtime.restore.lock.locked())
 
 
+class PreRestoreBackupCommandTests(unittest.TestCase):
+    def test_build_tolerates_scalar_or_empty_restore_section(self):
+        # restore 段写成标量/空值时降级为默认 tag，不得让恢复流程崩溃（P0-2）
+        for section in ("xx", None, 1, {}):
+            args = restore_workflow.build_pre_restore_backup_command(
+                {"restore": section}
+            )
+
+            self.assertEqual(args, ["--tag", "mcdr2restic-pre-restore"])
+
+
 if __name__ == "__main__":
     unittest.main()

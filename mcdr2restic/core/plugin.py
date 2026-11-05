@@ -273,12 +273,13 @@ class PluginEntrypoint:
 
     def restart_discord(self, server: PluginServerInterface):
         self.runtime.service.discord = DiscordWebhookClient(
-            server, get_config_snapshot(self.runtime).get("discord", {})
+            server, get_config_section(get_config_snapshot(self.runtime), "discord")
         )
 
     def restart_custom_webhook(self, server: PluginServerInterface):
         self.runtime.service.custom_webhook = CustomWebhookClient(
-            server, get_config_snapshot(self.runtime).get("custom_webhook", {})
+            server,
+            get_config_section(get_config_snapshot(self.runtime), "custom_webhook"),
         )
 
     def restart_update_checker(

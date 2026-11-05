@@ -117,3 +117,21 @@ class ShutdownGuardTests(unittest.TestCase):
         self.assertTrue(
             any("save-on" in m for m in server.logger.warning_messages)
         )
+
+    def test_restart_webhook_clients_tolerate_scalar_or_empty_sections(self):
+        # discord/custom_webhook 段写成标量或空值时降级为空配置，不得中断加载（P0-2）
+        runtime = create_runtime()
+        entrypoint = PluginEntrypoint(runtime, BootstrapResult(logs=[]))
+        server = FakePluginServer()
+
+        for section in ("xx", None, 1):
+            with mock.patch(
+                "mcdr2restic.core.plugin.get_config_snapshot",
+                return_value={"discord": section, "custom_webhook": section},
+            ):
+                entrypoint.restart_discord(server)
+                entrypoint.restart_custom_webhook(server)
+
+        self.assertIsNotNone(runtime.service.discord)
+        self.assertIsNotNone(runtime.service.custom_webhook)
+        self.assertEqual(server.logger.warning_messages, [])

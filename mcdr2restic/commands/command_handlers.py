@@ -17,6 +17,7 @@ from mcdr2restic.commands.command_context import CommandContext
 from mcdr2restic.commands.restore_commands import RestoreCommands
 from mcdr2restic.commands.restic_commands import ResticCommands
 from mcdr2restic.core.i18n import server_rtr
+from mcdr2restic.core.utils import get_config_section
 from mcdr2restic.config.state_store import get_config_snapshot
 from mcdr2restic.commands.status_commands import StatusCommands
 
@@ -30,12 +31,11 @@ class CommandHandlers:
         self.restic = ResticCommands(self.context)
 
     def register_commands(self, server: PluginServerInterface):
-        roots = [self.context.get_command_root()]
-        roots.extend(
-            get_config_snapshot(self.context.app_runtime)
-            .get("command", {})
-            .get("aliases", [])
+        command_cfg = get_config_section(
+            get_config_snapshot(self.context.app_runtime), "command"
         )
+        roots = [self.context.get_command_root()]
+        roots.extend(command_cfg.get("aliases", []))
         seen: Set[str] = set()
         for root_name in roots:
             root_name = str(root_name).strip()

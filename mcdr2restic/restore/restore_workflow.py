@@ -400,7 +400,9 @@ def build_pre_restore_backup_command(cfg: Dict[str, Any]) -> List[str]:
     restic_cfg = cfg.get("restic", {}) if isinstance(cfg.get("restic"), dict) else {}
     args = normalize_command_args(restic_cfg.get(RESTIC_CFG_BACKUP_COMMAND, []))
     tag = str(
-        cfg.get("restore", {}).get("pre_restore_backup_tag", "mcdr2restic-pre-restore")
+        get_config_section(cfg, "restore").get(
+            "pre_restore_backup_tag", "mcdr2restic-pre-restore"
+        )
         or ""
     ).strip()
     if tag:
