@@ -56,7 +56,8 @@ class NotificationDispatcher:
                 section="onebot",
                 client_attr="onebot",
                 not_started_key="warn.notify.onebot_not_started",
-                send_failed_key="warn.notify.onebot_send_failed",
+                # 外层兜底拿不到具体 QQ 号，不能用含 {user_id} 的键（P3-4）
+                send_failed_key="warn.notify.onebot_deliver_failed",
                 deliver=self._deliver_onebot,
             ),
             ChannelSpec(
