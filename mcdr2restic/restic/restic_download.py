@@ -275,11 +275,17 @@ def parse_restic_release_metadata(data: bytes) -> Dict[str, Any]:
     return metadata
 
 
+SIGNATURE_ASSET_SUFFIXES = (".asc", ".sig")
+
+
 def select_restic_release_asset(
     release: Dict[str, Any], asset_keyword: str
 ) -> Dict[str, Any]:
     for asset in release.get("assets", []):
         name = str(asset.get("name", "") or "")
+        if name.lower().endswith(SIGNATURE_ASSET_SUFFIXES):
+            # 跳过 GPG 签名文件，避免子串匹配选中签名而非二进制本体
+            continue
         if asset_keyword in name:
             return asset
     raise BackupProblem(

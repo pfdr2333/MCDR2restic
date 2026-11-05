@@ -16,6 +16,7 @@ try:
         install_restic_archive,
         install_restic_from_urls,
         mock,
+        select_restic_release_asset,
         tempfile,
         unittest,
         verify_restic_download,
@@ -33,6 +34,7 @@ except ImportError:
         install_restic_archive,
         install_restic_from_urls,
         mock,
+        select_restic_release_asset,
         tempfile,
         unittest,
         verify_restic_download,
@@ -192,6 +194,31 @@ class DefaultVersionTests(unittest.TestCase):
             build_default_config()["restic"]["download_version"],
             get_default_restic_version(),
         )
+
+
+class SelectReleaseAssetTests(unittest.TestCase):
+    @staticmethod
+    def asset(name):
+        return {"name": name}
+
+    def test_signature_files_are_never_selected(self):
+        release = {
+            "assets": [
+                self.asset("restic_v0.19.1_windows_amd64.zip.asc"),
+                self.asset("restic_v0.19.1_windows_amd64.zip.sig"),
+                self.asset("restic_v0.19.1_windows_amd64.zip"),
+            ]
+        }
+
+        selected = select_restic_release_asset(release, "windows_amd64")
+
+        self.assertEqual(selected["name"], "restic_v0.19.1_windows_amd64.zip")
+
+    def test_missing_asset_raises_localized_problem(self):
+        release = {"assets": [self.asset("restic_v0.19.1_linux_amd64.bz2")]}
+
+        with self.assertRaises(BackupProblem):
+            select_restic_release_asset(release, "windows_amd64")
 
 
 class ResticInstallArchiveTests(unittest.TestCase):

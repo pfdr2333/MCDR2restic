@@ -155,6 +155,7 @@ from mcdr2restic.restic.restic_download import (
     install_restic_from_urls,
     is_default_restic_executable_path,
     resolve_restic_executable_path,
+    select_restic_release_asset,
     verify_restic_download,
 )
 from mcdr2restic.restic.restic_guidance import classify_restic_failure_output
@@ -400,6 +401,7 @@ __all__ = [
     "save_text_file_atomically",
     "save_yaml_file",
     "schedule_status_text",
+    "select_restic_release_asset",
     "server_is_running",
     "start_restic_process",
     "sys",
