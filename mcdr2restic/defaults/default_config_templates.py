@@ -194,18 +194,15 @@ def maintenance_schedule_block(language: str) -> str:
     if str(language).lower().startswith("zh"):
         return (
             "\n\nmaintenance_schedule:\n"
-            "  # 仓库维护调度。默认每天 03:00 执行一次；cron_expression 留空时仍使用默认值。\n"
-            "  # interval_seconds > 0 时使用固定间隔。\n"
-            "  # interval_seconds = 0 且 cron_expression = \"0\" 表示关闭维护调度。\n"
+            "  # 仓库维护调度，默认每天 03:00 执行一次。\n"
+            "  # interval_seconds > 0 时用固定间隔；为 0 且 cron_expression = \"0\" 时关闭。\n"
             "  interval_seconds: 0\n"
             '  cron_expression: "{}"'.format(DEFAULT_MAINTENANCE_CRON)
         )
     return (
         "\n\nmaintenance_schedule:\n"
-        "  # Repository maintenance schedule. Default: run once per day at 03:00; "
-        "empty cron_expression keeps this default.\n"
-        "  # interval_seconds > 0 uses a fixed interval.\n"
-        "  # interval_seconds = 0 with cron_expression = \"0\" disables maintenance scheduling.\n"
+        "  # Repository maintenance schedule, daily at 03:00 by default.\n"
+        "  # interval_seconds > 0 uses a fixed interval; 0 with cron_expression = \"0\" disables it.\n"
         "  interval_seconds: 0\n"
         '  cron_expression: "{}"'.format(DEFAULT_MAINTENANCE_CRON)
     )

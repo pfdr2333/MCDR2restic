@@ -15,41 +15,28 @@ config_template: |-
     # Aliases
     aliases:
       - "!!m2r"
-    # MCDR permission level.
+    # MCDR permission level
     permission_level: 3
   
   schedule:
-    # interval_seconds > 0 uses a fixed interval.
-    # interval_seconds = 0 enables the 6-field cron_expression below.
+    # interval_seconds > 0 uses a fixed interval; 0 uses the 6-field cron below.
     interval_seconds: 0
-    # 6-field cron: second minute hour day month weekday. Default: check normal backups every 3 hours.
+    # 6-field cron: second minute hour day month weekday. Default: every 3 hours.
     cron_expression: "0 0 0,3,6,9,12,15,18,21 * * *"
-    # Whether normal scheduled backups use player activity sensing.
-    # At trigger time, the plugin runs list once to check the current online count;
-    # join/left events record whether anyone entered or left during this period.
-    # Flow:
-    # - someone joined this period: back up
-    # - nobody joined and list reports 0 online: skip
-    # - nobody joined and list reports non-zero online: back up
-    # - nobody joined but someone left, even if list reports 0 online: back up
+    # Whether to back up only in periods with player activity: combines join/left events with the online count at trigger time; skips quiet periods.
     require_player_activity_in_wait_period: true
-    # Minecraft command used to query current online players. Default: list.
-    # It is executed with server.rcon_query. If RCON is unavailable, the plugin falls
-    # back to join/left event estimates.
+    # Minecraft command used to query online players, executed via RCON; without RCON only join/left events are used.
     online_check_command: "list"
   
   force_schedule:
-    # Forced backup schedule. It ignores player activity sensing and is disabled by default.
-    # interval_seconds > 0 uses a fixed interval.
-    # interval_seconds = 0 with cron_expression not equal to "0" enables the 6-field cron.
-    # interval_seconds = 0 with cron_expression = "0" disables forced backups.
+    # Forced backup schedule, ignoring player activity, disabled by default.
+    # interval_seconds > 0 uses a fixed interval; 0 with cron_expression = "0" disables it.
     interval_seconds: 0
     cron_expression: "0"
   
   maintenance_schedule:
-    # Repository maintenance schedule. Default: run once per day at 03:00; empty cron_expression keeps this default.
-    # interval_seconds > 0 uses a fixed interval.
-    # interval_seconds = 0 with cron_expression = "0" disables maintenance scheduling.
+    # Repository maintenance schedule, daily at 03:00 by default.
+    # interval_seconds > 0 uses a fixed interval; 0 with cron_expression = "0" disables it.
     interval_seconds: 0
     cron_expression: "0 0 3 * * *"
   
@@ -77,42 +64,32 @@ config_template: |-
     wait_after_save_on_seconds: 1
   
   restic:
-    # Every command is executed with executable prepended automatically.
-    # Default: the restic executable placed in MCDR's config folder.
+    # Every restic command runs with executable prepended; the default is the restic binary in the config folder.
     executable: __MCDR2RESTIC_EXECUTABLE__
-    # Working directory for the restic process.
-    # Empty string or null means inheriting MCDR's current working directory.
+    # Working directory for the restic process; empty inherits MCDR's current directory.
     working_directory: ""
-    # restic repository. Default: a local repository in MCDR's working directory.
+    # restic repository; a local repository under MCDR's working directory by default.
     repository: __MCDR2RESTIC_REPOSITORY__
-    # Repository password. This direct password has priority; when empty, password_file is used.
-    # The sample password is only for easy first-run testing. Change it for production.
+    # Repository password; password_file is used when empty. The sample password is for first-run testing only — change it for production.
     password: "123456"
-    # Password file. Used only when password is empty.
+    # Password file, used only when password is empty.
     password_file: ""
-    # Automatically download restic if executable still uses the default path and is missing.
-    # Only Linux amd64 and Windows amd64 are supported; other systems are skipped.
+    # Download restic automatically when missing (Linux/Windows amd64 only).
     auto_download: true
-    # restic download version. latest uses the latest GitHub release; version tags such as v0.18.0 are also accepted.
+    # Download version: latest or a tag such as v0.18.0.
     download_version: "latest"
-    # Download proxy prefixes. The plugin tries official GitHub first, then these proxies in order.
+    # Download proxy prefixes: official GitHub first, then these in order.
     download_proxy_prefixes:
       - "https://gh.llkk.cc/"
       - "https://gh-proxy.com/"
       - "https://hub.gitmirror.com/"
     download_timeout_seconds: 120
-    # Automatically run restic init when a local repository is missing or lacks config.
-    # Remote repositories such as S3/B2/rest/sftp/rclone are not initialized automatically.
+    # Run restic init automatically when a local repository is missing; remote repositories are not initialized.
     auto_init_local_repository: true
-    # restic inherits MCDR's process environment and then applies these variables.
-    # A value of null removes an inherited variable with the same name.
-    # repository/password/password_file automatically set RESTIC_REPOSITORY,
-    # RESTIC_PASSWORD and RESTIC_PASSWORD_FILE.
-    # You can also add cloud backend environment variables here, such as those for S3/B2.
+    # Extra environment variables for restic; a null value removes an inherited variable.
+    # repository/password/password_file are exported as RESTIC_* variables automatically.
     environment: {}
-    # Repository maintenance commands run from maintenance_schedule, independently of backups.
-    # executable is prepended automatically to each command, e.g.:
-    # restic forget ...
+    # Repository maintenance commands, scheduled by maintenance_schedule, executable prepended.
     maintenance_commands:
       - [
           "forget",
@@ -120,9 +97,7 @@ config_template: |-
           "--keep-daily", "7",
           "--prune"
         ]
-    # Backup command.
-    # executable is prepended automatically, e.g.:
-    # restic backup ...
+    # Backup command, executable prepended. Only worlds are backed up by default; consider the whole ./server directory or the MCDR root to protect files beyond the save data.
   __MCDR2RESTIC_DEFAULT_BACKUP_COMMENT__
     backup_command:
       - "backup"
@@ -131,16 +106,14 @@ config_template: |-
       - "minecraft"
       - "--host"
       - "mcdr2Restic"
-    # Timeout shared by restic command workflows. 0 means unlimited.
+    # Total timeout for restic command workflows, 0 means unlimited.
     timeout_seconds: 0
-    # Progress echo interval for restic backup/restore --json, in seconds.
+    # Progress echo interval for backup/restore --json, in seconds.
     progress_interval_seconds: 5
-    # restic exit codes.
-    # 0 indicates success.
-    # 3 indicates some source files were unreadable and is treated as failure by default.
+    # Exit codes treated as success.
     success_exit_codes:
       - 0
-    # Even if the exit code is 0, matching any of these patterns marks the run as abnormal.
+    # Output matching these rules is treated as failure.
     error_regexes:
       - '(?i)^fatal:'
       - '(?i)^error(?:s)?\b(?!:\s*0\b)'
@@ -152,22 +125,20 @@ config_template: |-
     max_output_chars_in_notification: 1800
   
   onebot:
-    # OneBot V11 forward WebSocket.
-    # After filling admin_qqs, set enabled to true.
+    # OneBot v11 notifications. Fill admin_qqs, then set enabled to true.
     enabled: false
-    # WebSocket server address
+    # WebSocket address
     ws_url: "ws://127.0.0.1:8777"
-    # Token used for connection authentication
+    # Connection auth token
     access_token: ""
-    # true uses Header: Authorization: Bearer xxx;
-    # false uses the URL parameter access_token (commonly used by NapCat).
+    # true puts the token in the Authorization header; false puts it in the URL parameter (commonly used by NapCat).
     use_header_auth: false
     # QQ accounts to receive notifications
     admin_qqs:
       - 123456789
     # Message prefix
     message_prefix: "[MCDR2Restic]"
-    # Network timeout and reconnect strategy
+    # Connect/send timeouts and reconnect interval (seconds)
     connect_timeout_seconds: 10
     send_timeout_seconds: 10
     reconnect_interval_seconds: 5
@@ -175,42 +146,55 @@ config_template: |-
   discord:
     # Discord webhook notifications. Fill webhook_url, then set enabled to true.
     enabled: false
-    # Discord channel webhook URL.
+    # Discord channel webhook URL
     webhook_url: ""
-    # Webhook display name and avatar. Leave avatar_url empty to use the Discord webhook default.
+    # Webhook display name and avatar; leave empty for the Discord defaults.
     username: "MCDR2Restic"
     avatar_url: ""
-    # Discord notification prefix. Message bodies still use templates under messages.
+    # Notification message prefix
     message_prefix: "[MCDR2Restic]"
-    # Optional mentions. Empty by default to avoid accidental pings.
+    # Optional mentions; empty by default to avoid accidental pings.
     mention_user_ids: []
     mention_role_ids: []
     mention_everyone: false
     send_timeout_seconds: 10
   
+  custom_webhook:
+    # Generic custom webhook. Fill url, then set enabled to true.
+    enabled: false
+    # URL that receives the POST request.
+    url: ""
+    # Notification message prefix.
+    message_prefix: "[MCDR2Restic]"
+    # Request timeout in seconds.
+    send_timeout_seconds: 10
+    # Extra request headers, e.g. Authorization.
+    headers: {}
+    # JSON body template. {message} in leaf values becomes the notification text; variables such as {label} and {status} are also available.
+    payload:
+      content: "{message}"
+  
   notification:
-    # Backup lifecycle notification policy.
-    # Controls at which backup stages QQ notifications are sent to the administrators above.
-    notify_on_start: true # Send a notification when a backup task starts.
-    notify_on_success: true # Send a notification when a backup task completes successfully.
-    notify_on_failure: true # Send a notification when a backup task fails.
-    notify_on_skip: false # Send a notification when a backup task is skipped (e.g. backup not required).
+    # Backup notification policy, applied to OneBot, Discord and the custom webhook.
+    notify_on_start: true # Notify when a backup starts.
+    notify_on_success: true # Notify when a backup succeeds.
+    notify_on_failure: true # Notify when a backup fails.
+    notify_on_skip: false # Notify when a backup is skipped.
   
   snapshot_cache:
-    # restic snapshot list cache used by the status command.
-    # The cache is stored in SQLite and invalidated only after this plugin changes the repository.
+    # Snapshot list cache for the status command.
     enabled: true
-    # Number of snapshots shown per page. Default: 10.
+    # Snapshots per page
     page_size: 10
-    # Timeout for restic snapshots --json when refreshing the cache.
+    # Timeout for restic snapshots when refreshing the cache (seconds)
     query_timeout_seconds: 30
-    # SQLite cache file name under this plugin's config directory.
+    # Cache database file name, under the plugin config directory
     database: "snapshots.sqlite3"
   
   restore:
-    # Before applying restore tasks, the plugin creates one safety backup with this tag.
+    # Tag applied to the safety snapshot created before restoring.
     pre_restore_backup_tag: "mcdr2restic-pre-restore"
-    # The restore workflow is driven by MCDR server stop/start hooks; these values are reserved for the state machine or external watchdogs.
+    # Timeouts for stopping/starting Minecraft during the restore workflow (seconds).
     stop_timeout_seconds: 120
     start_timeout_seconds: 120
   
