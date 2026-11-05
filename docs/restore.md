@@ -167,10 +167,11 @@ MCDR2Restic 的恢复流程是“先入队，再执行”。
 你会看到类似这样的列表：
 
 ```text
-恢复任务
+MCDR2Restic 恢复任务列表
   1. [文件] 8f2f9c3d -> /server/whitelist.json
   2. [文件夹] 8f2f9c3d -> /server/world/region
   3. [整份快照] 8f2f9c3d -> / (恢复到 D:\mc\restore-out)
+提示：!!restic restore apply 可以执行任务
 ```
 
 ## 删除恢复任务
