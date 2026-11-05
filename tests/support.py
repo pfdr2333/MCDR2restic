@@ -90,7 +90,6 @@ from mcdr2restic.config.config_migration import (
 )
 from mcdr2restic.config.state_store import (
     load_state_file,
-    load_yaml_mapping,
     load_yaml_mapping_with_text_repair,
     repair_inconsistent_block_scalar_indentation,
     save_text_file_atomically,
@@ -377,7 +376,6 @@ __all__ = [
     "list_restore_tasks",
     "load_config_file_mapping",
     "load_state_file",
-    "load_yaml_mapping",
     "load_yaml_mapping_with_text_repair",
     "make_source_translate",
     "mark_snapshot_cache_invalid",

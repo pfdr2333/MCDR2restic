@@ -31,9 +31,7 @@ MC_LIST_PLAYER_COUNT_PATTERNS = (
 
 def player_activity_required(cfg: Dict[str, Any]) -> bool:
     schedule = get_config_section(cfg, "schedule")
-    if "require_player_activity_in_wait_period" in schedule:
-        return bool(schedule.get("require_player_activity_in_wait_period", True))
-    return bool(schedule.get("require_player_joined_in_wait_period", True))
+    return bool(schedule.get("require_player_activity_in_wait_period", True))
 
 
 def runtime_player_set(runtime_state: Dict[str, Any]) -> Set[str]:

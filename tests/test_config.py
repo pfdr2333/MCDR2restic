@@ -13,7 +13,7 @@ try:
         get_default_config_template,
         load_config_file_mapping,
         load_state_file,
-        load_yaml_mapping,
+        load_yaml_mapping_with_text_repair,
         migrate_config_file,
         migrate_legacy_config,
         mock,
@@ -37,7 +37,7 @@ except ImportError:
         get_default_config_template,
         load_config_file_mapping,
         load_state_file,
-        load_yaml_mapping,
+        load_yaml_mapping_with_text_repair,
         migrate_config_file,
         migrate_legacy_config,
         mock,
@@ -411,10 +411,14 @@ class StateFileDurabilityTests(unittest.TestCase):
 
             with open(path + ".tmp", "w", encoding="utf8") as file:
                 file.write("garbage: [")
-            self.assertEqual(load_yaml_mapping(path), {"a": 1})
+            self.assertEqual(
+                load_yaml_mapping_with_text_repair(path).mapping, {"a": 1}
+            )
 
             save_yaml_file(path, {"b": 2})
-            self.assertEqual(load_yaml_mapping(path), {"b": 2})
+            self.assertEqual(
+                load_yaml_mapping_with_text_repair(path).mapping, {"b": 2}
+            )
 
     def test_concurrent_atomic_writes_keep_main_file_parseable(self):
         # 持锁写方与修复回写并发时不得因共享 .tmp 名互相截断，主文件始终可解析（P1-4）
@@ -440,7 +444,9 @@ class StateFileDurabilityTests(unittest.TestCase):
                 thread.join()
 
             self.assertEqual(errors, [])
-            self.assertIn(load_yaml_mapping(path)["index"], payloads)
+            self.assertIn(
+                load_yaml_mapping_with_text_repair(path).mapping["index"], payloads
+            )
             self.assertEqual(
                 [name for name in os.listdir(temp_dir) if name.endswith(".tmp")], []
             )

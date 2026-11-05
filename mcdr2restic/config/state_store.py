@@ -111,10 +111,6 @@ def merge_defaults(target: Dict[str, Any], defaults: Dict[str, Any]):
             merge_defaults(target[key], value)
 
 
-def load_yaml_mapping(path: str) -> Dict[str, Any]:
-    return load_yaml_mapping_with_text_repair(path).mapping
-
-
 def load_yaml_mapping_with_text_repair(
     path: str,
     repair_text: Optional[Callable[[str], Optional[str]]] = None,
