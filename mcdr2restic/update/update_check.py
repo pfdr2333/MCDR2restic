@@ -5,7 +5,6 @@ import json
 import os
 import re
 import threading
-import time
 from typing import Any, Callable, Dict, Optional, Tuple
 
 from mcdreforged.api.all import PluginServerInterface
@@ -55,7 +54,6 @@ class UpdateChecker:
         self.check_on_startup = check_on_startup
         self.config_provider = config_provider
         self.stop_event = threading.Event()
-        self.wakeup_event = threading.Event()
         self.thread = threading.Thread(
             target=self._main, name="MCDR2Restic-UpdateCheck", daemon=True
         )
@@ -65,7 +63,6 @@ class UpdateChecker:
 
     def stop(self):
         self.stop_event.set()
-        self.wakeup_event.set()
         if self.thread.is_alive():
             self.thread.join(timeout=5)
 
@@ -151,16 +148,8 @@ class UpdateChecker:
         )
 
     def _wait(self, seconds: float) -> bool:
-        end = time.monotonic() + max(0.0, seconds)
-        self.wakeup_event.clear()
-        while not self.stop_event.is_set():
-            remaining = end - time.monotonic()
-            if remaining <= 0:
-                return False
-            if self.wakeup_event.wait(timeout=min(60.0, remaining)):
-                self.wakeup_event.clear()
-                return True
-        return True
+        # wakeup_event 并无外部触发者，等待只需被 stop_event 打断（P4-3）
+        return self.stop_event.wait(timeout=max(0.0, seconds))
 
 
 def get_current_plugin_version(server: Optional[PluginServerInterface]) -> str:
