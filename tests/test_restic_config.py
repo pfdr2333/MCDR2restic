@@ -63,6 +63,11 @@ class ResticConfigTests(unittest.TestCase):
             ["world", "literal-source"],
         )
 
+    def test_extract_backup_sources_consumes_short_value_options(self):
+        args = ["backup", "-r", "./restic-repo", "-H", "srv", "-o", "key=value", "world"]
+
+        self.assertEqual(restic_config.extract_restic_backup_sources(args), ["world"])
+
     def test_effective_repository_prefers_environment_over_command_args(self):
         cfg = {
             "repository": "./environment-repo",
@@ -128,6 +133,15 @@ class ResticConfigTests(unittest.TestCase):
             "working_directory": "/server",
             "repository": "s3:bucket/repo",
             "backup_command": ["backup", "."],
+        }
+
+        restic_config.assert_backup_sources_do_not_contain_repository(cfg)
+
+    def test_repository_passed_via_short_option_is_not_a_backup_source(self):
+        cfg = {
+            "working_directory": "/server",
+            "repository": "/repo",
+            "backup_command": ["backup", "-r", "/repo", "./world"],
         }
 
         restic_config.assert_backup_sources_do_not_contain_repository(cfg)
