@@ -39,7 +39,6 @@ def build_restore_session(**overrides):
         "cache_key": "cache",
         "language": "zh_cn",
         "phase": "restoring",
-        "started_at": "now",
     }
     fields.update(overrides)
     return RestoreSession(**fields)
@@ -521,7 +520,6 @@ class RestoreWorkflowTests(unittest.TestCase):
             cache_key="cache",
             language="zh_cn",
             phase="starting",
-            started_at="now",
         )
 
         restore_workflow.handle_restore_server_startup(runtime, server)
@@ -535,7 +533,7 @@ class RestoreWorkflowTests(unittest.TestCase):
         server = FakePluginServer()
         runtime.restore.lock.acquire()
         runtime.restore.session = RestoreSession(
-            [], {"restore": {}}, {}, "cache", "zh_cn", "starting", "now"
+            [], {"restore": {}}, {}, "cache", "zh_cn", "starting"
         )
 
         finished = restore_workflow.finish_restore_start_timeout_if_still_starting(
@@ -551,7 +549,7 @@ class RestoreWorkflowTests(unittest.TestCase):
         runtime = create_runtime()
         server = FakePluginServer()
         old_session = RestoreSession(
-            [], {"restore": {}}, {}, "cache-old", "zh_cn", "starting", "old"
+            [], {"restore": {}}, {}, "cache-old", "zh_cn", "starting"
         )
         new_session = RestoreSession(
             [], {"restore": {}}, {}, "cache-new", "zh_cn", "starting", "new"
@@ -577,7 +575,7 @@ class RestoreWorkflowTests(unittest.TestCase):
         server = FakePluginServer()
         runtime.restore.lock.acquire()
         runtime.restore.session = RestoreSession(
-            [], {}, {}, "cache", "zh_cn", "starting", "now"
+            [], {}, {}, "cache", "zh_cn", "starting"
         )
 
         handled = restore_workflow.handle_restore_server_stop(

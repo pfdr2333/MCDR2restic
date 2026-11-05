@@ -32,7 +32,6 @@ def build_restore_session(phase):
         cache_key="cache",
         language="zh_cn",
         phase=phase,
-        started_at="now",
     )
 
 

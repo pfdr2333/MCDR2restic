@@ -52,7 +52,6 @@ def run_backup_body(
     app_runtime: PluginRuntime,
     server: PluginServerInterface,
     cfg: Dict[str, Any],
-    label: str,
     invalidate_snapshot_cache_func: SnapshotCacheInvalidator,
 ) -> str:
     restic_cfg = get_config_section(cfg, "restic")

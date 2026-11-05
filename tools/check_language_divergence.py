@@ -22,7 +22,6 @@ LANGUAGE_PAIRS: Tuple[Tuple[str, str], ...] = (
     ("lang/en_us.json", "mcdr2restic/lang/en_us.json"),
     ("lang/zh_tw.json", "mcdr2restic/lang/zh_tw.json"),
 )
-ZERO_SHA = "0000000000000000000000000000000000000000"
 
 
 def load_semantic_messages(path: str) -> Dict[str, str]:

@@ -309,9 +309,7 @@ def consume_restic_output_item(
     append_restic_output_line(
         stream_name, line, buffers.stdout_lines, buffers.stderr_lines
     )
-    handle_restic_stream_line(
-        session.app_runtime.service.server, session.progress, stream_name, line
-    )
+    handle_restic_stream_line(session.app_runtime.service.server, session.progress, line)
     maybe_emit_restic_progress(
         session.app_runtime.service.server,
         session.progress,

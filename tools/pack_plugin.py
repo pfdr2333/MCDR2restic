@@ -138,8 +138,6 @@ def iter_required_relative_paths(
             )
         yield Path(required_name)
     for optional_name in OPTIONAL_ROOT_FILES:
-        if optional_name in REQUIRED_ROOT_FILES:
-            continue
         optional_path = root / optional_name
         if optional_path.is_file():
             yield Path(optional_name)

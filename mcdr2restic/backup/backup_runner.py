@@ -208,9 +208,7 @@ class BackupRunner:
         language = config_language(cfg, get_mcdr_language(server))
         try:
             server.logger.info(tr(language, "info.backup.started", label=label))
-            run_backup_body(
-                self.app_runtime, server, cfg, label, self.snapshot_invalidator
-            )
+            run_backup_body(self.app_runtime, server, cfg, self.snapshot_invalidator)
             return self._successful_outcome(server, label, started_at)
         except BackupCanceled as exc:
             return self._canceled_outcome(server, label, started_at, exc)
@@ -352,5 +350,7 @@ def should_notify_backup_finished(
     return bool(notification_cfg.get("notify_on_failure", True))
 
 
-def join_backup_detail_texts(*parts: str) -> str:
-    return "; ".join(str(part).strip() for part in parts if str(part).strip())
+def join_backup_detail_texts(first: str, second: str) -> str:
+    return "; ".join(
+        str(part).strip() for part in (first, second) if str(part).strip()
+    )

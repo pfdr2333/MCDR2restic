@@ -48,7 +48,7 @@ class ResticCommands:
         server = self.context.server_from_source(source)
         cfg = get_config_snapshot(self.context.app_runtime)
         restic_cfg = cfg.get("restic", {}) if isinstance(cfg.get("restic"), dict) else {}
-        if self.reject_manual_restic_command(source, command):
+        if self.reject_manual_restic_command(source):
             return
 
         self.context.app_runtime.backup.label = "manual-{}".format(command)
@@ -71,9 +71,7 @@ class ResticCommands:
 
         self.handle_manual_restic_success(source, server, restic_cfg, command)
 
-    def reject_manual_restic_command(
-        self, source: CommandSource, command: str
-    ) -> bool:
+    def reject_manual_restic_command(self, source: CommandSource) -> bool:
         server = self.context.server_from_source(source)
         if is_restore_running(self.context.app_runtime):
             reply_tr(source, server, "error.restic.manual.restore_running")

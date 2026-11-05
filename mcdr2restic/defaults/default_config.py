@@ -276,9 +276,3 @@ def build_default_restore_config() -> ConfigDict:
         "pre_restore_backup_tag": "mcdr2restic-pre-restore",
         "start_timeout_seconds": 120,
     }
-
-
-def default_config_for_language(language: str) -> ConfigDict:
-    """Return a fresh default configuration for the requested language."""
-
-    return build_default_config(language)

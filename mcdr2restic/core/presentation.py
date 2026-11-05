@@ -297,7 +297,7 @@ def append_snapshot_rows(
 
     page_size = int(page_context["page_size"])
     for index, row in enumerate(rows, start=(page - 1) * page_size + 1):
-        lines.append(format_snapshot_line(index, row, translate))
+        lines.append(format_snapshot_line(index, row))
     append_snapshot_next_page_hint(
         lines, ctx, page, int(page_context["total_pages"])
     )
@@ -315,9 +315,7 @@ def append_snapshot_next_page_hint(
     lines.append(ctx.translate("snapshot.next_page", root=root, page=page + 1))
 
 
-def format_snapshot_line(
-    index: int, row: sqlite3.Row, translate: Callable[..., str]
-) -> str:
+def format_snapshot_line(index: int, row: sqlite3.Row) -> str:
     short_id = str(row["short_id"] or row["id"] or "")[:8]
     time_text = format_restic_time_for_display(str(row["time_text"] or ""))
     host = str(row["hostname"] or "")

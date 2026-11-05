@@ -184,10 +184,6 @@ def load_language_messages(language: str) -> Dict[str, str]:
     }
 
 
-def supported_languages() -> frozenset[str]:
-    return available_language_codes()
-
-
 @lru_cache(maxsize=None)
 def available_language_codes() -> frozenset[str]:
     try:

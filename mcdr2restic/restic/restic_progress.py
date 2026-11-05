@@ -31,7 +31,6 @@ def build_restic_progress_state(
 def handle_restic_stream_line(
     server: Optional[PluginServerInterface],
     progress: ResticProgressState,
-    stream_name: str,
     line: str,
 ):
     text = str(line or "").strip()

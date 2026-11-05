@@ -408,7 +408,7 @@ class BackupFlowTests(unittest.TestCase):
             mock.patch.object(restic_service, "assert_restic_success"),
         ):
             snapshot_id = restic_service.run_backup_body(
-                runtime, server, cfg, "manual", lambda *_args: None
+                runtime, server, cfg, lambda *_args: None
             )
 
         self.assertEqual(snapshot_id, "abc123")

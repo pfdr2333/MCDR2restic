@@ -48,7 +48,7 @@ from mcdr2restic.restore.restore_paths import (
     get_restic_working_directory,
     normalize_restore_snapshot,
 )
-from mcdr2restic.core.utils import get_config_section, now_text
+from mcdr2restic.core.utils import get_config_section
 
 
 def is_direct_restore_session(tasks: List[Dict[str, Any]]) -> bool:
@@ -104,7 +104,6 @@ def create_restore_session(
         cache_key=queue.cache_key,
         language=language,
         phase=RestorePhase.PRE_BACKUP,
-        started_at=now_text(),
         skip_safety_snapshot=skip_safety_snapshot,
     )
 
@@ -167,10 +166,6 @@ def mark_restore_starting(app_runtime: PluginRuntime, result: RestoreStageResult
             app_runtime.restore.session.phase = RestorePhase.STARTING
             app_runtime.restore.session.error = result.restore_error
             app_runtime.restore.session.rollback_error = result.rollback_error
-
-
-def mark_restore_rollback_started(app_runtime: PluginRuntime):
-    update_restore_phase(app_runtime, RestorePhase.ROLLBACK)
 
 
 def is_restore_running(app_runtime: PluginRuntime) -> bool:
@@ -327,7 +322,7 @@ def create_restore_safety_snapshot(
         server_tr(server, "log.restore.pre_backup_started", count=len(session.tasks))
     )
     safety_snapshot_id = run_backup_body(
-        app_runtime, server, cfg, "pre-restore", invalidate_snapshot_cache_func
+        app_runtime, server, cfg, invalidate_snapshot_cache_func
     )
     if safety_snapshot_id:
         mark_restore_safety_snapshot(app_runtime, safety_snapshot_id)
@@ -741,7 +736,6 @@ def rollback_to_safety_snapshot(
         message = server_tr(server, "error.restore.rollback_snapshot_missing")
         server.logger.error(message)
         return message
-    mark_restore_rollback_started(app_runtime)
     try:
         deadline = make_restic_deadline(restic_cfg)
         command_root = command_root_from_config(session.cfg)

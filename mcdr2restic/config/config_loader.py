@@ -15,7 +15,7 @@ from mcdr2restic.config.config_paths import (
     ensure_config_file_exists,
     get_data_file_path,
 )
-from mcdr2restic.defaults.default_config import default_config_for_language
+from mcdr2restic.defaults.default_config import build_default_config
 from mcdr2restic.defaults.default_constants import CONFIG_NAME
 from mcdr2restic.core.i18n import config_language, set_active_language, tr
 from mcdr2restic.core.language import get_mcdr_language
@@ -40,7 +40,7 @@ def load_config(
     mcdr_language = get_mcdr_language(server)
     loaded = load_config_mapping(server, mcdr_language)
     language = config_language(loaded, mcdr_language)
-    merge_defaults(loaded, default_config_for_language(language))
+    merge_defaults(loaded, build_default_config(language))
     language = config_language(loaded, mcdr_language)
     migrate_config_file(server, language, loaded)
 

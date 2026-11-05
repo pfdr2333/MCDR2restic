@@ -31,14 +31,6 @@ class RestorePhase(TextEnum):
     STOPPING = "stopping"
     RESTORING = "restoring"
     STARTING = "starting"
-    ROLLBACK = "rollback"
-
-
-BACKUP_STATUS_NEVER = BackupRunStatus.NEVER.value
-BACKUP_STATUS_RUNNING = BackupRunStatus.RUNNING.value
-BACKUP_STATUS_SUCCESS = BackupRunStatus.SUCCESS.value
-BACKUP_STATUS_FAILED = BackupRunStatus.FAILED.value
-BACKUP_STATUS_CANCELED = BackupRunStatus.CANCELED.value
 
 
 def normalize_backup_run_status(status: Any) -> BackupRunStatus:
@@ -139,7 +131,6 @@ class RestoreSession:
     cache_key: str
     language: str
     phase: RestorePhase
-    started_at: str
     error: str = ""
     safety_snapshot_id: str = ""
     rollback_error: str = ""
