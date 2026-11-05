@@ -22,20 +22,31 @@ TranslateFunc = Callable[..., str]
 _ACTIVE_LANGUAGE = ""
 
 
-def normalize_language(language: str) -> str:
+ZH_TW_LANGUAGE_ALIASES = {"zh_tw", "zh_hant", "zh_hk", "zh_mo"}
+
+
+def fold_language_aliases(
+    language: str, exists: Callable[[str], bool], fallback: str = FALLBACK_LANGUAGE
+) -> str:
+    """语言码归一化并把中文别名折叠到 zh_cn/zh_tw，存在性由 exists 判定。"""
     requested = normalize_language_name(language)
-    available = available_language_codes()
-    if requested in available:
+    if exists(requested):
         return requested
-    if requested in {"zh_tw", "zh_hant", "zh_hk", "zh_mo"} and "zh_tw" in available:
+    if requested in ZH_TW_LANGUAGE_ALIASES and exists("zh_tw"):
         return "zh_tw"
     if (
         requested == "zh"
         or requested.startswith("zh_cn")
         or requested.startswith("zh_hans")
-    ) and "zh_cn" in available:
+    ) and exists("zh_cn"):
         return "zh_cn"
-    return FALLBACK_LANGUAGE
+    return fallback
+
+
+def normalize_language(language: str) -> str:
+    return fold_language_aliases(
+        language, lambda code: code in available_language_codes()
+    )
 
 
 def normalize_language_name(language: str) -> str:

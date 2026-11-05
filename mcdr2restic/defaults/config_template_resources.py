@@ -9,7 +9,7 @@ from typing import Any, Dict
 
 import yaml
 
-from mcdr2restic.core.i18n import FALLBACK_LANGUAGE, normalize_language_name
+from mcdr2restic.core.i18n import FALLBACK_LANGUAGE, fold_language_aliases
 
 
 CONFIG_TEMPLATE_PACKAGE = "mcdr2restic.config_templates"
@@ -51,20 +51,7 @@ def load_config_template_resource(language: str) -> Dict[str, Any]:
 
 
 def resolve_config_template_language(language: str) -> str:
-    requested = normalize_language_name(language)
-    if config_template_resource_exists(requested):
-        return requested
-    if requested in {"zh_tw", "zh_hant", "zh_hk", "zh_mo"} and config_template_resource_exists(
-        "zh_tw"
-    ):
-        return "zh_tw"
-    if (
-        requested == "zh"
-        or requested.startswith("zh_cn")
-        or requested.startswith("zh_hans")
-    ) and config_template_resource_exists("zh_cn"):
-        return "zh_cn"
-    return FALLBACK_LANGUAGE
+    return fold_language_aliases(language, config_template_resource_exists)
 
 
 def config_template_resource_exists(language: str) -> bool:

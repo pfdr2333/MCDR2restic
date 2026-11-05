@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, TypeAlias
 
+from mcdr2restic.core.i18n import normalize_language_name
 from mcdr2restic.defaults.default_constants import (
     CONFIG_VERSION,
     DEFAULT_MAINTENANCE_CRON,
@@ -64,7 +65,7 @@ DEFAULT_LANGUAGE_CONFIG_VALUE = "zh_cn"
 
 
 def default_language_config_value(language: str) -> str:
-    return str(language or "").strip().lower().replace("-", "_") or DEFAULT_LANGUAGE_CONFIG_VALUE
+    return normalize_language_name(language) or DEFAULT_LANGUAGE_CONFIG_VALUE
 
 
 def build_default_command_config() -> ConfigDict:
