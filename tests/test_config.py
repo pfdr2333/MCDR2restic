@@ -50,6 +50,7 @@ except ImportError:
         yaml,
     )
 
+from mcdr2restic.config.config_loader import load_config, save_enabled_unlocked
 from mcdr2restic.config.config_paths import ensure_config_file_exists
 from mcdr2restic.defaults.message_defaults import build_default_messages
 
@@ -324,6 +325,58 @@ class ConfigurationTests(unittest.TestCase):
                 load_config_file_mapping(server)
 
         self.assertEqual(error.exception.i18n_key, "error.config.yaml_invalid")
+
+    @mock.patch("mcdr2restic.core.i18n._ACTIVE_LANGUAGE", "")
+    def test_config_migration_serializes_with_enabled_flip(self):
+        # 迁移与 enabled 翻转都是整文件替换，必须经 config_state.lock 互斥，
+        # 否则并发时最后写入胜出、丢掉对方的改动（P1-9）
+        with tempfile.TemporaryDirectory() as temp_dir:
+            server = FakeServer(temp_dir)
+            server.logger = FakeLogger()
+            server.get_mcdr_language = lambda: "en_us"
+            config_path = os.path.join(temp_dir, "config.yml")
+            with open(config_path, "w", encoding="utf8") as file:
+                file.write(
+                    "enabled: true\n"
+                    "schedule:\n"
+                    "  interval_seconds: 0\n"
+                    "config_version: 8\n"
+                )
+
+            app_runtime = create_runtime()
+            events = []
+            migrate_entered = threading.Event()
+            real_migrate = migrate_config_file
+
+            def instrumented_migrate(*args, **kwargs):
+                migrate_entered.set()
+                real_migrate(*args, **kwargs)
+                events.append("migrate_finished")
+
+            def reload_config():
+                try:
+                    load_config(app_runtime, server)
+                except Exception as exc:
+                    events.append("load_config error: {}".format(exc))
+
+            with mock.patch(
+                "mcdr2restic.config.config_loader.migrate_config_file",
+                side_effect=instrumented_migrate,
+            ):
+                worker = threading.Thread(target=reload_config, daemon=True)
+                worker.start()
+                self.assertTrue(migrate_entered.wait(timeout=5))
+                with app_runtime.config_state.lock:
+                    events.append("flip_finished")
+                    save_enabled_unlocked(app_runtime, server, False)
+                worker.join(timeout=5)
+                self.assertFalse(worker.is_alive())
+
+            self.assertEqual(events, ["migrate_finished", "flip_finished"])
+            with open(config_path, "r", encoding="utf8") as file:
+                final = yaml.safe_load(file.read())
+            self.assertEqual(final["config_version"], 10)
+            self.assertFalse(final["enabled"])
 
     def test_first_config_generation_is_atomic(self):
         server = FakePluginServer()

@@ -42,7 +42,10 @@ def load_config(
     language = config_language(loaded, mcdr_language)
     merge_defaults(loaded, build_default_config(language))
     language = config_language(loaded, mcdr_language)
-    migrate_config_file(server, language, loaded)
+    # 迁移会重写 config.yml，必须与 save_enabled_unlocked 互斥：
+    # 两侧都是整文件替换，并发时最后写入胜出、丢掉对方的改动（P1-9）
+    with app_runtime.config_state.lock:
+        migrate_config_file(server, language, loaded)
 
     state = load_state_file(server)
     with app_runtime.config_state.lock:
