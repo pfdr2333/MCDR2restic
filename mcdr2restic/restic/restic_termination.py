@@ -40,6 +40,9 @@ def try_graceful_terminate(process: subprocess.Popen) -> str:
             os.killpg(os.getpgid(process.pid), signal.SIGTERM)
         process.wait(timeout=10)
         return ""
+    except ProcessLookupError:
+        # 进程已自然退出，视为终止成功而非失败
+        return ""
     except Exception as exc:
         return str(exc)
 
@@ -50,6 +53,9 @@ def try_force_kill(process: subprocess.Popen) -> str:
             process.kill()
         else:
             os.killpg(os.getpgid(process.pid), signal.SIGKILL)
+        return ""
+    except ProcessLookupError:
+        # 进程已自然退出，视为终止成功而非失败
         return ""
     except Exception as exc:
         return str(exc)

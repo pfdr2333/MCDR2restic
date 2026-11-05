@@ -169,6 +169,7 @@ from mcdr2restic.restic.restic_runner import (
 )
 from mcdr2restic.restic.restic_termination import (
     TerminateResult,
+    terminate_process,
     termination_failure_suffix,
 )
 from mcdr2restic.restore.restore_task_repository import (
@@ -404,6 +405,7 @@ __all__ = [
     "sys",
     "tail_text",
     "tempfile",
+    "terminate_process",
     "termination_failure_suffix",
     "threading",
     "tr",

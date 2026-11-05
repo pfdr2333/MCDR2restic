@@ -13,6 +13,7 @@ try:
         SimpleNamespace,
         TerminateResult,
         assert_restic_success,
+        terminate_process,
         classify_restic_failure_output,
         create_runtime,
         detect_error_lines,
@@ -45,6 +46,7 @@ except ImportError:
         SimpleNamespace,
         TerminateResult,
         assert_restic_success,
+        terminate_process,
         classify_restic_failure_output,
         create_runtime,
         detect_error_lines,
@@ -518,6 +520,29 @@ class ResticTerminationTests(unittest.TestCase):
             "kill failed",
             termination_failure_suffix(TerminateResult(error="kill failed")),
         )
+
+    def test_posix_process_already_exited_counts_as_terminated(self):
+        # 进程自然退出后 killpg/getpgid 抛 ProcessLookupError，不应误报终止失败
+        process = mock.Mock()
+        process.pid = 1234
+
+        with (
+            mock.patch("mcdr2restic.restic.restic_termination.os.name", "posix"),
+            mock.patch(
+                "mcdr2restic.restic.restic_termination.os.getpgid",
+                side_effect=ProcessLookupError,
+                create=True,
+            ),
+            mock.patch(
+                "mcdr2restic.restic.restic_termination.os.killpg",
+                return_value=None,
+                create=True,
+            ),
+        ):
+            result = terminate_process(process)
+
+        self.assertTrue(result.terminated)
+        self.assertEqual(result.error, "")
 
 
 class SaveFlushWatcherTests(unittest.TestCase):
