@@ -271,6 +271,7 @@ class CommandServer(FakePluginServer):
 __all__ = [
     "DEFAULT_CONFIG",
     "REPO_ROOT",
+    "WHOLE_BLOCK_SECTIONS",
     "BackupProblem",
     "BackupScheduler",
     "CommandContext",
@@ -381,7 +382,6 @@ __all__ = [
     "unittest",
     "verify_plugin",
     "version_number_tuple",
-    "WHOLE_BLOCK_SECTIONS",
     "yaml",
     "zipfile",
 ]
