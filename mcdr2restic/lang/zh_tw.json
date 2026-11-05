@@ -167,6 +167,8 @@
   "debug.update.next_wait": "下次版本更新檢查等待 {seconds} 秒（{due_text}）",
   "log.update.thread_stopped": "MCDR2Restic 版本更新檢查執行緒已停止",
   "warn.update.check_failed": "MCDR2Restic 版本更新檢查失敗（{reason}）：{error}",
+  "reason.update.startup": "外掛啟動時",
+  "reason.update.daily": "每日例行檢查",
   "warn.update.new_version": "檢測到 MCDR2Restic 新版本：{latest_version}（當前 {current_version}），釋出頁：{latest_url}，更新命令：!!MCDR plugin install -U mcdr2restic",
   "info.update.up_to_date": "MCDR2Restic 版本檢查完成：當前 {current_version}，最新 {latest_version}（{reason}）",
   "error.update.release_payload_invalid": "release API 返回格式異常",

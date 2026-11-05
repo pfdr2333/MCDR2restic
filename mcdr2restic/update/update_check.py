@@ -28,6 +28,21 @@ from mcdr2restic.backup.scheduling import compute_update_check_wait_seconds
 ConfigProvider = Callable[[], Dict[str, Any]]
 PLUGIN_METADATA_FILE = "mcdreforged.plugin.json"
 
+CHECK_REASON_KEYS = {
+    "startup": "reason.update.startup",
+    "daily": "reason.update.daily",
+}
+
+
+def update_check_reason_text(
+    server: PluginServerInterface, reason: str
+) -> str:
+    # reason 是内部触发来源标记，展示给用户前转译为已译文案
+    key = CHECK_REASON_KEYS.get(reason)
+    if key is None:
+        return reason
+    return server_tr(server, key)
+
 
 class UpdateChecker:
     def __init__(
@@ -104,7 +119,10 @@ class UpdateChecker:
         except Exception as exc:
             self.server.logger.warning(
                 server_tr(
-                    self.server, "warn.update.check_failed", reason=reason, error=exc
+                    self.server,
+                    "warn.update.check_failed",
+                    reason=update_check_reason_text(self.server, reason),
+                    error=exc,
                 )
             )
 
@@ -128,7 +146,7 @@ class UpdateChecker:
                 "info.update.up_to_date",
                 current_version=current_version,
                 latest_version=latest_version,
-                reason=reason,
+                reason=update_check_reason_text(self.server, reason),
             )
         )
 

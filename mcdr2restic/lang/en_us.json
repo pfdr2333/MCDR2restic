@@ -169,6 +169,8 @@
   "debug.update.next_wait": "Next update check waits {seconds}s ({due_text})",
   "log.update.thread_stopped": "MCDR2Restic update check thread stopped",
   "warn.update.check_failed": "MCDR2Restic update check failed ({reason}): {error}",
+  "reason.update.startup": "on plugin startup",
+  "reason.update.daily": "the daily routine",
   "warn.update.new_version": "A new MCDR2Restic version is available: {latest_version} (current {current_version}), release page: {latest_url}, update command: !!MCDR plugin install -U mcdr2restic",
   "info.update.up_to_date": "MCDR2Restic update check finished: current {current_version}, latest {latest_version} ({reason})",
   "error.update.release_payload_invalid": "Release API returned an invalid payload",
