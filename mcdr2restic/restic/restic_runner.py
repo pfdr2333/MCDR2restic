@@ -139,7 +139,10 @@ def assert_restic_process_completed(
     started: float,
     outcome: ResticProcessOutcome,
 ):
-    if app_runtime.backup.cancel.is_set():
+    canceled = app_runtime.backup.cancel.is_set()
+    # restic 已成功收尾（退出码 0）时取消请求才刚到达，快照实际已落库，
+    # 仍标 canceled 会与仓库真实状态矛盾，只有被打断的进程才按取消处理（P5-1）
+    if canceled and (outcome.timed_out or outcome.return_code != 0):
         raise BackupCanceled(i18n_key="error.backup.cancel_requested")
     if outcome.timed_out:
         raise_restic_timeout(restic_cfg, phase, started, outcome.stdout, outcome.stderr)

@@ -15,7 +15,44 @@ except ImportError:
         unittest,
     )
 
+import threading
+
+from mcdr2restic.core.models import BackupCanceled
 from mcdr2restic.restic import restic_runner
+
+
+class AssertResticProcessCompletedTests(unittest.TestCase):
+    @staticmethod
+    def _runtime_with_cancel(set_cancel: bool):
+        runtime = mock.Mock()
+        runtime.backup.cancel = threading.Event()
+        if set_cancel:
+            runtime.backup.cancel.set()
+        return runtime
+
+    def test_cancel_arriving_after_successful_finish_stays_success(self):
+        # restic 已成功收尾时取消才刚到达：快照已落库，不得标 canceled（P5-1）
+        runtime = self._runtime_with_cancel(set_cancel=True)
+        outcome = restic_runner.ResticProcessOutcome("", "", 0, False)
+        restic_runner.assert_restic_process_completed(
+            runtime, {}, "backup", 0.0, outcome
+        )
+
+    def test_cancel_with_interrupted_process_raises_backup_canceled(self):
+        runtime = self._runtime_with_cancel(set_cancel=True)
+        outcome = restic_runner.ResticProcessOutcome("", "", 1, False)
+        with self.assertRaises(BackupCanceled):
+            restic_runner.assert_restic_process_completed(
+                runtime, {}, "backup", 0.0, outcome
+            )
+
+    def test_without_cancel_timeout_still_raises_timeout_problem(self):
+        runtime = self._runtime_with_cancel(set_cancel=False)
+        outcome = restic_runner.ResticProcessOutcome("", "", 1, True)
+        with self.assertRaises(BackupProblem):
+            restic_runner.assert_restic_process_completed(
+                runtime, {}, "backup", 0.0, outcome
+            )
 
 
 class ResticRunnerTests(unittest.TestCase):
