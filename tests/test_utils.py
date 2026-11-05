@@ -79,4 +79,4 @@ class UtilsTests(unittest.TestCase):
         )
 
         self.assertIn("MCDR2Restic 状态", output)
-        self.assertIn("正常备份: 60 秒后（固定间隔 60 秒）", output)
+        self.assertIn("正常备份：60 秒后（固定间隔 60 秒）", output)
