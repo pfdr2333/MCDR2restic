@@ -5,6 +5,7 @@ import json
 import os
 import re
 import sqlite3
+import threading
 import time
 from contextlib import closing
 from datetime import datetime
@@ -18,6 +19,7 @@ from mcdr2restic.core.utils import now_text, tail_text
 
 
 SNAPSHOT_REFRESH_ERROR_TAIL_CHARS = 800
+SCHEMA_MIGRATION_LOCK = threading.Lock()
 
 
 def get_snapshot_db_path(
@@ -123,7 +125,7 @@ def ensure_restore_tasks_columns(conn: sqlite3.Connection):
     }
     for column, statement in column_additions.items():
         if column not in columns:
-            conn.execute(statement)
+            execute_column_addition(conn, statement)
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_restore_tasks_cache ON restore_tasks (cache_key, id)"
     )
@@ -137,7 +139,17 @@ def ensure_snapshot_meta_columns(conn: sqlite3.Connection):
     }
     for column, statement in additions.items():
         if column not in columns:
+            execute_column_addition(conn, statement)
+
+
+def execute_column_addition(conn: sqlite3.Connection, statement: str):
+    # 条件 ALTER 串行化，并容忍并发线程已补列导致的 duplicate column
+    with SCHEMA_MIGRATION_LOCK:
+        try:
             conn.execute(statement)
+        except sqlite3.OperationalError as exc:
+            if "duplicate column" not in str(exc).lower():
+                raise
 
 
 def table_columns(conn: sqlite3.Connection, table_name: str) -> set:

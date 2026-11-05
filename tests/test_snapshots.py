@@ -1,3 +1,5 @@
+import sqlite3
+
 try:
     from .support import (
         BackupProblem,
@@ -13,6 +15,7 @@ try:
         clear_restore_tasks,
         closing,
         import_restic_snapshots_to_sql,
+        execute_column_addition,
         insert_snapshot_row,
         io,
         iter_json_array_stream,
@@ -259,3 +262,15 @@ class SnapshotDatabaseTests(unittest.TestCase):
                 ],
                 ["b"],
             )
+
+    def test_column_addition_tolerates_duplicate_column(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            server = FakeServer(temp_dir)
+            with closing(open_snapshot_db(server, {"database": "db.sqlite3"})) as conn:
+                # 列已存在时不得抛错（并发建表场景），其他 OperationalError 仍需抛出
+                execute_column_addition(
+                    conn,
+                    "ALTER TABLE restore_tasks ADD COLUMN cache_key TEXT NOT NULL DEFAULT ''",
+                )
+                with self.assertRaises(sqlite3.OperationalError):
+                    execute_column_addition(conn, "ALTER TABLE no_such_table ADD COLUMN x TEXT")

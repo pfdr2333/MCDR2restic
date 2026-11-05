@@ -183,6 +183,8 @@ from mcdr2restic.restore.restore_task_repository import (
 from mcdr2restic.restore.restore_paths import normalize_restore_include_path
 from mcdr2restic.snapshots.snapshot_cache import build_snapshot_cache_key
 from mcdr2restic.snapshots.snapshot_db import (
+    commit_refreshed_snapshot_cache,
+    execute_column_addition,
     insert_snapshot_row,
     open_snapshot_db,
     read_snapshot_page,
@@ -335,11 +337,13 @@ __all__ = [
     "clear_restore_tasks",
     "closing",
     "command_handlers",
+    "commit_refreshed_snapshot_cache",
     "compute_maintenance_wait_seconds",
     "config_template_resources",
     "create_runtime",
     "datetime",
     "detect_error_lines",
+    "execute_column_addition",
     "expected_restic_sha256",
     "extract_sha256_from_sums",
     "fetch_restic_release_metadata",
