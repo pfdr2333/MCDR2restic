@@ -308,6 +308,7 @@
   "mcdr2restic.error.restore.target_inside_repository": "Restore target directory cannot be inside the restic repository: {repository_path}",
   "mcdr2restic.error.restore.target_inside_backup_sources": "Restore target directory cannot be inside a backup source directory: {source_path}",
   "mcdr2restic.error.restore.target_contains_protected": "Restore target directory cannot contain a protected directory: {protected_path}",
+  "mcdr2restic.error.restore.target_admin_share_unc": "Restore target directory cannot use an administrative-share UNC path; use a drive-letter path instead: {path}",
   "mcdr2restic.info.restore.task_completed_to": "Restore task #{task_id} completed: {snapshot} -> {target}",
   "mcdr2restic.info.restore.direct_completed": "All restore tasks completed",
   "mcdr2restic.warn.restore.direct_failed": "Restore task failed: {error}"

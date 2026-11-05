@@ -237,6 +237,7 @@
   "error.restore.target_inside_repository": "恢復目標目錄不能位於 restic 倉庫內：{repository_path}",
   "error.restore.target_inside_backup_sources": "恢復目標目錄不能位於備份源目錄內：{source_path}",
   "error.restore.target_contains_protected": "恢復目標目錄不能包含受保護目錄：{protected_path}",
+  "error.restore.target_admin_share_unc": "恢復目標目錄不能使用管理共享 UNC 寫法，請改用磁碟機代號路徑：{path}",
   "error.restore.state_missing": "恢復流程狀態丟失",
   "error.restore.pre_backup_slot_busy": "恢復流程無法建立保護快照：當前已有備份在執行",
   "log.restore.pre_backup_started": "正在建立恢復前保護快照，共 {count} 個任務",

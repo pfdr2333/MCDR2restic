@@ -205,8 +205,38 @@ class RestoreTargetDirectoryTests(unittest.TestCase):
                 "\\\\localhost\\c$\\" + str(REPO_ROOT)[3:], restic_cfg
             )
 
+        # 管理共享写法整体拒绝（P0-6），不再映射回盘符后做等价比较
         self.assertEqual(
-            error.exception.i18n_key, "error.restore.target_is_working_directory"
+            error.exception.i18n_key, "error.restore.target_admin_share_unc"
+        )
+
+    @unittest.skipUnless(os.name == "nt", "admin share UNC is Windows-specific")
+    def test_normalize_target_rejects_foreign_host_admin_share_unc(self):
+        restic_cfg = {"working_directory": str(REPO_ROOT)}
+
+        # 主机名枚举无法覆盖局域网 IP/FQDN 别名（P0-6 残余），按写法拒绝
+        for host in ("192.168.255.254", "unknown-host.example.com"):
+            with self.assertRaises(BackupProblem) as error:
+                restore_paths.normalize_restore_target_directory(
+                    "\\\\" + host + "\\c$\\" + str(REPO_ROOT)[3:], restic_cfg
+                )
+
+            self.assertEqual(
+                error.exception.i18n_key, "error.restore.target_admin_share_unc"
+            )
+
+    @unittest.skipUnless(os.name == "nt", "admin share UNC is Windows-specific")
+    def test_normalize_target_rejects_admin_share_unc_of_unrelated_directory(self):
+        restic_cfg = {"working_directory": str(REPO_ROOT)}
+
+        # 即使目标与受保护目录无关，管理共享写法本身也不放行
+        with self.assertRaises(BackupProblem) as error:
+            restore_paths.normalize_restore_target_directory(
+                "\\\\localhost\\c$\\unrelated-restore-target", restic_cfg
+            )
+
+        self.assertEqual(
+            error.exception.i18n_key, "error.restore.target_admin_share_unc"
         )
 
     @unittest.skipUnless(os.name == "nt", "verbatim UNC prefix is Windows-specific")
@@ -219,8 +249,32 @@ class RestoreTargetDirectoryTests(unittest.TestCase):
             )
 
         self.assertEqual(
-            error.exception.i18n_key, "error.restore.target_is_working_directory"
+            error.exception.i18n_key, "error.restore.target_admin_share_unc"
         )
+
+    @unittest.skipUnless(os.name == "nt", "verbatim UNC prefix is Windows-specific")
+    def test_normalize_target_rejects_verbatim_unc_foreign_host(self):
+        restic_cfg = {"working_directory": str(REPO_ROOT)}
+
+        with self.assertRaises(BackupProblem) as error:
+            restore_paths.normalize_restore_target_directory(
+                "\\\\?\\UNC\\192.168.255.254\\c$\\" + str(REPO_ROOT)[3:], restic_cfg
+            )
+
+        self.assertEqual(
+            error.exception.i18n_key, "error.restore.target_admin_share_unc"
+        )
+
+    @unittest.skipUnless(os.name == "nt", "UNC share is Windows-specific")
+    def test_normalize_target_accepts_regular_unc_share(self):
+        restic_cfg = {"working_directory": str(REPO_ROOT)}
+
+        # 普通共享（非 X$ 管理共享形式）不受写法规则影响
+        result = restore_paths.normalize_restore_target_directory(
+            "\\\\fileserver\\backup-target\\restore-here", restic_cfg
+        )
+
+        self.assertTrue(result)
 
     @unittest.skipUnless(os.name == "nt", "verbatim prefix only exists on Windows")
     def test_normalize_target_accepts_verbatim_unrelated_directory(self):

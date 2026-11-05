@@ -207,7 +207,7 @@ WINDOWS_VERBATIM_UNC_PREFIX = "\\\\?\\UNC\\"
 WINDOWS_VERBATIM_PREFIX = "\\\\?\\"
 # 管理共享 \\主机\X$\… 与盘符 X:\… 指向同一位置，可确定性互映射；
 # 普通共享无法离线判定，不做映射。
-LOCAL_UNC_ADMIN_SHARE_PATTERN = re.compile(
+UNC_ADMIN_SHARE_PATTERN = re.compile(
     r"^(?:\\\\(?P<host>[^\\/]+)\\)(?P<share>[A-Za-z])\$(?P<rest>\\.*)?$"
 )
 _local_unc_host_names: Set[str] | None = None
@@ -228,8 +228,16 @@ def _local_unc_host_candidates() -> Set[str]:
     return _local_unc_host_names
 
 
+def strip_windows_verbatim_prefix(text: str) -> str:
+    if text.upper().startswith(WINDOWS_VERBATIM_UNC_PREFIX):
+        return "\\\\" + text[len(WINDOWS_VERBATIM_UNC_PREFIX):]
+    if text.upper().startswith(WINDOWS_VERBATIM_PREFIX):
+        return text[len(WINDOWS_VERBATIM_PREFIX):]
+    return text
+
+
 def map_local_admin_share_unc_to_drive(text: str) -> str:
-    match = LOCAL_UNC_ADMIN_SHARE_PATTERN.match(text)
+    match = UNC_ADMIN_SHARE_PATTERN.match(text)
     if not match:
         return text
     host = match.group("host").rstrip(".").lower()
@@ -239,14 +247,18 @@ def map_local_admin_share_unc_to_drive(text: str) -> str:
     return f"{match.group('share').upper()}:{rest}"
 
 
+def is_admin_share_unc_path(path: str) -> bool:
+    # 主机名无法离线穷尽（局域网 IP/FQDN/DNS 别名都能指向本机），而恢复目标
+    # 没有任何以管理共享书写的合法场景，按写法整体拒绝（P0-6）。
+    return bool(
+        UNC_ADMIN_SHARE_PATTERN.match(strip_windows_verbatim_prefix(str(path or "")))
+    )
+
+
 def canonical_path_for_comparison(path: str) -> str:
     if os.name != "nt":
         return str(path or "")
-    text = str(path or "")
-    if text.upper().startswith(WINDOWS_VERBATIM_UNC_PREFIX):
-        text = "\\\\" + text[len(WINDOWS_VERBATIM_UNC_PREFIX):]
-    elif text.upper().startswith(WINDOWS_VERBATIM_PREFIX):
-        text = text[len(WINDOWS_VERBATIM_PREFIX):]
+    text = strip_windows_verbatim_prefix(str(path or ""))
     text = map_local_admin_share_unc_to_drive(text)
     # verbatim 内的 ".." 不会被 normpath/realpath 折叠，剥除后需补一次
     return os.path.normpath(text)

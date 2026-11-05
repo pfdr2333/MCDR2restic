@@ -10,6 +10,7 @@ from mcdr2restic.restic.restic_config import (
     canonical_path_for_comparison,
     get_backup_source_paths,
     get_effective_restic_repository,
+    is_admin_share_unc_path,
     is_local_restic_repository,
     normalize_filesystem_path,
     path_contains_or_equals,
@@ -110,10 +111,43 @@ def normalize_restore_target_directory(
     return target
 
 
+def _protected_directories(
+    restic_cfg: Dict[str, Any],
+    workdir: str,
+    repository_path: str,
+    data_dir: str,
+) -> List[str]:
+    protected = [workdir, *get_backup_source_paths(restic_cfg)]
+    if repository_path:
+        protected.append(repository_path)
+    if data_dir:
+        protected.append(data_dir)
+    return protected
+
+
+def _reject_target_containing_protected(
+    target_path: str, protected_dirs: List[str]
+):
+    # 目标若为受保护目录的祖先，快照会覆写保护范围本身，同样必须拒绝
+    for protected in protected_dirs:
+        if path_contains_or_equals(target_path, protected):
+            raise BackupProblem(
+                i18n_key="error.restore.target_contains_protected",
+                protected_path=protected,
+            )
+
+
 def assert_restore_target_allowed(
     target: str, restic_cfg: Dict[str, Any], data_dir: str = ""
 ):
-    target_path = canonical_path_for_comparison(normalize_filesystem_path(target))
+    normalized_target = normalize_filesystem_path(target)
+    # 管理共享 UNC 与盘符路径指向同一位置，但主机名无法离线穷尽，
+    # 逐主机映射存在枚举盲区，按写法整体拒绝（P0-6）
+    if is_admin_share_unc_path(normalized_target):
+        raise BackupProblem(
+            i18n_key="error.restore.target_admin_share_unc", path=target
+        )
+    target_path = canonical_path_for_comparison(normalized_target)
     workdir = get_restic_working_directory(restic_cfg)
     if os.path.normcase(target_path) == os.path.normcase(
         canonical_path_for_comparison(workdir)
@@ -136,15 +170,7 @@ def assert_restore_target_allowed(
                 i18n_key="error.restore.target_inside_backup_sources",
                 source_path=source_path,
             )
-    # 目标若为受保护目录的祖先，快照会覆写保护范围本身，同样必须拒绝
-    protected_dirs = [workdir, *get_backup_source_paths(restic_cfg)]
-    if repository_path:
-        protected_dirs.append(repository_path)
-    if data_dir:
-        protected_dirs.append(data_dir)
-    for protected in protected_dirs:
-        if path_contains_or_equals(target_path, protected):
-            raise BackupProblem(
-                i18n_key="error.restore.target_contains_protected",
-                protected_path=protected,
-            )
+    _reject_target_containing_protected(
+        target_path,
+        _protected_directories(restic_cfg, workdir, repository_path, data_dir),
+    )

@@ -173,3 +173,31 @@ class CanonicalPathComparisonTests(unittest.TestCase):
         self.assertTrue(contains(r"\\localhost\c$\base", r"C:\base\sub"))
         self.assertTrue(contains(r"C:\base", r"C:\base"))
         self.assertFalse(contains(r"C:\base", r"C:\basement"))
+
+
+class AdminShareDetectionTests(unittest.TestCase):
+    # is_admin_share_unc_path 是纯字符串判定（探测与主机无关），无平台门控
+    def test_detects_admin_share_form_on_any_host(self):
+        is_admin_share = restic_config.is_admin_share_unc_path
+
+        self.assertTrue(is_admin_share(r"\\localhost\c$\dir"))
+        self.assertTrue(is_admin_share(r"\\192.168.1.5\d$\dir"))
+        self.assertTrue(is_admin_share(r"\\unknown-host.example.com\e$"))
+        self.assertTrue(is_admin_share(r"\\LOCALHOST\C$"))
+
+    def test_detects_admin_share_behind_verbatim_prefix(self):
+        is_admin_share = restic_config.is_admin_share_unc_path
+
+        self.assertTrue(is_admin_share(r"\\?\UNC\fileserver\c$\dir"))
+        self.assertTrue(is_admin_share(r"\\?\UNC\192.168.1.5\c$\dir"))
+
+    def test_regular_shares_and_drive_paths_are_not_admin_share(self):
+        is_admin_share = restic_config.is_admin_share_unc_path
+
+        self.assertFalse(is_admin_share(r"\\fileserver\backup\dir"))
+        self.assertFalse(is_admin_share(r"\\?\UNC\fileserver\backup\dir"))
+        self.assertFalse(is_admin_share(r"C:\dir"))
+        self.assertFalse(is_admin_share(r"\\?\C:\dir"))
+        self.assertFalse(is_admin_share(r"/srv/backup"))
+        self.assertFalse(is_admin_share(""))
+        self.assertFalse(is_admin_share(None))
