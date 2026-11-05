@@ -15,7 +15,17 @@
 
 ## 第一步：安装插件
 
-自动安装：在MCDR终端中输入`!!MCDR plugin install mcdr2restic`以进行自动安装
+插件已入库 MCDR 插件仓库，在 MCDR 终端执行一条命令即可安装：
+
+```text
+!!MCDR plugin install mcdr2restic
+```
+
+后续更新同样只需一条命令：
+
+```text
+!!MCDR plugin install -U mcdr2restic
+```
 
 手动安装：在 [GitHub Releases](https://github.com/pfdr2333/MCDR2restic/releases/latest) 中下载最新版本，然后将其放入 MCDR 的 `plugins` 文件夹中，使用 `!!MCDR plugin load mcdr2restic.mcdr` 加载插件。
 
@@ -25,7 +35,7 @@
 
 1. 配置文件注释和默认插件语言会跟随 MCDR 的语言设置，目前支持 `en_us`、`zh_cn`、`zh_tw`
 2. 默认的 `restic` 备份命令会识别 `/server/` 下是原版单文件夹世界还是 Paper 的三文件夹世界并自动添加（无论有没有识别成功都会自动添加 `/server/world` 进备份范围）
-3. 按需调整备份范围和保留时间
+3. 按需调整备份范围和保留时间。默认只备份世界目录；建议改为备份整个 `/server` 目录甚至整个 MCDR 目录，保护存档之外的配置、插件和文件状态
 4. 按需调整存储方式和位置
 
 ## 第三步：重载配置

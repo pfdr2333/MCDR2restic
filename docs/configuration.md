@@ -378,6 +378,24 @@ backup_command:
   - "mcdr2Restic"
 ```
 
+### 建议：备份整个 `server` 目录或整个 MCDR 目录
+
+默认只备份世界目录，恢复后只还原存档。服务器实际包含的东西更多：`server.properties`、mod、配置文件、插件、蓝图的原理图文件等都在 `/server` 下，MCDR 自己的 `config`、`plugins`、`logs` 也在 MCDR 根目录下。
+
+想获得完整恢复能力，可以把备份范围扩大为：
+
+```yaml
+backup_command:
+  - "backup"
+  - "./server"
+  - "--tag"
+  - "minecraft"
+  - "--host"
+  - "mcdr2Restic"
+```
+
+或者直接备份整个 MCDR 根目录。注意插件会拒绝把 restic 仓库放进备份源目录，所以备份整个根目录时必须把仓库放到根目录之外，或改用远程仓库。范围越大，快照保留能力越完整，增量开销通常可以接受。
+
 ### `timeout_seconds`
 
 - `0` 表示不限制

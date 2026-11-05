@@ -35,13 +35,28 @@ Every snapshot is a complete backup of its point in time while only consuming in
 
 ## Installation
 
-1. Grab `MCDR2Restic.mcdr` from the latest [Release](https://github.com/pfdr2333/MCDR2restic/releases) and drop it into MCDR's `plugins/` directory.
-2. Reload the plugin (`!!MCDR reload all`). On first load a sample configuration tailored to your system is generated at `config/mcdr2restic/config.yml` — the defaults just work:
-   - restic is downloaded automatically and the local repository initialized
-   - `./server/world` is backed up by default (all three world directories are added when detected)
-   - On Windows the sample uses `.\restic.exe`-style backslash paths and excludes `session.lock`
-3. Adjust the configuration as needed, then run `!!restic reload`.
+The plugin is published in the MCDR plugin repository — one command installs it:
 
+```text
+!!MCDR plugin install mcdr2restic
+```
+
+Updating later is also a one-liner:
+
+```text
+!!MCDR plugin install -U mcdr2restic
+```
+
+Manual installation: grab `MCDR2Restic.mcdr` from the latest [Release](https://github.com/pfdr2333/MCDR2restic/releases), drop it into MCDR's `plugins/` directory, and run `!!MCDR reload all`. On first load a sample configuration tailored to your system is generated at `config/mcdr2restic/config.yml` — the defaults just work:
+
+- restic is downloaded automatically and the local repository initialized
+- `./server/world` is backed up by default (all three world directories are added when detected)
+- On Windows the sample uses `.\restic.exe`-style backslash paths and excludes `session.lock`
+
+Adjust the configuration as needed, then run `!!restic reload`.
+
+> Only the world directories are backed up by default. For full restore capability, consider backing up the entire `./server` directory or even the whole MCDR root, protecting server files beyond the save data.
+>
 > The example password `123456` only lowers the entry barrier — change it for production use.
 >
 > The OneBot dependency is named `websocket-client` (imported as `websocket`). If a conflicting package with the same name is installed, the plugin reports the problem. If dependency installation fails behind mainland-China networks, configure a PyPI mirror or proxy for the Python environment MCDR uses.

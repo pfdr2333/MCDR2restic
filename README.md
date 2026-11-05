@@ -35,13 +35,28 @@ MCDReforged 插件：调用 [restic](https://restic.readthedocs.io/en/stable/) �
 
 ## 安装
 
-1. 下载最新 [Release](https://github.com/pfdr2333/MCDR2restic/releases) 中的 `MCDR2Restic.mcdr`，放入 MCDR 的 `plugins/` 目录。
-2. 重载插件（`!!MCDR reload all`）。首次加载会在 `config/mcdr2restic/config.yml` 自动生成适配当前系统的示例配置，默认即可运行：
-   - 自动下载 restic、自动初始化本地仓库
-   - 默认备份 `./server/world`（检测到三世界目录时自动全部写入）
-   - Windows 下自动使用 `.\restic.exe` 等反斜杠路径并排除 `session.lock`
-3. 按需修改配置后执行 `!!restic reload`。
+插件已入库 MCDR 插件仓库，在 MCDR 终端执行一条命令即可安装：
 
+```text
+!!MCDR plugin install mcdr2restic
+```
+
+后续更新同样只需一条命令：
+
+```text
+!!MCDR plugin install -U mcdr2restic
+```
+
+也可以手动安装：下载最新 [Release](https://github.com/pfdr2333/MCDR2restic/releases) 中的 `MCDR2Restic.mcdr`，放入 MCDR 的 `plugins/` 目录后执行 `!!MCDR reload all`。首次加载会在 `config/mcdr2restic/config.yml` 自动生成适配当前系统的示例配置，默认即可运行：
+
+- 自动下载 restic、自动初始化本地仓库
+- 默认备份 `./server/world`（检测到三世界目录时自动全部写入）
+- Windows 下自动使用 `.\restic.exe` 等反斜杠路径并排除 `session.lock`
+
+按需修改配置后执行 `!!restic reload`。
+
+> 默认只备份世界目录。如需获得完整的恢复能力，建议把备份范围改为整个 `./server` 目录甚至 MCDR 根目录，保护存档之外的服务器文件状态。
+>
 > 示例密码 `123456` 仅用于降低上手门槛，正式使用请修改。
 >
 > OneBot 通知依赖包名为 `websocket-client`（导入名 `websocket`）。如果误装了同名的错误包导致 `websocket.WebSocketApp` 不存在，插件会给出提示。国内网络下依赖安装失败时，建议为 MCDR 使用的 Python 环境配置 PyPI 镜像或代理。
