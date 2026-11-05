@@ -35,6 +35,9 @@ except ImportError:
         unittest,
     )
 
+from datetime import date
+
+
 
 class NotificationTests(unittest.TestCase):
     def test_discord_request_contains_json_payload(self):
@@ -222,6 +225,46 @@ class CustomWebhookTests(unittest.TestCase):
         ):
             client._send_message("hello", {})
 
+        self.assertIn("发送失败", server.logger.warning_messages[0])
+
+    def test_webhook_send_survives_garbage_timeout(self):
+        # 超时解析原来在 try 之外，垃圾值会让 daemon 线程静默死亡、通知无声丢失（P1-1）
+        server = FakePluginServer()
+        client = CustomWebhookClient(
+            server,
+            {"enabled": True, "url": "https://example.test/hook",
+             "send_timeout_seconds": "10s"},
+        )
+
+        client._send_message("hello", {})
+
+        self.assertEqual(len(server.logger.warning_messages), 1)
+        self.assertIn("发送失败", server.logger.warning_messages[0])
+
+    def test_webhook_send_survives_scalar_headers(self):
+        server = FakePluginServer()
+        client = CustomWebhookClient(
+            server,
+            {"enabled": True, "url": "https://example.test/hook", "headers": "x"},
+        )
+
+        client._send_message("hello", {})
+
+        self.assertEqual(len(server.logger.warning_messages), 1)
+        self.assertIn("发送失败", server.logger.warning_messages[0])
+
+    def test_webhook_send_survives_unserializable_payload_value(self):
+        # YAML 日期等值无法 JSON 序列化，构造请求阶段抛 TypeError 必须转为告警
+        server = FakePluginServer()
+        client = CustomWebhookClient(
+            server,
+            {"enabled": True, "url": "https://example.test/hook",
+             "payload": {"content": "{message}", "since": date(2026, 1, 1)}},
+        )
+
+        client._send_message("hello", {})
+
+        self.assertEqual(len(server.logger.warning_messages), 1)
         self.assertIn("发送失败", server.logger.warning_messages[0])
 
     def test_default_config_contains_custom_webhook_block(self):

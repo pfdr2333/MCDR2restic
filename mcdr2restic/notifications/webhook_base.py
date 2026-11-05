@@ -50,9 +50,11 @@ class WebhookClientBase:
                 server_tr(self.server, self.url_empty_message_key)
             )
             return
-        request = self.build_request(webhook_url, *args)
-        timeout = max(1, int(self.cfg.get("send_timeout_seconds", 10)))
         try:
+            # 构造请求与解析超时同样可能因垃圾配置抛错，必须与 urlopen 一起受保护，
+            # 否则 daemon 线程静默死亡、通知无声丢失
+            request = self.build_request(webhook_url, *args)
+            timeout = max(1, int(self.cfg.get("send_timeout_seconds", 10)))
             with urllib.request.urlopen(request, timeout=timeout) as response:
                 status = getattr(response, "status", WEBHOOK_HTTP_SUCCESS_MIN)
                 if (
