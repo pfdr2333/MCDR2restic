@@ -1,7 +1,7 @@
 try:
     from .support import (
         CustomWebhookClient,
-        DEFAULT_CONFIG,
+        build_default_config,
         DiscordWebhookClient,
         FakePluginServer,
         NotificationDispatcher,
@@ -19,7 +19,7 @@ try:
 except ImportError:
     from support import (
         CustomWebhookClient,
-        DEFAULT_CONFIG,
+        build_default_config,
         DiscordWebhookClient,
         FakePluginServer,
         NotificationDispatcher,
@@ -214,7 +214,7 @@ class CustomWebhookTests(unittest.TestCase):
 
     def test_default_config_contains_custom_webhook_block(self):
         self.assertEqual(
-            DEFAULT_CONFIG["custom_webhook"]["payload"], {"content": "{message}"}
+            build_default_config()["custom_webhook"]["payload"], {"content": "{message}"}
         )
 
     def test_dispatcher_skips_webhook_when_disabled(self):

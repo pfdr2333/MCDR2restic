@@ -4,8 +4,6 @@ from __future__ import annotations
 import copy
 from typing import Any, Dict
 
-from mcdr2restic.defaults.default_freeze import freeze_default
-
 
 _RESTIC_FALLBACK_RELEASE: Dict[str, Any] = {
     "tag_name": "v0.19.1",
@@ -20,8 +18,6 @@ _RESTIC_FALLBACK_RELEASE: Dict[str, Any] = {
         },
     ],
 }
-
-RESTIC_FALLBACK_RELEASE = freeze_default(_RESTIC_FALLBACK_RELEASE)
 
 
 def build_restic_fallback_release() -> Dict[str, Any]:

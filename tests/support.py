@@ -113,7 +113,7 @@ from mcdr2restic.core.presentation import (
 )
 from mcdr2restic.core.runtime import create_runtime
 from mcdr2restic.core.utils import non_negative_int, safe_int, tail_text
-from mcdr2restic.defaults.default_config import DEFAULT_CONFIG, build_default_config
+from mcdr2restic.defaults.default_config import build_default_config
 from mcdr2restic.defaults.default_config_templates import get_default_config_template
 from mcdr2restic.defaults.message_defaults import get_default_message_template
 from mcdr2restic.minecraft.minecraft_service import server_is_running, try_call_bool
@@ -272,7 +272,6 @@ class CommandServer(FakePluginServer):
 
 
 __all__ = [
-    "DEFAULT_CONFIG",
     "REPO_ROOT",
     "WHOLE_BLOCK_SECTIONS",
     "BackupProblem",

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import bz2
+import hashlib
 import json
 import os
 import platform
@@ -148,8 +149,15 @@ def download_and_install_restic(
             output_name=output_name,
             target_path=target_path,
             timeout=timeout,
+            version=resolve_restic_release_version(release, version),
         ),
     )
+
+
+def resolve_restic_release_version(release: Dict[str, Any], requested: str) -> str:
+    """优先取 release 实际 tag，供固化校验表命中（latest 回退场景）。"""
+
+    return str(release.get("tag_name") or "").strip() or requested
 
 
 @dataclass(frozen=True)
@@ -162,6 +170,7 @@ class ResticDownloadTarget:
     output_name: str
     target_path: str
     timeout: int
+    version: str = ""
 
 
 def install_restic_from_urls(
@@ -186,6 +195,7 @@ def install_restic_from_urls(
                     )
                 )
                 download_file(url, archive_path, target.timeout)
+                verify_restic_download(target, archive_path)
                 install_restic_archive(
                     archive_path,
                     target.asset_keyword,
@@ -304,6 +314,68 @@ def download_bytes(url: str, timeout: int) -> bytes:
             url=mask_download_url(url),
             error=exc,
         ) from exc
+
+
+SHA256SUMS_URL_TEMPLATE = (
+    "https://github.com/restic/restic/releases/download/{version}/SHA256SUMS"
+)
+
+
+def verify_restic_download(target: ResticDownloadTarget, archive_path: str):
+    """下载产物必须先通过 SHA256 校验才允许落盘执行，防镜像篡改。"""
+
+    expected = expected_restic_sha256(target)
+    if not expected:
+        raise BackupProblem(
+            i18n_key="error.restic.checksum_file_unavailable", version=target.version
+        )
+    actual = sha256_file(archive_path)
+    if actual != expected:
+        raise BackupProblem(
+            i18n_key="error.restic.checksum_mismatch",
+            asset_name=target.asset_name,
+            expected=expected,
+            actual=actual,
+        )
+
+
+def expected_restic_sha256(target: ResticDownloadTarget) -> str:
+    return fetch_official_sha256(target.asset_name, target.version, target.timeout)
+
+
+def fetch_official_sha256(asset_name: str, version: str, timeout: int) -> str:
+    # 校验文件只从 github.com 官方源获取，镜像源不作为信任锚点
+    version_text = str(version or "").strip()
+    if not version_text or version_text.lower() == "latest":
+        return ""
+    url = SHA256SUMS_URL_TEMPLATE.format(version=version_text)
+    try:
+        data = download_bytes(url, timeout)
+    except Exception:
+        return ""
+    return extract_sha256_from_sums(data.decode("utf-8", "replace"), asset_name)
+
+
+def extract_sha256_from_sums(text: str, asset_name: str) -> str:
+    for line in text.splitlines():
+        parts = line.split(None, 1)
+        if len(parts) != 2:
+            continue
+        filename = parts[1].strip().lstrip("*").strip()
+        if filename != asset_name:
+            continue
+        digest = parts[0].strip().lower()
+        if re.fullmatch(r"[0-9a-f]{64}", digest):
+            return digest
+    return ""
+
+
+def sha256_file(path: str) -> str:
+    digest = hashlib.sha256()
+    with open(path, "rb") as file:
+        for chunk in iter(lambda: file.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def install_restic_archive(

@@ -2,7 +2,6 @@ import os
 
 try:
     from .support import (
-        DEFAULT_CONFIG,
         apply_config_file_migrations,
         build_default_config,
         ConfigError,
@@ -20,7 +19,6 @@ try:
     )
 except ImportError:
     from support import (
-        DEFAULT_CONFIG,
         apply_config_file_migrations,
         build_default_config,
         ConfigError,
@@ -46,10 +44,6 @@ class ConfigurationTests(unittest.TestCase):
         first["restic"]["backup_command"].append("--changed")
 
         self.assertNotIn("--changed", second["restic"]["backup_command"])
-        with self.assertRaises(TypeError):
-            DEFAULT_CONFIG["enabled"] = False
-        with self.assertRaises(TypeError):
-            DEFAULT_CONFIG["restic"]["password"] = "changed"
 
     def test_migrate_legacy_config_moves_restic_environment_secrets(self):
         cfg = {

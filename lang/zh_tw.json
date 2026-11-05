@@ -158,6 +158,8 @@
   "mcdr2restic.error.restic.download_failed": "下載失敗 {url}: {error}",
   "mcdr2restic.error.restic.archive_unsupported": "不支援的 restic 壓縮包型別: {asset_keyword}",
   "mcdr2restic.error.restic.bz2_empty": "bz2 解壓後內容為空",
+  "mcdr2restic.error.restic.checksum_file_unavailable": "無法從官方源獲取 restic {version} 的校驗檔案，已取消安裝未校驗的下載",
+  "mcdr2restic.error.restic.checksum_mismatch": "restic 下載檔案 SHA256 校驗失敗，已取消安裝：{asset_name} 期望 {expected}，實際 {actual}",
   "mcdr2restic.error.restic.zip_executable_not_found": "zip 中未找到可識別的 restic 可執行檔案，包含檔案: {members}",
   "mcdr2restic.log.update.thread_started": "MCDR2Restic 版本更新檢查執行緒已啟動",
   "mcdr2restic.warn.update.compute_next_failed": "計算下次版本更新檢查時間失敗: {error}",

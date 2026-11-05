@@ -18,7 +18,6 @@ from mcdr2restic.defaults.default_constants import (
     SNAPSHOT_PAGE_SIZE,
     SNAPSHOT_QUERY_TIMEOUT_SECONDS,
 )
-from mcdr2restic.defaults.default_freeze import freeze_default
 from mcdr2restic.defaults.message_defaults import build_default_messages
 
 
@@ -283,6 +282,3 @@ def default_config_for_language(language: str) -> ConfigDict:
     """Return a fresh default configuration for the requested language."""
 
     return build_default_config(language)
-
-
-DEFAULT_CONFIG: Any = freeze_default(build_base_default_config())

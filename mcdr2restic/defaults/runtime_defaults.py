@@ -5,7 +5,6 @@ import copy
 from typing import Any, Dict
 
 from mcdr2restic.core.models import BackupRunStatus
-from mcdr2restic.defaults.default_freeze import freeze_default
 
 
 _DEFAULT_RUNTIME: Dict[str, Any] = {
@@ -25,8 +24,6 @@ _DEFAULT_RUNTIME: Dict[str, Any] = {
     "last_backup_status": BackupRunStatus.NEVER.value,
     "last_backup_message": "",
 }
-
-DEFAULT_RUNTIME = freeze_default(_DEFAULT_RUNTIME)
 
 
 def build_default_runtime() -> Dict[str, Any]:

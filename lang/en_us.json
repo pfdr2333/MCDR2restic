@@ -156,6 +156,8 @@
   "mcdr2restic.error.restic.download_failed": "Download failed {url}: {error}",
   "mcdr2restic.error.restic.archive_unsupported": "Unsupported restic archive type: {asset_keyword}",
   "mcdr2restic.error.restic.bz2_empty": "bz2 archive decompressed to empty content",
+  "mcdr2restic.error.restic.checksum_file_unavailable": "Cannot fetch official SHA256SUMS for restic {version} from github.com, unverified download rejected",
+  "mcdr2restic.error.restic.checksum_mismatch": "restic download failed SHA256 verification, installation rejected: {asset_name} expected {expected}, got {actual}",
   "mcdr2restic.error.restic.zip_executable_not_found": "No recognizable restic executable was found in the zip; archive entries: {members}",
   "mcdr2restic.log.update.thread_started": "MCDR2Restic update check thread started",
   "mcdr2restic.warn.update.compute_next_failed": "Failed to compute the next update check time: {error}",

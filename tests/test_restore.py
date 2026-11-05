@@ -277,11 +277,10 @@ class RestoreTargetCommandTests(unittest.TestCase):
                 restore_workflow, "run_restic_command_with_lock_recovery", executed
             ), mock.patch.object(
                 restore_workflow, "ensure_default_restic_executable_available"
-            ):
-                with self.assertRaises(BackupProblem) as error:
-                    restore_workflow.execute_restore_tasks(
-                        runtime, server, restic_cfg, session
-                    )
+            ), self.assertRaises(BackupProblem) as error:
+                restore_workflow.execute_restore_tasks(
+                    runtime, server, restic_cfg, session
+                )
 
         self.assertEqual(
             error.exception.i18n_key, "error.restore.target_inside_backup_sources"

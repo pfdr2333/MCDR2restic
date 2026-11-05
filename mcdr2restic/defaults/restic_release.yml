@@ -1,0 +1,10 @@
+# MCDR2restic 内置信任的 restic 版本与校验值（插件初始化自动下载时使用）。
+# 升级 restic 时更新本文件：version、各资产的 name/url/sha256 均取自该版本官方 release 与 SHA256SUMS。
+version: v0.19.1
+assets:
+  - name: restic_0.19.1_linux_amd64.bz2
+    url: https://github.com/restic/restic/releases/download/v0.19.1/restic_0.19.1_linux_amd64.bz2
+    sha256: f415415624dcc452f2a02b8c33641791a8c6d6d3b65bbb3543fcf9a25151585c
+  - name: restic_0.19.1_windows_amd64.zip
+    url: https://github.com/restic/restic/releases/download/v0.19.1/restic_0.19.1_windows_amd64.zip
+    sha256: da948ad707ed690426473aaba2046cd61f8f90f6f0e7dab6be0d5796531de67d
