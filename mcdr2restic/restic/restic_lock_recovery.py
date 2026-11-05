@@ -20,7 +20,8 @@ from mcdr2restic.core.language import get_mcdr_language
 from mcdr2restic.core.models import BackupProblem, ResticCommandResult
 from mcdr2restic.restic.restic_constants import RESTIC_COMMAND_UNLOCK
 from mcdr2restic.restic.restic_context import ResticOperationContext
-from mcdr2restic.restic.restic_result import assert_restic_success
+from mcdr2restic.restic.restic_guidance import LOCKED_REPOSITORY_HINT
+from mcdr2restic.restic.restic_result import assert_restic_success, combine_restic_output
 from mcdr2restic.restic.restic_runner import run_restic_command
 
 
@@ -28,7 +29,6 @@ LOCKED_REPOSITORY_PATTERN = re.compile(
     r"repository is already locked(?: exclusively)? by PID (?P<pid>\d+) on (?P<host>\S+)",
     re.IGNORECASE,
 )
-LOCKED_REPOSITORY_HINT = "repository is already locked"
 WINDOWS_PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
 WINDOWS_SYNCHRONIZE = 0x00100000
 WINDOWS_ERROR_ACCESS_DENIED = 5
@@ -117,12 +117,6 @@ def recoverable_stale_lock_info(
     if process_exists(lock_info.pid):
         return None
     return lock_info
-
-
-def combine_restic_output(result: ResticCommandResult) -> str:
-    """Combine stdout and stderr for lock detection without losing either stream."""
-
-    return "{}\n{}".format(result.stdout, result.stderr)
 
 
 def extract_restic_lock_info(text: str) -> Optional[ResticLockInfo]:

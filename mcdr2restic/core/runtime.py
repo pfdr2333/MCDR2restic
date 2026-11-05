@@ -4,7 +4,7 @@ from __future__ import annotations
 import subprocess
 import threading
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional
+from typing import Any, Callable, Dict, Optional
 
 from mcdreforged.api.all import PluginServerInterface
 
@@ -66,6 +66,23 @@ class PluginRuntime:
         self.backup.cancel.clear()
         if self.backup.lock.locked():
             self.backup.lock.release()
+
+    def acquire_backup_slot_waiting(
+        self,
+        give_up_when: Optional[Callable[[], bool]] = None,
+        interval: float = 1.0,
+    ) -> bool:
+        """轮询等待备份槽位；插件停止时立即放弃，避免僵尸线程拿到锁执行。
+
+        give_up_when 返回 True 时放弃等待（如等待维护时发现槽位被普通备份占用）。
+        """
+        while True:
+            if self.service.stopping.is_set():
+                return False
+            if self.backup.lock.acquire(timeout=interval):
+                return True
+            if give_up_when is not None and give_up_when():
+                return False
 
 
 def create_runtime() -> PluginRuntime:

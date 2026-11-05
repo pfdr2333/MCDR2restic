@@ -255,17 +255,35 @@ def record_snapshot_refresh_failure(
     return error
 
 
+def preserve_snapshot_meta_fields(
+    existing: Optional[sqlite3.Row],
+) -> Tuple[float, Optional[str], int, float]:
+    """保留既有 meta 行的展示字段，供失败/失效行复用，避免覆盖上次刷新信息。"""
+
+    if existing is None:
+        return 0.0, None, 0, 0.0
+    return (
+        float(existing["updated_at_epoch"] or 0),
+        existing["updated_at_text"],
+        int(existing["snapshot_count"] or 0),
+        float(existing["last_refresh_duration"] or 0),
+    )
+
+
 def build_snapshot_refresh_failure_row(
     cache_key: str,
     existing: Optional[sqlite3.Row],
     error: str,
     duration_seconds: float,
 ) -> Tuple[Any, ...]:
+    updated_at_epoch, updated_at_text, snapshot_count, _ = (
+        preserve_snapshot_meta_fields(existing)
+    )
     return (
         cache_key,
-        float(existing["updated_at_epoch"] or 0) if existing is not None else 0,
-        existing["updated_at_text"] if existing is not None else None,
-        int(existing["snapshot_count"] or 0) if existing is not None else 0,
+        updated_at_epoch,
+        updated_at_text,
+        snapshot_count,
         error,
         existing["invalidation_reason"] if existing is not None else "",
         duration_seconds,

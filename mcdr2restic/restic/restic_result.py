@@ -20,6 +20,12 @@ from mcdr2restic.restic.restic_guidance import (
 )
 
 
+def combine_restic_output(result: ResticCommandResult) -> str:
+    """Combine stdout and stderr without losing either stream."""
+
+    return "{}\n{}".format(result.stdout, result.stderr)
+
+
 def assert_restic_success(
     restic_cfg: Dict[str, Any],
     result: ResticCommandResult,
@@ -28,7 +34,7 @@ def assert_restic_success(
     success_codes = {
         int(code) for code in restic_cfg.get(RESTIC_CFG_SUCCESS_EXIT_CODES, [0])
     }
-    combined = "{}\n{}".format(result.stdout, result.stderr)
+    combined = combine_restic_output(result)
     max_output_chars = int(restic_cfg.get(RESTIC_CFG_MAX_OUTPUT_CHARS, 1800))
 
     assert_no_json_errors(result, max_output_chars)

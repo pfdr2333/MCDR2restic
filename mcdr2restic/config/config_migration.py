@@ -28,6 +28,7 @@ from mcdr2restic.config.config_template import (
     get_top_level_block_lines,
     template_top_level_keys,
     yaml_scalar,
+    TOP_LEVEL_KEY_PATTERN,
 )
 from mcdr2restic.defaults.config_template_resources import (
     available_config_template_languages,
@@ -39,7 +40,6 @@ from mcdr2restic.core.utils import get_config_section, safe_int
 
 
 ResticLineBuilder = Callable[[str, Dict[str, Any]], List[str]]
-TOP_LEVEL_KEY_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_-]*\s*:")
 
 
 def migrate_legacy_config(cfg: Dict[str, Any]):

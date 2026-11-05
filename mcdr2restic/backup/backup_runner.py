@@ -119,16 +119,10 @@ class BackupRunner:
     def _acquire_backup_slot(self, wait_for_maintenance: bool) -> bool:
         if not wait_for_maintenance:
             return self.app_runtime.backup.lock.acquire(blocking=False)
-
-        while True:
-            # 卸载时立即放弃等待，避免僵尸线程在关闭过程中拿到锁执行备份
-            if self.app_runtime.service.stopping.is_set():
-                return False
-            if self.app_runtime.backup.lock.acquire(blocking=False):
-                return True
-            if self.app_runtime.backup.label != "maintenance":
-                return False
-            time.sleep(1.0)
+        # 卸载时立即放弃等待，避免僵尸线程在关闭过程中拿到锁执行备份
+        return self.app_runtime.acquire_backup_slot_waiting(
+            lambda: self.app_runtime.backup.label != "maintenance"
+        )
 
     def _run_with_acquired_lock(self, server: PluginServerInterface, label: str):
         # 调度触发的备份经 run_locked 进入，这里统一登记执行线程供卸载时取消

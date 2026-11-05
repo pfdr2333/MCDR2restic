@@ -27,8 +27,9 @@ from mcdr2restic.restic.restic_guidance import (
     restic_management_command,
 )
 from mcdr2restic.restic.restic_runner import (
-    build_restic_popen_kwargs,
+    RESTIC_READER_JOIN_TIMEOUT_SECONDS,
     resolve_popen_executable,
+    start_restic_subprocess,
 )
 from mcdr2restic.restic.restic_termination import (
     TerminateResult,
@@ -42,7 +43,6 @@ SNAPSHOT_IMPORT_COMMIT_INTERVAL = 100
 SNAPSHOT_STDERR_TAIL_CHARS = 4000
 SNAPSHOT_ERROR_TAIL_CHARS = 1000
 JSON_STREAM_READ_SIZE = 65536
-RESTIC_READER_JOIN_TIMEOUT_SECONDS = 2
 
 
 @dataclass
@@ -203,14 +203,13 @@ def start_restic_snapshot_process(restic_cfg: Dict[str, Any]) -> subprocess.Pope
         RESTIC_COMMAND_SNAPSHOTS,
         RESTIC_OPTION_JSON,
     ]
-    try:
-        return subprocess.Popen(command, **build_restic_popen_kwargs(cwd, env))
-    except FileNotFoundError as exc:
-        raise BackupProblem(
-            i18n_key="error.restic.executable_not_found", executable=executable
-        ) from exc
-    except Exception as exc:
-        raise BackupProblem(i18n_key="error.snapshot.start_failed", error=exc) from exc
+    return start_restic_subprocess(
+        command,
+        cwd,
+        env,
+        executable,
+        lambda exc: BackupProblem(i18n_key="error.snapshot.start_failed", error=exc),
+    )
 
 
 def build_snapshot_restic_environment(restic_cfg: Dict[str, Any]) -> Dict[str, str]:

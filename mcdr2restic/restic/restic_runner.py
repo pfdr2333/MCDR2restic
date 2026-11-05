@@ -7,7 +7,7 @@ import subprocess
 import threading
 import time
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, NamedTuple, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, List, NamedTuple, Optional, Sequence, Tuple
 
 from mcdr2restic.config.state_store import get_config_snapshot
 from mcdr2restic.defaults.default_constants import (
@@ -177,6 +177,26 @@ def start_restic_process(
     executable: str,
     phase: str,
 ) -> subprocess.Popen:
+    return start_restic_subprocess(
+        command,
+        cwd,
+        env,
+        executable,
+        lambda exc: BackupProblem(
+            i18n_key="error.restic.start_failed", phase=phase, error=exc
+        ),
+    )
+
+
+def start_restic_subprocess(
+    command: List[str],
+    cwd: Optional[str],
+    env: Dict[str, str],
+    executable: str,
+    build_start_failed_error: Callable[[Exception], BackupProblem],
+) -> subprocess.Popen:
+    """共享的 restic 子进程启动包装：可执行文件缺失与启动失败转本地化异常。"""
+
     try:
         return subprocess.Popen(command, **build_restic_popen_kwargs(cwd, env))
     except FileNotFoundError as exc:
@@ -184,9 +204,7 @@ def start_restic_process(
             i18n_key="error.restic.executable_not_found", executable=executable
         ) from exc
     except Exception as exc:
-        raise BackupProblem(
-            i18n_key="error.restic.start_failed", phase=phase, error=exc
-        ) from exc
+        raise build_start_failed_error(exc) from exc
 
 
 def build_restic_popen_kwargs(

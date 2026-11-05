@@ -37,6 +37,7 @@ from mcdr2restic.snapshots.snapshot_db import (
     commit_refreshed_snapshot_cache,
     delete_snapshot_temp_rows,
     open_snapshot_db,
+    preserve_snapshot_meta_fields,
     read_snapshot_meta,
     record_snapshot_refresh_failure,
 )
@@ -279,13 +280,16 @@ def mark_snapshot_cache_invalid(
 def build_snapshot_invalidation_row(
     cache_key: str, existing, reason: str
 ) -> Tuple[Any, ...]:
+    updated_at_epoch, updated_at_text, snapshot_count, last_refresh_duration = (
+        preserve_snapshot_meta_fields(existing)
+    )
     return (
         cache_key,
-        float(existing["updated_at_epoch"] or 0) if existing is not None else 0,
-        existing["updated_at_text"] if existing is not None else None,
-        int(existing["snapshot_count"] or 0) if existing is not None else 0,
+        updated_at_epoch,
+        updated_at_text,
+        snapshot_count,
         "{} @ {}".format(reason, now_text()),
-        float(existing["last_refresh_duration"] or 0) if existing is not None else 0,
+        last_refresh_duration,
     )
 
 
