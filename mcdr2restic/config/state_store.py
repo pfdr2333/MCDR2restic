@@ -5,6 +5,8 @@ import contextlib
 import copy
 import os
 import re
+import time
+import uuid
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, Optional
 
@@ -155,18 +157,30 @@ def save_yaml_file(path: str, data: Dict[str, Any]):
     )
 
 
-def save_text_file_atomically(path: str, text: str):
-    """先写临时文件再原子替换，进程中断不会留下损坏的主文件。"""
+def save_text_file_atomically(path: str, text: str, attempts: int = 5):
+    """先写唯一命名的临时文件再原子替换：进程中断不会损坏主文件，
+    并发写方与修复回写也不会因共享 .tmp 名互相截断（P1-4）。"""
 
     directory = os.path.dirname(path)
     if directory:
         os.makedirs(directory, exist_ok=True)
-    temp_path = "{}.tmp".format(path)
-    with open(temp_path, "w", encoding="utf8") as file:
-        file.write(text)
-        file.flush()
-        os.fsync(file.fileno())
-    os.replace(temp_path, path)
+    last_error: OSError = PermissionError(path)
+    for attempt in range(attempts):
+        temp_path = "{}.{}.tmp".format(path, uuid.uuid4().hex)
+        try:
+            with open(temp_path, "w", encoding="utf8") as file:
+                file.write(text)
+                file.flush()
+                os.fsync(file.fileno())
+            os.replace(temp_path, path)
+            return
+        except PermissionError as exc:
+            # Windows 并发替换同一目标会瞬时共享冲突，退避重试而非丢弃本次写入
+            last_error = exc
+            with contextlib.suppress(OSError):
+                os.remove(temp_path)
+            time.sleep(0.05 * (attempt + 1))
+    raise last_error
 
 
 def load_state_file(server: PluginServerInterface) -> Dict[str, Any]:

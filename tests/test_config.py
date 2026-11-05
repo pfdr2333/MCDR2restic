@@ -1,4 +1,5 @@
 import os
+import threading
 
 try:
     from .support import (
@@ -336,6 +337,35 @@ class StateFileDurabilityTests(unittest.TestCase):
 
             save_yaml_file(path, {"b": 2})
             self.assertEqual(load_yaml_mapping(path), {"b": 2})
+
+    def test_concurrent_atomic_writes_keep_main_file_parseable(self):
+        # 持锁写方与修复回写并发时不得因共享 .tmp 名互相截断，主文件始终可解析（P1-4）
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = os.path.join(temp_dir, "state.yml")
+            payloads = {
+                index: {"index": index, "text": "x" * 500} for index in range(24)
+            }
+            errors = []
+
+            def write(index):
+                try:
+                    save_yaml_file(path, payloads[index])
+                except OSError as exc:
+                    errors.append(exc)
+
+            threads = [
+                threading.Thread(target=write, args=(index,)) for index in payloads
+            ]
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join()
+
+            self.assertEqual(errors, [])
+            self.assertIn(load_yaml_mapping(path)["index"], payloads)
+            self.assertEqual(
+                [name for name in os.listdir(temp_dir) if name.endswith(".tmp")], []
+            )
 
     def test_load_state_file_repairs_block_scalar_and_rewrites(self):
         server = FakePluginServer()
