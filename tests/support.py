@@ -185,12 +185,16 @@ from mcdr2restic.restore.restore_task_repository import (
     restore_tasks_output,
 )
 from mcdr2restic.restore.restore_paths import normalize_restore_include_path
-from mcdr2restic.snapshots.snapshot_cache import build_snapshot_cache_key
+from mcdr2restic.snapshots.snapshot_cache import (
+    build_snapshot_cache_key,
+    mark_snapshot_cache_invalid,
+)
 from mcdr2restic.snapshots.snapshot_db import (
     commit_refreshed_snapshot_cache,
     execute_column_addition,
     insert_snapshot_row,
     open_snapshot_db,
+    read_snapshot_meta,
     read_snapshot_page,
 )
 from mcdr2restic.snapshots.snapshot_importer import (
@@ -374,6 +378,7 @@ __all__ = [
     "load_yaml_mapping",
     "load_yaml_mapping_with_text_repair",
     "make_source_translate",
+    "mark_snapshot_cache_invalid",
     "migrate_config_file",
     "migrate_legacy_config",
     "mock",
@@ -389,6 +394,7 @@ __all__ = [
     "parse_online_list_output",
     "persist_player_state",
     "read_bundled_plugin_version",
+    "read_snapshot_meta",
     "read_snapshot_page",
     "render_message",
     "render_payload_leaves",

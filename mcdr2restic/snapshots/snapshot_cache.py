@@ -165,6 +165,8 @@ def refresh_snapshot_cache(query: SnapshotQueryContext, cache_key: str):
     started = time.monotonic()
     with closing(open_snapshot_db(query.server, query.snapshot_cfg)) as conn:
         try:
+            # 记录刷新起点的 meta：提交时对比即可发现刷新期间到达的失效标记
+            meta_before_refresh = read_snapshot_meta(conn, cache_key)
             count = import_restic_snapshots_to_sql(
                 query.restic_cfg,
                 conn,
@@ -173,7 +175,12 @@ def refresh_snapshot_cache(query: SnapshotQueryContext, cache_key: str):
                 query.command_root,
             )
             commit_refreshed_snapshot_cache(
-                conn, cache_key, temp_key, count, time.monotonic() - started
+                conn,
+                cache_key,
+                temp_key,
+                count,
+                time.monotonic() - started,
+                meta_before_refresh,
             )
         except Exception as exc:
             error = record_snapshot_refresh_failure(

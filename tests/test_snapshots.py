@@ -22,8 +22,10 @@ try:
         iter_json_array_stream,
         list_restore_tasks,
         make_source_translate,
+        mark_snapshot_cache_invalid,
         mock,
         open_snapshot_db,
+        read_snapshot_meta,
         read_snapshot_page,
         restore_tasks_output,
         tempfile,
@@ -52,8 +54,10 @@ except ImportError:
         iter_json_array_stream,
         list_restore_tasks,
         make_source_translate,
+        mark_snapshot_cache_invalid,
         mock,
         open_snapshot_db,
+        read_snapshot_meta,
         read_snapshot_page,
         restore_tasks_output,
         tempfile,
@@ -316,3 +320,51 @@ class SnapshotDatabaseTests(unittest.TestCase):
             remaining_rows,
             {"new-key", "pending-key", "new-key:refresh:333:444"},
         )
+
+    def test_refresh_commit_preserves_invalidation_marked_during_refresh(self):
+        # 刷新读旧快照期间备份完成写入失效标记，提交不得把它覆盖回有效（P1-5）
+        with tempfile.TemporaryDirectory() as temp_dir:
+            server = FakeServer(temp_dir)
+            snapshot_cfg = {"database": "db.sqlite3"}
+            restic_cfg = {"repository": "/repo"}
+            cache_key = build_snapshot_cache_key(restic_cfg)
+
+            with closing(open_snapshot_db(server, snapshot_cfg)) as conn:
+                commit_refreshed_snapshot_cache(
+                    conn, cache_key, cache_key + ":refresh:1:1", 1, 0.5
+                )
+            with closing(open_snapshot_db(server, snapshot_cfg)) as conn:
+                meta_before = read_snapshot_meta(conn, cache_key)
+
+            mark_snapshot_cache_invalid(
+                server, snapshot_cfg, restic_cfg, "备份完成 @ 2026-01-01 00:00:01"
+            )
+
+            with closing(open_snapshot_db(server, snapshot_cfg)) as conn:
+                commit_refreshed_snapshot_cache(
+                    conn, cache_key, cache_key + ":refresh:2:2", 1, 0.5, meta_before
+                )
+                meta = read_snapshot_meta(conn, cache_key)
+
+        self.assertEqual(int(meta["invalidated"]), 1)
+        self.assertIn("备份完成", str(meta["invalidation_reason"]))
+
+    def test_refresh_commit_clears_invalidation_present_before_refresh(self):
+        # 失效标记早于本次刷新（如上次刷新失败残留）时，成功刷新应转回有效，
+        # 否则每次查询都会重新刷新缓存
+        with tempfile.TemporaryDirectory() as temp_dir:
+            server = FakeServer(temp_dir)
+            with closing(open_snapshot_db(server, {"database": "db.sqlite3"})) as conn:
+                conn.execute(
+                    "INSERT INTO snapshot_meta (cache_key, error, invalidated, invalidation_reason)"
+                    " VALUES ('cache-a', 'boom', 1, 'previous failure')"
+                )
+                meta_before = read_snapshot_meta(conn, "cache-a")
+
+                commit_refreshed_snapshot_cache(
+                    conn, "cache-a", "cache-a:refresh:1:1", 1, 0.5, meta_before
+                )
+                meta = read_snapshot_meta(conn, "cache-a")
+
+        self.assertEqual(int(meta["invalidated"]), 0)
+        self.assertEqual(meta["error"], "")

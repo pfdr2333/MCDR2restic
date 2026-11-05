@@ -181,12 +181,17 @@ def commit_refreshed_snapshot_cache(
     temp_key: str,
     snapshot_count: int,
     duration_seconds: float,
+    meta_before_refresh: Optional[sqlite3.Row] = None,
 ):
     with conn:
         conn.execute("DELETE FROM snapshots WHERE cache_key = ?", (cache_key,))
         conn.execute(
             "UPDATE snapshots SET cache_key = ? WHERE cache_key = ?",
             (cache_key, temp_key),
+        )
+        existing = read_snapshot_meta(conn, cache_key)
+        invalidated, invalidation_reason = refreshed_meta_invalidation_state(
+            existing, meta_before_refresh
         )
         conn.execute(
             """
@@ -195,11 +200,37 @@ def commit_refreshed_snapshot_cache(
                 cache_key, updated_at_epoch, updated_at_text, snapshot_count,
                 error, invalidated, invalidation_reason, last_refresh_duration
             )
-            VALUES (?, ?, ?, ?, '', 0, '', ?)
+            VALUES (?, ?, ?, ?, '', ?, ?, ?)
             """,
-            (cache_key, time.time(), now_text(), snapshot_count, duration_seconds),
+            (
+                cache_key,
+                time.time(),
+                now_text(),
+                snapshot_count,
+                invalidated,
+                invalidation_reason,
+                duration_seconds,
+            ),
         )
         prune_orphan_snapshot_cache_keys(conn, cache_key)
+
+
+def refreshed_meta_invalidation_state(
+    existing: Optional[sqlite3.Row],
+    meta_before_refresh: Optional[sqlite3.Row],
+) -> Tuple[int, str]:
+    """刷新期间缓存被标记失效（如备份完成）时保留失效标记。
+
+    若直接写 invalidated=0，备份完成前的旧快照列表会被当成有效缓存，
+    restore list 在下次失效前看不到最新快照（P1-5）。
+    """
+
+    if existing is None or int(existing["invalidated"] or 0) == 0:
+        return 0, ""
+    if meta_before_refresh is None or tuple(existing) != tuple(meta_before_refresh):
+        return 1, str(existing["invalidation_reason"] or "")
+    # 失效标记早于本次刷新（如上次刷新失败），本次已带来新数据，可正常转有效
+    return 0, ""
 
 
 def prune_orphan_snapshot_cache_keys(conn: sqlite3.Connection, current_cache_key: str):
