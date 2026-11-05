@@ -5,13 +5,20 @@ try:
         apply_config_file_migrations,
         build_default_config,
         ConfigError,
+        create_runtime,
         FakeLogger,
+        FakePluginServer,
         FakeServer,
         get_default_config_template,
         load_config_file_mapping,
+        load_state_file,
+        load_yaml_mapping,
         migrate_config_file,
         migrate_legacy_config,
+        mock,
+        persist_player_state,
         replace_or_append_enabled_line,
+        save_yaml_file,
         tempfile,
         unittest,
         WHOLE_BLOCK_SECTIONS,
@@ -22,13 +29,20 @@ except ImportError:
         apply_config_file_migrations,
         build_default_config,
         ConfigError,
+        create_runtime,
         FakeLogger,
+        FakePluginServer,
         FakeServer,
         get_default_config_template,
         load_config_file_mapping,
+        load_state_file,
+        load_yaml_mapping,
         migrate_config_file,
         migrate_legacy_config,
+        mock,
+        persist_player_state,
         replace_or_append_enabled_line,
+        save_yaml_file,
         tempfile,
         unittest,
         WHOLE_BLOCK_SECTIONS,
@@ -253,3 +267,57 @@ class ConfigurationTests(unittest.TestCase):
                 load_config_file_mapping(server)
 
         self.assertEqual(error.exception.i18n_key, "error.config.yaml_invalid")
+
+
+class StateFileDurabilityTests(unittest.TestCase):
+    def test_save_yaml_file_is_atomic_and_tolerates_stale_temp(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = os.path.join(temp_dir, "state.yml")
+            save_yaml_file(path, {"a": 1})
+
+            with open(path + ".tmp", "w", encoding="utf8") as file:
+                file.write("garbage: [")
+            self.assertEqual(load_yaml_mapping(path), {"a": 1})
+
+            save_yaml_file(path, {"b": 2})
+            self.assertEqual(load_yaml_mapping(path), {"b": 2})
+
+    def test_load_state_file_repairs_block_scalar_and_rewrites(self):
+        server = FakePluginServer()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            server.get_data_folder = lambda: temp_dir
+            path = os.path.join(temp_dir, "state.yml")
+            with open(path, "w", encoding="utf8") as file:
+                file.write(
+                    "runtime:\n"
+                    "  last_backup_message: |-\n"
+                    "      first\n"
+                    "    second\n"
+                )
+
+            state = load_state_file(server)
+
+            self.assertIn("runtime", state)
+            self.assertIn("first", state["runtime"]["last_backup_message"])
+            with open(path, "r", encoding="utf8") as file:
+                self.assertNotIn("      first", file.read())
+        self.assertTrue(server.logger.warning_messages)
+
+    def test_persist_player_state_throttles_file_writes(self):
+        runtime = create_runtime()
+        server = FakePluginServer()
+        runtime.config_state.config = {
+            "runtime": {"last_player_joined": "player @ 2026-01-01 00:00:00"}
+        }
+
+        with mock.patch(
+            "mcdr2restic.minecraft.player_activity_service.save_config_unlocked"
+        ) as save:
+            persist_player_state(runtime, server)
+            persist_player_state(runtime, server)
+
+        self.assertEqual(save.call_count, 1)
+        self.assertEqual(
+            runtime.config_state.state["runtime"]["last_player_joined"],
+            "player @ 2026-01-01 00:00:00",
+        )

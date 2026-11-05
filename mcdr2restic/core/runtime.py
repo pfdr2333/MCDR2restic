@@ -17,6 +17,7 @@ class ConfigRuntimeState:
     state: Dict[str, Any] = field(default_factory=dict)
     language: str = ""
     lock: threading.RLock = field(default_factory=threading.RLock)
+    player_state_persisted_at: float = 0.0
 
 
 @dataclass

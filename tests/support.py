@@ -89,9 +89,14 @@ from mcdr2restic.config.config_migration import (
     migrate_legacy_config,
 )
 from mcdr2restic.config.state_store import (
+    load_state_file,
+    load_yaml_mapping,
     load_yaml_mapping_with_text_repair,
     repair_inconsistent_block_scalar_indentation,
+    save_text_file_atomically,
+    save_yaml_file,
 )
+from mcdr2restic.minecraft.player_activity_service import persist_player_state
 from mcdr2restic.core.i18n import (
     make_source_translate,
     normalize_language,
@@ -351,6 +356,8 @@ __all__ = [
     "json",
     "list_restore_tasks",
     "load_config_file_mapping",
+    "load_state_file",
+    "load_yaml_mapping",
     "load_yaml_mapping_with_text_repair",
     "make_source_translate",
     "migrate_config_file",
@@ -366,6 +373,7 @@ __all__ = [
     "pack_plugin",
     "parse_daily_time",
     "parse_online_list_output",
+    "persist_player_state",
     "read_bundled_plugin_version",
     "read_snapshot_page",
     "render_message",
@@ -384,6 +392,8 @@ __all__ = [
     "restore_workflow",
     "runtime_player_set",
     "safe_int",
+    "save_text_file_atomically",
+    "save_yaml_file",
     "schedule_status_text",
     "server_is_running",
     "start_restic_process",

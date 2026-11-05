@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+import contextlib
 import copy
 import os
 import re
@@ -14,6 +15,7 @@ from mcdr2restic.config.config_paths import get_data_file_path
 from mcdr2restic.defaults.default_config import build_default_config
 from mcdr2restic.defaults.default_constants import STATE_NAME
 from mcdr2restic.defaults.runtime_defaults import build_default_runtime
+from mcdr2restic.core.i18n import server_tr
 from mcdr2restic.core.runtime import PluginRuntime
 
 
@@ -41,9 +43,24 @@ def save_config_unlocked(
             app_runtime.config_state.config.get("runtime", build_default_runtime())
         )
     }
+    sync_state_unlocked(app_runtime, state)
+    save_yaml_file(get_data_file_path(target, STATE_NAME), state)
+
+
+def sync_state_unlocked(
+    app_runtime: PluginRuntime,
+    state: Optional[Dict[str, Any]] = None,
+):
+    """把最新 runtime 状态同步进内存镜像；镜像滞后会让快照读回旧状态。"""
+
+    if state is None:
+        state = {
+            "runtime": copy.deepcopy(
+                app_runtime.config_state.config.get("runtime", build_default_runtime())
+            )
+        }
     app_runtime.config_state.state.clear()
     app_runtime.config_state.state.update(copy.deepcopy(state))
-    save_yaml_file(get_data_file_path(target, STATE_NAME), state)
 
 
 def get_config_snapshot(app_runtime: PluginRuntime) -> Dict[str, Any]:
@@ -130,15 +147,41 @@ def read_text_file(path: str) -> str:
 
 
 def save_yaml_file(path: str, data: Dict[str, Any]):
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w", encoding="utf8") as file:
+    save_text_file_atomically(
+        path,
         yaml.safe_dump(
-            data, file, allow_unicode=True, sort_keys=False, default_flow_style=False
-        )
+            data, allow_unicode=True, sort_keys=False, default_flow_style=False
+        ),
+    )
+
+
+def save_text_file_atomically(path: str, text: str):
+    """先写临时文件再原子替换，进程中断不会留下损坏的主文件。"""
+
+    directory = os.path.dirname(path)
+    if directory:
+        os.makedirs(directory, exist_ok=True)
+    temp_path = "{}.tmp".format(path)
+    with open(temp_path, "w", encoding="utf8") as file:
+        file.write(text)
+        file.flush()
+        os.fsync(file.fileno())
+    os.replace(temp_path, path)
 
 
 def load_state_file(server: PluginServerInterface) -> Dict[str, Any]:
-    state = load_yaml_mapping(get_data_file_path(server, STATE_NAME))
+    path = get_data_file_path(server, STATE_NAME)
+    result = load_yaml_mapping_with_text_repair(
+        path, repair_inconsistent_block_scalar_indentation
+    )
+    state = result.mapping
+    if result.repaired_text is not None:
+        # 回写修复后的文本，避免每次启动重复修复
+        with contextlib.suppress(OSError):
+            save_text_file_atomically(path, result.repaired_text)
+        server.logger.warning(
+            server_tr(server, "warn.config.auto_repaired_block_scalar_indentation")
+        )
     runtime_state = state.get("runtime")
     if not isinstance(runtime_state, dict):
         state["runtime"] = build_default_runtime()

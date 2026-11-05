@@ -28,6 +28,7 @@ from mcdr2restic.config.state_store import (
     load_state_file,
     merge_defaults,
     save_config_unlocked,
+    save_text_file_atomically,
 )
 
 
@@ -102,8 +103,7 @@ def save_enabled_unlocked(
     ensure_config_file_exists(server, get_mcdr_language(server))
     lines = read_config_lines(path)
     lines = replace_or_append_enabled_line(lines, enabled)
-    with open(path, "w", encoding="utf8") as file:
-        file.writelines(lines)
+    save_text_file_atomically(path, "".join(lines))
 
 
 def read_config_lines(path: str):

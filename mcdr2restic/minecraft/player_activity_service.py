@@ -1,11 +1,16 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+import time
 from typing import Any, Dict, NamedTuple, Optional
 
 from mcdreforged.api.all import PluginServerInterface
 
-from mcdr2restic.config.state_store import ensure_runtime, save_config_unlocked
+from mcdr2restic.config.state_store import (
+    ensure_runtime,
+    save_config_unlocked,
+    sync_state_unlocked,
+)
 from mcdr2restic.core.i18n import server_tr
 from mcdr2restic.minecraft.player_activity import (
     mark_player_activity_unlocked,
@@ -22,6 +27,23 @@ from mcdr2restic.core.utils import (
     now_text,
     tail_text,
 )
+
+
+PLAYER_STATE_PERSIST_INTERVAL_SECONDS = 30.0
+
+
+def persist_player_state(app_runtime: PluginRuntime, server: PluginServerInterface):
+    """玩家进出/采样属高频事件：内存镜像每次同步，文件落盘按间隔节流。"""
+
+    sync_state_unlocked(app_runtime)
+    now = time.monotonic()
+    if (
+        now - app_runtime.config_state.player_state_persisted_at
+        < PLAYER_STATE_PERSIST_INTERVAL_SECONDS
+    ):
+        return
+    app_runtime.config_state.player_state_persisted_at = now
+    save_config_unlocked(app_runtime, server)
 
 
 def handle_player_joined(
@@ -45,7 +67,7 @@ def handle_player_joined(
         runtime_state["player_joined_since_last_check"] = True
         runtime_state["player_activity_since_last_backup"] = True
         runtime_state["last_player_joined"] = "{} @ {}".format(player, now_text())
-        save_config_unlocked(app_runtime, server)
+        persist_player_state(app_runtime, server)
     server.logger.debug(
         server_tr(server, "debug.player.joined_recorded", player=player)
     )
@@ -69,7 +91,7 @@ def handle_player_left(
         )
         runtime_state["known_online_players"] = sorted(known_players)
         record_player_left_unlocked(runtime_state, player, current_online)
-        save_config_unlocked(app_runtime, server)
+        persist_player_state(app_runtime, server)
     server.logger.debug(
         server_tr(
             server,
@@ -181,7 +203,7 @@ def record_online_sample(
             "rcon {}".format(sample.command),
             tail_text(str(sample.result), 300),
         )
-        save_config_unlocked(app_runtime, server)
+        persist_player_state(app_runtime, server)
 
 
 def resolve_known_online_players(
