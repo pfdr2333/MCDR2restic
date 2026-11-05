@@ -3,8 +3,11 @@ try:
 except ImportError:
     from support import FakePluginServer, create_runtime, mock, tempfile, unittest
 
+import threading
+
 from mcdr2restic.backup.backup_runner import BackupRunner
 from mcdr2restic.core.models import BackupCanceled, BackupRunOutcome, BackupRunStatus
+from mcdr2restic.minecraft.minecraft_service import request_cancel_current_backup
 
 
 class BackupRunnerTests(unittest.TestCase):
@@ -103,6 +106,85 @@ class BackupRunnerTests(unittest.TestCase):
         self.assertEqual(result.status, BackupRunStatus.CANCELED)
         self.assertTrue(result.detail.startswith("original; "))
         self.assertIn("save-on failed", result.detail)
+
+    def test_run_locked_registers_running_thread_for_cancel(self):
+        runtime, runner = self.make_runner()
+        server = FakePluginServer()
+        seen = {}
+
+        def fake_body(*args, **kwargs):
+            seen["thread"] = runtime.backup.thread
+
+        with tempfile.TemporaryDirectory() as data_dir:
+            server.get_data_folder = lambda: data_dir
+            with mock.patch(
+                "mcdr2restic.backup.backup_runner.run_backup_body",
+                side_effect=fake_body,
+            ):
+                self.assertTrue(runner.run_locked(server, "manual"))
+
+        self.assertIs(seen["thread"], threading.current_thread())
+        self.assertFalse(runtime.backup.lock.locked())
+        self.assertIsNone(runtime.backup.thread)
+
+    def test_acquire_backup_slot_gives_up_when_plugin_stopping(self):
+        runtime, runner = self.make_runner()
+        runtime.backup.lock.acquire()
+        runtime.backup.label = "maintenance"
+        runtime.service.stopping.set()
+        try:
+            self.assertFalse(runner._acquire_backup_slot(wait_for_maintenance=True))
+        finally:
+            runtime.backup.lock.release()
+
+    def test_run_locked_skips_when_stopping_while_waiting_for_maintenance(self):
+        runtime, runner = self.make_runner()
+        server = FakePluginServer()
+        runtime.backup.lock.acquire()
+        runtime.backup.label = "maintenance"
+        runtime.service.stopping.set()
+        try:
+            with mock.patch("mcdr2restic.backup.backup_runner.run_backup_body") as body:
+                self.assertFalse(runner.run_locked(server, "scheduled", wait_for_slot=True))
+            body.assert_not_called()
+        finally:
+            runtime.backup.lock.release()
+        self.assertTrue(
+            any("插件正在停止" in m for m in server.logger.info_messages)
+        )
+
+    def test_unload_cancels_long_running_deferred_backup(self):
+        runtime, runner = self.make_runner()
+        server = FakePluginServer()
+        started = threading.Event()
+
+        def long_body(*args, **kwargs):
+            started.set()
+            self.assertTrue(runtime.backup.cancel.wait(timeout=10))
+            raise BackupCanceled(i18n_key="error.backup.cancel_requested")
+
+        with tempfile.TemporaryDirectory() as data_dir:
+            server.get_data_folder = lambda: data_dir
+            with mock.patch(
+                "mcdr2restic.backup.backup_runner.run_backup_body",
+                side_effect=long_body,
+            ):
+                self.assertTrue(runner.start_deferred_thread(server, "scheduled"))
+                self.assertTrue(started.wait(timeout=5))
+                # 模拟卸载流程：先置停止事件，再请求取消并等待备份线程退出
+                runtime.service.stopping.set()
+                request_cancel_current_backup(runtime, "unload")
+                thread = runtime.backup.thread
+                self.assertIsNotNone(thread)
+                thread.join(timeout=5)
+
+        self.assertFalse(thread.is_alive())
+        self.assertFalse(runtime.backup.lock.locked())
+        self.assertIsNone(runtime.backup.label)
+        self.assertEqual(
+            runtime.config_state.config["runtime"]["last_backup_status"],
+            BackupRunStatus.CANCELED.value,
+        )
 
     def test_run_with_acquired_lock_survives_notify_crash(self):
         runtime, runner = self.make_runner()

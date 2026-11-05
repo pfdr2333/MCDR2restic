@@ -50,9 +50,18 @@ class MaintenanceRunner:
         if self.restore_running_provider(self.app_runtime):
             server.logger.warning(tr(language, "warn.maintenance.restore_running"))
             return False
-
-        self.app_runtime.backup.lock.acquire(blocking=True)
+        if not self._acquire_slot_waiting():
+            # 仅在插件停止时走到这里，避免卸载后僵尸线程抢到锁执行 prune
+            server.logger.info(tr(language, "info.maintenance.skipped_on_plugin_stop"))
+            return False
         return self._run_with_acquired_lock(server)
+
+    def _acquire_slot_waiting(self) -> bool:
+        while True:
+            if self.app_runtime.plugin_stopping.is_set():
+                return False
+            if self.app_runtime.backup.lock.acquire(timeout=1.0):
+                return True
 
     def _run_with_acquired_lock(self, server: PluginServerInterface) -> bool:
         cfg = get_config_snapshot(self.app_runtime)

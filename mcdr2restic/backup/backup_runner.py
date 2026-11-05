@@ -66,6 +66,23 @@ class BackupRunner:
         thread.start()
         return True
 
+    def start_deferred_thread(
+        self, server: PluginServerInterface, label: Union[BackupTrigger, str]
+    ) -> bool:
+        """调度触发的备份：在新线程内等待槽位后执行，调度线程不被备份时长阻塞。
+
+        等待与执行都经 run_locked 完成，插件停止时放弃等待、执行中可被取消。
+        """
+        thread = threading.Thread(
+            target=self.run_locked,
+            args=(server, label),
+            kwargs={"wait_for_slot": True},
+            name="MCDR2Restic-Backup-{}".format(backup_trigger_label(label)),
+            daemon=True,
+        )
+        thread.start()
+        return True
+
     def run_locked(
         self,
         server: PluginServerInterface,
@@ -80,9 +97,14 @@ class BackupRunner:
             )
             return False
         if not self._acquire_backup_slot(wait_for_slot):
-            server.logger.warning(
-                tr(language, "warn.backup.already_running", label=label_text)
-            )
+            if self.app_runtime.plugin_stopping.is_set():
+                server.logger.info(
+                    tr(language, "info.backup.skipped_on_plugin_stop", label=label_text)
+                )
+            else:
+                server.logger.warning(
+                    tr(language, "warn.backup.already_running", label=label_text)
+                )
             return False
         self._run_with_acquired_lock(server, label_text)
         return True
@@ -92,6 +114,9 @@ class BackupRunner:
             return self.app_runtime.backup.lock.acquire(blocking=False)
 
         while True:
+            # 卸载时立即放弃等待，避免僵尸线程在关闭过程中拿到锁执行备份
+            if self.app_runtime.plugin_stopping.is_set():
+                return False
             if self.app_runtime.backup.lock.acquire(blocking=False):
                 return True
             if self.app_runtime.backup.label != "maintenance":
@@ -99,6 +124,8 @@ class BackupRunner:
             time.sleep(1.0)
 
     def _run_with_acquired_lock(self, server: PluginServerInterface, label: str):
+        # 调度触发的备份经 run_locked 进入，这里统一登记执行线程供卸载时取消
+        self.app_runtime.backup.thread = threading.current_thread()
         self.app_runtime.backup.label = label
         self.app_runtime.backup.cancel.clear()
         started = time.monotonic()

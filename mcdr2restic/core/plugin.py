@@ -273,9 +273,7 @@ class PluginEntrypoint:
             server,
             SchedulerDependencies(
                 config_provider=lambda: get_config_snapshot(self.runtime),
-                backup_runner=lambda target, trigger: backup_runner.run_locked(
-                    target, trigger, wait_for_slot=True
-                ),
+                backup_runner=backup_runner.start_deferred_thread,
                 maintenance_runner=self.create_maintenance_runner().run_waiting,
                 mc_ready_provider=lambda target: is_mc_ready(self.runtime, target),
                 skip_predicate=lambda cfg: should_skip_for_no_player_activity(

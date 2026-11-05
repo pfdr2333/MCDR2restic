@@ -3,6 +3,8 @@ try:
 except ImportError:
     from support import FakePluginServer, create_runtime, mock, unittest
 
+import threading
+
 from mcdr2restic.restic.maintenance_runner import MaintenanceRunner
 
 
@@ -64,3 +66,46 @@ class MaintenanceRunnerTests(unittest.TestCase):
         self.assertFalse(runtime.backup.lock.locked())
         self.assertIsNone(runtime.backup.thread)
         self.assertEqual(runtime.backup.label, None)
+
+    def test_run_waiting_gives_up_when_plugin_stopping(self):
+        runtime, runner = self.make_runner()
+        runtime.config_state.config = {"language": "en_us"}
+        server = FakePluginServer(language="en_us")
+        runtime.backup.lock.acquire()
+        runtime.service.stopping.set()
+        try:
+            with mock.patch(
+                "mcdr2restic.restic.maintenance_runner.run_maintenance_body"
+            ) as run_body:
+                self.assertFalse(runner.run_waiting(server))
+            run_body.assert_not_called()
+        finally:
+            runtime.backup.lock.release()
+        self.assertTrue(any("stopping" in m for m in server.logger.info_messages))
+
+    def test_waiting_maintenance_thread_never_runs_after_stop(self):
+        runtime, runner = self.make_runner()
+        runtime.config_state.config = {"language": "en_us"}
+        server = FakePluginServer(language="en_us")
+        # 模拟长备份占用槽位，卸载发生在维护线程等待期间
+        runtime.backup.lock.acquire()
+        result = {}
+
+        def waiting():
+            with mock.patch(
+                "mcdr2restic.restic.maintenance_runner.run_maintenance_body"
+            ) as run_body:
+                result["value"] = runner.run_waiting(server)
+                result["body_calls"] = run_body.call_count
+
+        worker = threading.Thread(target=waiting, daemon=True)
+        worker.start()
+        runtime.service.stopping.set()
+        worker.join(timeout=5)
+
+        self.assertFalse(worker.is_alive())
+        self.assertEqual(result["value"], False)
+        self.assertEqual(result["body_calls"], 0)
+        # 锁始终未被维护线程抢走
+        self.assertTrue(runtime.backup.lock.locked())
+        runtime.backup.lock.release()
