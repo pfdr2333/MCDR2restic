@@ -20,6 +20,7 @@ from mcdr2restic.core.utils import now_text, tail_text
 
 SNAPSHOT_REFRESH_ERROR_TAIL_CHARS = 800
 SCHEMA_MIGRATION_LOCK = threading.Lock()
+SNAPSHOT_REFRESH_TEMP_KEY_MARKER = ":refresh:"
 
 
 def get_snapshot_db_path(
@@ -198,6 +199,33 @@ def commit_refreshed_snapshot_cache(
             """,
             (cache_key, time.time(), now_text(), snapshot_count, duration_seconds),
         )
+        prune_orphan_snapshot_cache_keys(conn, cache_key)
+
+
+def prune_orphan_snapshot_cache_keys(conn: sqlite3.Connection, current_cache_key: str):
+    """清理换仓库后不再被恢复任务引用的旧 cache_key 行，防止孤儿数据永久残留。
+
+    进行中的刷新临时 key（:refresh: 标记）不属于孤儿，跳过以免破坏并发刷新。
+    """
+    referenced = {
+        str(row[0])
+        for row in conn.execute(
+            "SELECT DISTINCT cache_key FROM restore_tasks WHERE cache_key != ''"
+        )
+    }
+    referenced.add(current_cache_key)
+    stored_keys = {
+        str(row[0])
+        for row in conn.execute("SELECT DISTINCT cache_key FROM snapshot_meta")
+    } | {
+        str(row[0])
+        for row in conn.execute("SELECT DISTINCT cache_key FROM snapshots")
+    }
+    for cache_key in sorted(stored_keys - referenced):
+        if SNAPSHOT_REFRESH_TEMP_KEY_MARKER in cache_key:
+            continue
+        conn.execute("DELETE FROM snapshot_meta WHERE cache_key = ?", (cache_key,))
+        conn.execute("DELETE FROM snapshots WHERE cache_key = ?", (cache_key,))
 
 
 def record_snapshot_refresh_failure(

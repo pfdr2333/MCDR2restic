@@ -15,6 +15,7 @@ try:
         clear_restore_tasks,
         closing,
         import_restic_snapshots_to_sql,
+        commit_refreshed_snapshot_cache,
         execute_column_addition,
         insert_snapshot_row,
         io,
@@ -44,6 +45,8 @@ except ImportError:
         clear_restore_tasks,
         closing,
         import_restic_snapshots_to_sql,
+        execute_column_addition,
+        commit_refreshed_snapshot_cache,
         insert_snapshot_row,
         io,
         iter_json_array_stream,
@@ -274,3 +277,42 @@ class SnapshotDatabaseTests(unittest.TestCase):
                 )
                 with self.assertRaises(sqlite3.OperationalError):
                     execute_column_addition(conn, "ALTER TABLE no_such_table ADD COLUMN x TEXT")
+
+    def test_refresh_commit_prunes_orphan_cache_keys(self):
+        temp_key = "new-key:refresh:111:222"
+        with tempfile.TemporaryDirectory() as temp_dir:
+            server = FakeServer(temp_dir)
+            with closing(open_snapshot_db(server, {"database": "db.sqlite3"})) as conn:
+                conn.execute(
+                    "INSERT INTO snapshot_meta (cache_key) VALUES ('old-key'), ('pending-key')"
+                )
+                conn.execute(
+                    "INSERT INTO snapshots (cache_key, id, short_id, time_text)"
+                    " VALUES ('old-key', 's1', 's1', '2024-01-01T00:00:00Z'),"
+                    " ('pending-key', 's2', 's2', '2024-01-02T00:00:00Z'),"
+                    " ('new-key:refresh:333:444', 'stale', 'stale', '2024-01-03T00:00:00Z'),"
+                    " (?, 's3', 's3', '2024-01-04T00:00:00Z')",
+                    (temp_key,),
+                )
+                conn.execute(
+                    "INSERT INTO restore_tasks (created_at_text, snapshot, item_type, include_path, cache_key)"
+                    " VALUES ('now', 's2', 'full', '/', 'pending-key')"
+                )
+
+                commit_refreshed_snapshot_cache(conn, "new-key", temp_key, 1, 0.5)
+
+                remaining_meta = {
+                    str(row[0])
+                    for row in conn.execute("SELECT cache_key FROM snapshot_meta")
+                }
+                remaining_rows = {
+                    str(row[0])
+                    for row in conn.execute("SELECT DISTINCT cache_key FROM snapshots")
+                }
+
+        self.assertEqual(remaining_meta, {"new-key", "pending-key"})
+        # 崩溃残留的 :refresh: 临时行被保守保留，避免误伤并发刷新
+        self.assertEqual(
+            remaining_rows,
+            {"new-key", "pending-key", "new-key:refresh:333:444"},
+        )
