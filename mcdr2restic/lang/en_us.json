@@ -199,6 +199,7 @@
   "warn.notify.discord_not_initialized": "Discord is not initialized, cannot send notification: {template_key}",
   "warn.notify.discord_send_failed": "Failed to send Discord notification: {error}",
   "warn.notify.message_template_format_failed": "Failed to format message template {template_key}: {error}",
+  "warn.notify.message_render_fallback": "notification rendering failed",
   "warn.webhook.url_empty": "Custom webhook notifications are enabled, but url is empty",
   "warn.webhook.status_error": "Custom webhook returned an unexpected status code: {status}",
   "warn.webhook.send_failed": "Custom webhook send failed: {error}",

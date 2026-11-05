@@ -47,7 +47,11 @@ def render_message(
                     error=exc,
                 )
             )
-        return "{} {}".format(data["prefix"], template_key)
+        # 兜底不得直出内部键名，详情已通过 format_failed 告警进入日志（P3-19）
+        return "{} {}".format(
+            data["prefix"],
+            tr(options.language, "warn.notify.message_render_fallback"),
+        )
 
 
 def get_message_template(

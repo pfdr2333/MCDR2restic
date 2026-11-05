@@ -199,6 +199,7 @@
   "mcdr2restic.warn.notify.discord_not_initialized": "Discord is not initialized, cannot send notification: {template_key}",
   "mcdr2restic.warn.notify.discord_send_failed": "Failed to send Discord notification: {error}",
   "mcdr2restic.warn.notify.message_template_format_failed": "Failed to format message template {template_key}: {error}",
+  "mcdr2restic.warn.notify.message_render_fallback": "notification rendering failed",
   "mcdr2restic.warn.webhook.url_empty": "Custom webhook notifications are enabled, but url is empty",
   "mcdr2restic.warn.webhook.status_error": "Custom webhook returned an unexpected status code: {status}",
   "mcdr2restic.warn.webhook.send_failed": "Custom webhook send failed: {error}",

@@ -197,6 +197,7 @@
   "warn.notify.discord_not_initialized": "Discord 未初始化，无法发送通知：{template_key}",
   "warn.notify.discord_send_failed": "发送 Discord 通知失败：{error}",
   "warn.notify.message_template_format_failed": "消息模板 {template_key} 格式化失败：{error}",
+  "warn.notify.message_render_fallback": "通知消息渲染失败",
   "warn.webhook.url_empty": "自定义 Webhook 已启用，但 url 为空",
   "warn.webhook.status_error": "自定义 Webhook 返回异常状态码：{status}",
   "warn.webhook.send_failed": "自定义 Webhook 发送失败：{error}",

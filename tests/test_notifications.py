@@ -130,6 +130,17 @@ class NotificationTests(unittest.TestCase):
         )
         self.assertTrue(rendered.startswith("[T] Backup problem"))
 
+    def test_render_failure_falls_back_to_translated_text(self):
+        # 模板格式化失败时兜底不得直出内部键名（P3-19）
+        cfg = {
+            "onebot": {"message_prefix": "[T]"},
+            "messages": {"custom": "{prefix} {value.dotted}"},
+        }
+        rendered = render_message(
+            "custom", {"value": {"dotted": "x"}}, cfg
+        )
+        self.assertEqual(rendered, "[T] 通知消息渲染失败")
+
     def test_discord_mentions_are_explicit_and_ordered(self):
         cfg = {
             "mention_everyone": True,
