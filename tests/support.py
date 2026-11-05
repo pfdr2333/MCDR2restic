@@ -122,12 +122,18 @@ from mcdr2restic.minecraft.player_activity_service import (
     resolve_known_online_players,
 )
 from mcdr2restic.notifications import render_message
+from mcdr2restic.notifications.custom_webhook import (
+    CustomWebhookClient,
+    build_webhook_request,
+    render_payload_leaves,
+)
 from mcdr2restic.notifications.discord_webhook import (
     DiscordWebhookClient,
     build_discord_mentions,
     build_discord_request,
     truncate_discord_content,
 )
+from mcdr2restic.notifications.notification_dispatcher import NotificationDispatcher
 from mcdr2restic.restic.restic_download import (
     is_default_restic_executable_path,
     resolve_restic_executable_path,
@@ -266,11 +272,13 @@ __all__ = [
     "CommandServer",
     "ConfigError",
     "CronExpression",
+    "CustomWebhookClient",
     "DiscordWebhookClient",
     "FakeCommandSource",
     "FakeLogger",
     "FakePluginServer",
     "FakeServer",
+    "NotificationDispatcher",
     "Path",
     "PermissiveCommandSource",
     "ProbeServer",
@@ -293,6 +301,7 @@ __all__ = [
     "build_discord_mentions",
     "build_discord_request",
     "build_snapshot_cache_key",
+    "build_webhook_request",
     "classify_restic_failure_output",
     "clear_restore_tasks",
     "closing",
@@ -335,6 +344,7 @@ __all__ = [
     "read_bundled_plugin_version",
     "read_snapshot_page",
     "render_message",
+    "render_payload_leaves",
     "render_status_output",
     "repair_inconsistent_block_scalar_indentation",
     "replace_or_append_enabled_line",

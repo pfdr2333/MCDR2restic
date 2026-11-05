@@ -32,6 +32,7 @@ from mcdr2restic.config.state_store import (
     save_config_unlocked,
 )
 from mcdr2restic.notifications import (
+    CustomWebhookClient,
     DiscordWebhookClient,
     NotificationDispatcher,
     OneBotClient,
@@ -63,6 +64,7 @@ class PluginEntrypoint:
         self.register_help_messages(server)
         self.restart_onebot(server)
         self.restart_discord(server)
+        self.restart_custom_webhook(server)
         self.start_scheduler(server)
         self.restart_update_checker(server, startup_check=True)
         server.logger.info(server_tr(server, "log.plugin.loaded"))
@@ -147,6 +149,7 @@ class PluginEntrypoint:
         try_force_save_on(self.runtime, server, reason, get_config_snapshot)
         self.stop_onebot()
         self.runtime.service.discord = None
+        self.runtime.service.custom_webhook = None
         if self.runtime.service.server is not None:
             server.logger.info(server_tr(server, "log.plugin.stopped", reason=reason))
 
@@ -200,6 +203,7 @@ class PluginEntrypoint:
     def reload_services(self, server: PluginServerInterface):
         self.restart_onebot(server)
         self.restart_discord(server)
+        self.restart_custom_webhook(server)
         self.restart_update_checker(server, startup_check=False)
         self.wake_scheduler()
 
@@ -235,6 +239,11 @@ class PluginEntrypoint:
     def restart_discord(self, server: PluginServerInterface):
         self.runtime.service.discord = DiscordWebhookClient(
             server, get_config_snapshot(self.runtime).get("discord", {})
+        )
+
+    def restart_custom_webhook(self, server: PluginServerInterface):
+        self.runtime.service.custom_webhook = CustomWebhookClient(
+            server, get_config_snapshot(self.runtime).get("custom_webhook", {})
         )
 
     def restart_update_checker(

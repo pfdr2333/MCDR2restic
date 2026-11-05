@@ -12,7 +12,7 @@ MCDR2Restic 是一个基于 MCDReforged 的 Minecraft 备份插件。它将 [res
 - **快照恢复**：整份快照、单文件、文件夹，支持恢复到指定目录（不停服）
 - **安全兜底**：恢复前自动创建保护快照，恢复失败自动回滚
 - **仓库维护**：`forget`/`prune` 等按计划独立执行
-- **多通道通知**：OneBot QQ 与 Discord Webhook
+- **多通道通知**：OneBot QQ、Discord Webhook 与自定义 Webhook
 - **开箱即用**：自动下载 restic、自动初始化本地仓库、自动生成配置
 
 ## 建议阅读顺序

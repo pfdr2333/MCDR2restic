@@ -16,7 +16,7 @@ MCDReforged 插件：调用 [restic](https://restic.readthedocs.io/en/stable/) �
 - 快照恢复：整份快照、单文件、文件夹，支持恢复到指定目录
 - 恢复前自动创建保护快照，失败自动回滚
 - 仓库维护：`forget`/`prune` 等命令按计划独立执行
-- 通知：OneBot QQ 与 Discord Webhook，可同时启用
+- 通知：OneBot QQ、Discord 与自定义 Webhook，可同时启用
 - 中英双语消息与配置注释，跟随 MCDR 语言
 - 配置安全检查：restic 仓库不得位于备份源目录内
 

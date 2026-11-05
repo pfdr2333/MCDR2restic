@@ -16,7 +16,7 @@ An MCDReforged plugin that runs [restic](https://restic.readthedocs.io/en/stable
 - Snapshot restore: full snapshot, single file, or folder — including restore into a chosen directory
 - Automatic pre-restore safety snapshot with rollback on failure
 - Repository maintenance: `forget`/`prune` and friends, scheduled independently
-- Notifications via OneBot QQ and Discord webhooks, both can be enabled at once
+- Notifications via OneBot QQ, Discord, and a custom webhook, all can be enabled at once
 - Bilingual (Chinese/English) messages and config comments, following the MCDR language
 - Configuration safety check: the restic repository must not sit inside a backup source
 

@@ -26,6 +26,7 @@ class ServiceRuntimeState:
     command_handlers: Optional[Any] = None
     onebot: Optional[Any] = None
     discord: Optional[Any] = None
+    custom_webhook: Optional[Any] = None
     stopping: threading.Event = field(default_factory=threading.Event)
     snapshot_query_lock: threading.Lock = field(default_factory=threading.Lock)
 
@@ -135,6 +136,14 @@ class PluginRuntime:
     @discord.setter
     def discord(self, value: Optional[Any]):
         self.service.discord = value
+
+    @property
+    def custom_webhook(self) -> Optional[Any]:
+        return self.service.custom_webhook
+
+    @custom_webhook.setter
+    def custom_webhook(self, value: Optional[Any]):
+        self.service.custom_webhook = value
 
     @property
     def plugin_stopping(self) -> threading.Event:

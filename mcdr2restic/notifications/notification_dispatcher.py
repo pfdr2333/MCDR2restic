@@ -38,6 +38,7 @@ class NotificationDispatcher:
         self._log(log_text, failure)
         self._notify_onebot(template_key, values, cfg, language)
         self._notify_discord(template_key, values, cfg, language)
+        self._notify_webhook(template_key, values, cfg, language)
 
     def _logger(self):
         server = self.app_runtime.service.server
@@ -115,6 +116,36 @@ class NotificationDispatcher:
             self.app_runtime.service.discord.send_message(text)
         except Exception as exc:
             self._warn_server("warn.notify.discord_send_failed", error=exc)
+
+    def _notify_webhook(
+        self,
+        template_key: str,
+        values: Optional[Dict[str, Any]],
+        cfg: Dict[str, Any],
+        language: str,
+    ):
+        webhook_cfg = cfg.get("custom_webhook", {})
+        if not isinstance(webhook_cfg, dict) or not webhook_cfg.get("enabled", False):
+            return
+        if self.app_runtime.service.custom_webhook is None:
+            self._warn_server(
+                "warn.notify.webhook_not_initialized", template_key=template_key
+            )
+            return
+        text = render_message(
+            template_key,
+            values,
+            cfg,
+            MessageRenderOptions(
+                prefix=str(webhook_cfg.get("message_prefix", "[MCDR2Restic]")),
+                logger=self._logger(),
+                language=language,
+            ),
+        )
+        try:
+            self.app_runtime.service.custom_webhook.send_message(text, values)
+        except Exception as exc:
+            self._warn_server("warn.notify.webhook_send_failed", error=exc)
 
     def _warn(self, text: str):
         logger = self._logger()

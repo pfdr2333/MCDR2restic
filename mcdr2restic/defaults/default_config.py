@@ -50,6 +50,7 @@ def build_base_default_config() -> ConfigDict:
         "restic": build_default_restic_config(),
         "onebot": build_default_onebot_config(),
         "discord": build_default_discord_config(),
+        "custom_webhook": build_default_custom_webhook_config(),
         "notification": build_default_notification_config(),
         "snapshot_cache": build_default_snapshot_cache_config(),
         "restore": build_default_restore_config(),
@@ -227,6 +228,19 @@ def build_default_discord_config() -> ConfigDict:
         "mention_role_ids": [],
         "mention_everyone": False,
         "send_timeout_seconds": 10,
+    }
+
+
+def build_default_custom_webhook_config() -> ConfigDict:
+    """Return generic custom webhook notification defaults."""
+
+    return {
+        "enabled": False,
+        "url": "",
+        "message_prefix": "[MCDR2Restic]",
+        "send_timeout_seconds": 10,
+        "headers": {},
+        "payload": {"content": "{message}"},
     }
 
 

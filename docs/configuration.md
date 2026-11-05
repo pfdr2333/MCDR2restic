@@ -457,6 +457,38 @@ discord:
   send_timeout_seconds: 10
 ```
 
+### 自定义 Webhook 最小示例
+
+除 Discord 外，插件还提供一个通用的自定义 Webhook 渠道，可以把通知推送到飞书、钉钉、Slack、企业微信等任何支持 HTTP 接口的服务。
+
+```yaml
+custom_webhook:
+  enabled: true
+  url: "改成你的 Webhook URL"
+  message_prefix: "[MCDR2Restic]"
+  send_timeout_seconds: 10
+  headers: {}
+  payload:
+    content: "{message}"
+```
+
+说明：
+
+- 插件会向 `url` 发送 JSON POST 请求，请求体就是 `payload` 的结构
+- `payload` 里字符串值支持模板变量：`{message}` 是完整通知正文，`{prefix}`、`{label}`、`{status}`、`{start_time}`、`{end_time}`、`{duration_seconds}`、`{detail}`、`{error}` 也可用；不认识的变量会原样保留
+- `headers` 可以加认证头，例如 `Authorization: Bearer xxx`
+- 以飞书为例，把 `payload` 改成下面这样即可：
+
+```yaml
+custom_webhook:
+  enabled: true
+  url: "改成你的飞书群机器人 Webhook 地址"
+  payload:
+    msg_type: "text"
+    content:
+      text: "{message}"
+```
+
 ### 控制哪些阶段发通知
 
 ```yaml
