@@ -23,6 +23,7 @@ from mcdr2restic.core.models import (
     backup_trigger_display_label,
     backup_trigger_label,
 )
+from mcdr2restic.core.presentation import localized_backup_status
 from mcdr2restic.minecraft.minecraft_service import try_force_save_on
 from mcdr2restic.restic.restic_service import run_backup_body
 from mcdr2restic.core.runtime import PluginRuntime
@@ -273,7 +274,10 @@ class BackupRunner:
     ) -> BackupRunOutcome:
         try:
             try_force_save_on(
-                self.app_runtime, server, "backup finally", get_config_snapshot
+                self.app_runtime,
+                server,
+                tr(self._language(server), "reason.backup_finally"),
+                get_config_snapshot,
             )
             return outcome
         except Exception as exc:
@@ -326,11 +330,14 @@ class BackupRunner:
     ):
         if not should_notify_backup_finished(cfg, outcome):
             return
+        # 通知值由 dispatcher 按配置语言渲染，{status} 须直出已译文案而非内部枚举（P3-1）
         self.admin_notifier(
             "backup_failure" if outcome.failed else "backup_success",
             {
                 "label": label,
-                "status": outcome.status_value,
+                "status": localized_backup_status(
+                    outcome.status_value, config_language(cfg)
+                ),
                 "message": outcome.message,
                 "detail": outcome.detail or outcome.message,
                 "start_time": started_at_text,

@@ -359,7 +359,10 @@ def request_minecraft_stop_for_restore(
     if server.stop():
         return
     try_force_save_on(
-        app_runtime, server, "restore stop failed", config_snapshot_provider
+        app_runtime,
+        server,
+        server_tr(server, "reason.restore_stop_failed"),
+        config_snapshot_provider,
     )
     finish_restore_workflow(
         app_runtime,
@@ -379,7 +382,10 @@ def handle_restore_pre_stop_failure(
 ):
     try:
         try_force_save_on(
-            app_runtime, server, "restore pre-backup failed", config_snapshot_provider
+            app_runtime,
+            server,
+            server_tr(server, "reason.restore_pre_backup_failed"),
+            config_snapshot_provider,
         )
     except Exception as save_exc:
         server.logger.warning(
