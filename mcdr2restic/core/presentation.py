@@ -369,9 +369,12 @@ def schedule_status_text(
             return translate("status.schedule.disabled")
         wait_seconds, due_text = result
         schedule = cfg.get("force_schedule" if forced else "schedule", {})
-        detail = localized_schedule_detail(schedule, due_text, translate)
+        interval_text = localized_fixed_interval_text(schedule, translate)
+        if interval_text is not None:
+            # 固定间隔模式下"X 秒后"与间隔重复，直接返回间隔文案（P3-18）
+            return interval_text
         return translate(
-            "status.schedule.wait", seconds=int(wait_seconds), detail=detail
+            "status.schedule.wait", seconds=int(wait_seconds), detail=due_text
         )
     except Exception as exc:
         return translate(
@@ -379,9 +382,9 @@ def schedule_status_text(
         )
 
 
-def localized_schedule_detail(
-    schedule: Dict[str, Any], due_text: str, translate_or_language: Any
-) -> str:
+def localized_fixed_interval_text(
+    schedule: Dict[str, Any], translate_or_language: Any
+) -> Optional[str]:
     translate = normalize_translate(translate_or_language)
     try:
         interval_seconds = (
@@ -393,7 +396,7 @@ def localized_schedule_detail(
         interval_seconds = 0
     if interval_seconds > 0:
         return translate("status.schedule.fixed_interval", seconds=interval_seconds)
-    return due_text
+    return None
 
 
 def localized_bool(value: bool, translate_or_language: Any) -> str:

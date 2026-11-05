@@ -46,9 +46,8 @@ class UtilsTests(unittest.TestCase):
             "force_schedule": {"interval_seconds": 0, "cron_expression": "0"},
         }
 
-        self.assertEqual(
-            schedule_status_text(cfg, False, "zh_cn"), "60 秒后（固定间隔 60 秒）"
-        )
+        # 固定间隔模式直接返回间隔文案，不再"X 秒后（固定间隔 X 秒）"重复（P3-18）
+        self.assertEqual(schedule_status_text(cfg, False, "zh_cn"), "固定间隔 60 秒")
         self.assertEqual(schedule_status_text(cfg, True, "zh_cn"), "关闭")
 
     def test_render_status_output_uses_source_translate(self):
@@ -79,4 +78,4 @@ class UtilsTests(unittest.TestCase):
         )
 
         self.assertIn("MCDR2Restic 状态", output)
-        self.assertIn("正常备份：60 秒后（固定间隔 60 秒）", output)
+        self.assertIn("正常备份：固定间隔 60 秒", output)
