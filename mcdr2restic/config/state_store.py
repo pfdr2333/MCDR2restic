@@ -180,7 +180,11 @@ def load_state_file(server: PluginServerInterface) -> Dict[str, Any]:
         with contextlib.suppress(OSError):
             save_text_file_atomically(path, result.repaired_text)
         server.logger.warning(
-            server_tr(server, "warn.config.auto_repaired_block_scalar_indentation")
+            server_tr(
+                server,
+                "warn.config.auto_repaired_block_scalar_indentation",
+                path=path,
+            )
         )
     runtime_state = state.get("runtime")
     if not isinstance(runtime_state, dict):
