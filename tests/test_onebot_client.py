@@ -45,6 +45,55 @@ class OneBotAuthTests(unittest.TestCase):
         self.assertEqual(headers, {"Authorization": "Bearer secret-token"})
 
 
+class OneBotInvalidNumberSettingTests(unittest.TestCase):
+    def test_reconnect_loop_survives_invalid_interval(self):
+        # 重连线程死亡后永不重启，垃圾间隔值必须回退默认并告警（P1-2）
+        server = FakePluginServer()
+        client = build_client(server, reconnect_interval_seconds="soon")
+        client.websocket_client.WebSocketApp.return_value.run_forever = mock.Mock()
+        sleeps = []
+
+        def fake_sleep(seconds):
+            sleeps.append(seconds)
+            client.stop_event.set()
+
+        with mock.patch.object(client, "_sleep", side_effect=fake_sleep):
+            client._thread_main()
+
+        self.assertEqual(sleeps, [5])
+        self.assertTrue(
+            any(
+                "reconnect_interval_seconds" in message
+                for message in server.logger.warning_messages
+            )
+        )
+
+    def test_send_private_msg_survives_invalid_timeout(self):
+        server = FakePluginServer()
+        client = build_client(server, send_timeout_seconds="fast")
+
+        with mock.patch.object(client.connected_event, "wait", return_value=False):
+            client._send_private_msg(123, "hello")
+
+        self.assertTrue(
+            any(
+                "reconnect_interval_seconds" not in message
+                and "send_timeout_seconds" in message
+                for message in server.logger.warning_messages
+            )
+        )
+        self.assertTrue(
+            any("未连接" in message for message in server.logger.warning_messages)
+        )
+
+    def test_valid_number_setting_keeps_silent(self):
+        server = FakePluginServer()
+        client = build_client(server, reconnect_interval_seconds=7)
+
+        self.assertEqual(client._float_setting("reconnect_interval_seconds", 5), 7.0)
+        self.assertEqual(server.logger.warning_messages, [])
+
+
 class OneBotErrorMaskingTests(unittest.TestCase):
     def test_connection_error_log_masks_token(self):
         server = FakePluginServer()

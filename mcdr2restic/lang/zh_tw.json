@@ -186,6 +186,7 @@
   "info.onebot.connected": "OneBot WS 已連線：{url}",
   "warn.onebot.send_not_connected": "傳送 OneBot 訊息到 QQ {user_id} 失敗：OneBot WS 未連線",
   "warn.onebot.send_failed": "傳送 OneBot 訊息到 QQ {user_id} 失敗：{error}",
+  "warn.onebot.invalid_number_setting": "OneBot 配置項 {setting} 不是有效數字，已使用預設值 {default}",
   "warn.discord.webhook_url_empty": "Discord 通知已啟用，但 webhook_url 為空",
   "warn.discord.status_error": "Discord Webhook 返回異常狀態碼：{status}",
   "warn.discord.send_failed": "Discord Webhook 傳送失敗：{error}",

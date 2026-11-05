@@ -73,7 +73,22 @@ class OneBotClient:
         while not self.stop_event.is_set():
             self._connect_once()
             if not self.stop_event.is_set():
-                self._sleep(float(self.cfg.get("reconnect_interval_seconds", 5)))
+                self._sleep(self._float_setting("reconnect_interval_seconds", 5))
+
+    def _float_setting(self, key: str, default: float) -> float:
+        """配置值非法时告警并回退默认：重连线程死亡后永不重启，不能被垃圾配置杀死。"""
+        try:
+            return float(self.cfg.get(key, default))
+        except (TypeError, ValueError):
+            self.server.logger.warning(
+                server_tr(
+                    self.server,
+                    "warn.onebot.invalid_number_setting",
+                    setting=key,
+                    default=default,
+                )
+            )
+            return default
 
     def _connect_once(self):
         url, headers = self._build_connect_auth()
@@ -130,7 +145,7 @@ class OneBotClient:
         self.ws = None
 
     def _send_private_msg(self, user_id: int, text: str):
-        timeout = float(self.cfg.get("send_timeout_seconds", 10))
+        timeout = self._float_setting("send_timeout_seconds", 10)
         if not self.connected_event.wait(timeout=timeout):
             self.server.logger.warning(
                 server_tr(

@@ -188,6 +188,7 @@
   "info.onebot.connected": "OneBot WS connected: {url}",
   "warn.onebot.send_not_connected": "Failed to send OneBot message to QQ {user_id}: OneBot WS is not connected",
   "warn.onebot.send_failed": "Failed to send OneBot message to QQ {user_id}: {error}",
+  "warn.onebot.invalid_number_setting": "OneBot setting {setting} is not a valid number; falling back to the default {default}",
   "warn.discord.webhook_url_empty": "Discord notifications are enabled, but webhook_url is empty",
   "warn.discord.status_error": "Discord webhook returned an unexpected status code: {status}",
   "warn.discord.send_failed": "Discord webhook send failed: {error}",
