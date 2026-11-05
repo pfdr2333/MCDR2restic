@@ -76,7 +76,7 @@ Queued tasks are not executed immediately. When running `restore apply`:
 
 ## Documentation
 
-Full configuration references, scheduling details, and FAQs live in the [online docs](https://pfdr2333.github.io/MCDR2restic/) (Chinese; sources under [docs/](docs/index.md)):
+Full configuration references, scheduling details, and FAQs live in the [online docs](https://m2r.pfdr.cc/) (Chinese; sources under [docs/](docs/index.md)):
 
 - [Getting started](docs/getting-started.md)
 - [Commands](docs/commands.md)

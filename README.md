@@ -76,7 +76,7 @@ MCDReforged 插件：调用 [restic](https://restic.readthedocs.io/en/stable/) �
 
 ## 文档
 
-完整配置说明、调度策略与常见问题见[在线文档](https://pfdr2333.github.io/MCDR2restic/)（源文件在 [docs/](docs/index.md)）：
+完整配置说明、调度策略与常见问题见[在线文档](https://m2r.pfdr.cc/)（源文件在 [docs/](docs/index.md)）：
 
 - [快速开始](docs/getting-started.md)
 - [命令说明](docs/commands.md)
