@@ -138,6 +138,24 @@ class ResticResultTests(unittest.TestCase):
             os.path.abspath(executable),
         )
 
+    def test_bare_restic_name_resolves_identically_for_download_and_execution(self):
+        platform_defaults = {
+            "posix": "./config/mcdr2restic/restic",
+            "nt": ".\\config\\mcdr2restic\\restic.exe",
+        }
+        for platform_name, default_path in platform_defaults.items():
+            with mock.patch("os.name", platform_name):
+                download_path = resolve_restic_executable_path(
+                    {"working_directory": os.path.join(str(REPO_ROOT), "server")},
+                    "restic",
+                )
+                execution_path = resolve_popen_executable(
+                    "restic", os.path.join(str(REPO_ROOT), "server")
+                )
+
+            self.assertEqual(download_path, os.path.abspath(default_path))
+            self.assertEqual(execution_path, download_path)
+
 
 class ResticLockRecoveryTests(unittest.TestCase):
     LOCK_ERROR_OUTPUT = (

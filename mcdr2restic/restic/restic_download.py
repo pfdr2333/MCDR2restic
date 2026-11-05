@@ -90,12 +90,33 @@ def is_default_restic_executable_path(executable: str) -> bool:
     }
 
 
+def is_bare_restic_name(executable: str) -> bool:
+    normalized = executable.replace("\\", "/").strip().lower()
+    return normalized in {"restic", "restic.exe"}
+
+
+def default_restic_executable_for_platform() -> str:
+    return (
+        DEFAULT_RESTIC_EXECUTABLE_WINDOWS
+        if os.name == "nt"
+        else DEFAULT_RESTIC_EXECUTABLE_POSIX
+    )
+
+
+def resolve_default_restic_install_path(executable: str) -> str:
+    """裸名与默认路径族统一解析到当前平台默认安装位置，保证下载与执行一致。"""
+
+    if is_bare_restic_name(executable):
+        return os.path.abspath(default_restic_executable_for_platform())
+    return os.path.abspath(executable)
+
+
 def resolve_restic_executable_path(restic_cfg: Dict[str, Any], executable: str) -> str:
     expanded = os.path.expanduser(os.path.expandvars(executable))
     if os.path.isabs(expanded):
         return os.path.abspath(expanded)
-    if is_config_folder_default_restic_path(expanded):
-        return os.path.abspath(expanded)
+    if is_config_folder_default_restic_path(expanded) or is_bare_restic_name(expanded):
+        return resolve_default_restic_install_path(expanded)
     cwd = restic_cfg.get(RESTIC_CFG_WORKING_DIRECTORY) or os.getcwd()
     return os.path.abspath(os.path.join(str(cwd), expanded))
 

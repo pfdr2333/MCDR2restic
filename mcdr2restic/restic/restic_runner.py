@@ -35,7 +35,12 @@ from mcdr2restic.restic.restic_constants import (
     RESTIC_JSON_OUTPUT_PHASES,
     RESTIC_OPTION_JSON,
 )
-from mcdr2restic.restic.restic_download import is_config_folder_default_restic_path
+from mcdr2restic.restic.restic_download import (
+    is_bare_restic_name,
+    is_config_folder_default_restic_path,
+    resolve_default_restic_install_path,
+)
+
 from mcdr2restic.restic.restic_progress import (
     build_restic_progress_state,
     handle_restic_stream_line,
@@ -87,8 +92,8 @@ def resolve_popen_executable(executable: str, cwd: Optional[str]) -> str:
     text = str(executable or "").strip()
     if not text or os.path.isabs(text):
         return text
-    if is_config_folder_default_restic_path(text):
-        return os.path.abspath(text)
+    if is_config_folder_default_restic_path(text) or is_bare_restic_name(text):
+        return resolve_default_restic_install_path(text)
     if not cwd:
         return text
     if os.sep in text or (os.altsep and os.altsep in text):
