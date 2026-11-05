@@ -67,6 +67,9 @@ def import_restic_snapshots_to_sql(
         return_code = process.wait()
     finally:
         timer.cancel()
+        # 异常路径必须终止子进程：否则 restic 因管道写满永久阻塞并持有仓库读锁
+        if process.poll() is None:
+            terminate_process(process)
         stderr_thread.join(timeout=RESTIC_READER_JOIN_TIMEOUT_SECONDS)
 
     assert_snapshot_import_finished(

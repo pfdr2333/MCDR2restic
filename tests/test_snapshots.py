@@ -12,11 +12,13 @@ try:
         build_snapshot_cache_key,
         clear_restore_tasks,
         closing,
+        import_restic_snapshots_to_sql,
         insert_snapshot_row,
         io,
         iter_json_array_stream,
         list_restore_tasks,
         make_source_translate,
+        mock,
         open_snapshot_db,
         read_snapshot_page,
         restore_tasks_output,
@@ -38,11 +40,13 @@ except ImportError:
         build_snapshot_cache_key,
         clear_restore_tasks,
         closing,
+        import_restic_snapshots_to_sql,
         insert_snapshot_row,
         io,
         iter_json_array_stream,
         list_restore_tasks,
         make_source_translate,
+        mock,
         open_snapshot_db,
         read_snapshot_page,
         restore_tasks_output,
@@ -111,6 +115,33 @@ class SnapshotImporterTests(unittest.TestCase):
             "error.snapshot.return_code.repository_not_initialized",
         )
         self.assertEqual(error.exception.i18n_params["init_command"], "!!backup init")
+
+    def test_import_failure_terminates_restic_process(self):
+        process = mock.Mock()
+        process.poll.return_value = None
+        timer = mock.Mock()
+        stderr_thread = mock.Mock()
+
+        with mock.patch(
+            "mcdr2restic.snapshots.snapshot_importer.start_restic_snapshot_process",
+            return_value=process,
+        ), mock.patch(
+            "mcdr2restic.snapshots.snapshot_importer.start_snapshot_stderr_reader",
+            return_value=stderr_thread,
+        ), mock.patch(
+            "mcdr2restic.snapshots.snapshot_importer.start_process_timeout_timer",
+            return_value=(ProcessTimeoutState(threading.Event()), timer),
+        ), mock.patch(
+            "mcdr2restic.snapshots.snapshot_importer.import_snapshot_stdout",
+            side_effect=RuntimeError("parse boom"),
+        ), mock.patch(
+            "mcdr2restic.snapshots.snapshot_importer.terminate_process"
+        ) as terminate, self.assertRaises(RuntimeError):
+            import_restic_snapshots_to_sql({}, mock.Mock(), "cache", 60)
+
+        terminate.assert_called_once_with(process)
+        timer.cancel.assert_called_once_with()
+        stderr_thread.join.assert_called_once()
 
 
 class SnapshotDatabaseTests(unittest.TestCase):

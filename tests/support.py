@@ -187,6 +187,7 @@ from mcdr2restic.snapshots.snapshot_db import (
 from mcdr2restic.snapshots.snapshot_importer import (
     ProcessTimeoutState,
     assert_snapshot_import_finished,
+    import_restic_snapshots_to_sql,
     iter_json_array_stream,
 )
 from mcdr2restic.update.update_check import (
@@ -347,6 +348,7 @@ __all__ = [
     "get_default_restic_version",
     "has_recent_player_activity",
     "i18n",
+    "import_restic_snapshots_to_sql",
     "insert_snapshot_row",
     "install_restic_from_urls",
     "io",
