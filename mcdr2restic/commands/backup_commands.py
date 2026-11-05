@@ -58,9 +58,14 @@ class BackupCommands:
         if not is_mc_ready(self.context.app_runtime, server):
             reply_tr(source, server, "error.backup.minecraft_not_ready")
             return
-        if self.context.backup_runner_factory().start_thread(
-            server, BackupTrigger.MANUAL
-        ):
+        try:
+            started = self.context.backup_runner_factory().start_thread(
+                server, BackupTrigger.MANUAL
+            )
+        except Exception as exc:
+            reply_tr(source, server, "error.backup.thread_start_failed", error=exc)
+            return
+        if started:
             reply_tr(source, server, "info.backup.manual_started")
             return
         reply_tr(source, server, "error.backup.already_running")

@@ -55,6 +55,22 @@ class BackupRunnerTests(unittest.TestCase):
         runtime.release_backup_slot()
         self.assertFalse(runtime.backup.lock.locked())
 
+    def test_start_thread_rolls_back_slot_when_thread_start_fails(self):
+        runtime, runner = self.make_runner()
+        server = FakePluginServer()
+        fake_thread = mock.Mock()
+        fake_thread.start.side_effect = RuntimeError("cannot start new thread")
+
+        with mock.patch(
+            "mcdr2restic.backup.backup_runner.threading.Thread",
+            return_value=fake_thread,
+        ), self.assertRaises(RuntimeError):
+            runner.start_thread(server, "manual")
+
+        self.assertFalse(runtime.backup.lock.locked())
+        self.assertIsNone(runtime.backup.thread)
+        self.assertIsNone(runtime.backup.label)
+
     def test_execute_backup_run_classifies_success_cancel_and_failure(self):
         _, runner = self.make_runner()
         server = FakePluginServer()

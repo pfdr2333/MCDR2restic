@@ -51,6 +51,22 @@ class MaintenanceRunnerTests(unittest.TestCase):
         self.assertIsNone(runtime.backup.thread)
         self.assertFalse(runtime.backup.lock.locked())
 
+    def test_start_thread_rolls_back_slot_when_thread_start_fails(self):
+        runtime, runner = self.make_runner()
+        server = FakePluginServer()
+        fake_thread = mock.Mock()
+        fake_thread.start.side_effect = RuntimeError("cannot start new thread")
+
+        with mock.patch(
+            "mcdr2restic.restic.maintenance_runner.threading.Thread",
+            return_value=fake_thread,
+        ), self.assertRaises(RuntimeError):
+            runner.start_thread(server)
+
+        self.assertFalse(runtime.backup.lock.locked())
+        self.assertIsNone(runtime.backup.thread)
+        self.assertIsNone(runtime.backup.label)
+
     def test_run_waiting_executes_and_releases_slot(self):
         runtime, runner = self.make_runner()
         runtime.config_state.config = {"language": "en_us"}

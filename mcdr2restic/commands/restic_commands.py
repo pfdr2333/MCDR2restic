@@ -31,7 +31,14 @@ class ResticCommands:
         if not self.context.check_command_permission(source):
             return
         server = self.context.server_from_source(source)
-        if self.context.maintenance_runner_factory().start_thread(server):
+        try:
+            started = self.context.maintenance_runner_factory().start_thread(server)
+        except Exception as exc:
+            reply_tr(
+                source, server, "error.maintenance.thread_start_failed", error=exc
+            )
+            return
+        if started:
             reply_tr(source, server, "info.maintenance.manual_started")
             return
         if is_restore_running(self.context.app_runtime):

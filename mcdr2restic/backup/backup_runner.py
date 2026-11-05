@@ -64,7 +64,12 @@ class BackupRunner:
             daemon=True,
         )
         self.app_runtime.backup.thread = thread
-        thread.start()
+        try:
+            thread.start()
+        except Exception:
+            # 启动失败必须回滚，否则锁永久泄漏阻塞后续所有备份
+            self.app_runtime.release_backup_slot()
+            raise
         return True
 
     def start_deferred_thread(

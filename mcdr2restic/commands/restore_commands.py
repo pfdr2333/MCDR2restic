@@ -36,6 +36,7 @@ from mcdr2restic.restore.restore_paths import (
 from mcdr2restic.restore.restore_workflow import (
     RestoreQueueContext,
     RestoreReadinessProviders,
+    clear_restore_workflow_state,
     create_restore_session,
     get_restore_apply_rejection,
     is_direct_restore_session,
@@ -288,15 +289,19 @@ class RestoreCommands:
         ]
         if self.reject_restore_apply(source, server, translate, tasks):
             return
-        self.start_restore_apply(
-            server,
-            create_restore_session(
-                tasks,
-                RestoreQueueContext(cfg, snapshot_cfg, cache_key),
-                language,
-                skip_safety_snapshot=skip_safety_snapshot,
-            ),
+        session = create_restore_session(
+            tasks,
+            RestoreQueueContext(cfg, snapshot_cfg, cache_key),
+            language,
+            skip_safety_snapshot=skip_safety_snapshot,
         )
+        try:
+            self.start_restore_apply(server, session)
+        except Exception as exc:
+            reply_tr(
+                source, server, "error.restore.apply_start_failed", error=exc
+            )
+            return
         if is_direct_restore_session(tasks):
             reply_tr(source, server, "info.restore.direct_apply_started")
         elif skip_safety_snapshot:
@@ -309,23 +314,30 @@ class RestoreCommands:
         server: PluginServerInterface,
         session: RestoreSession,
     ) -> None:
-        """Persist restore session state and spawn the restore worker thread."""
+        """Persist restore session state and spawn the restore worker thread.
+
+        线程启动失败时回滚会话与恢复锁，避免恢复流程永久卡死。
+        """
 
         set_restore_session(self.context.app_runtime, session)
-        if is_direct_restore_session(session.tasks):
-            start_direct_restore_thread(
-                self.context.app_runtime,
-                server,
-                session,
-                clear_restore_tasks,
-            )
-            return
-        start_restore_pre_stop_thread(
-            self.context.app_runtime,
-            server,
-            self.context.snapshot_invalidator,
-            get_config_snapshot,
-        )
+        try:
+            if is_direct_restore_session(session.tasks):
+                start_direct_restore_thread(
+                    self.context.app_runtime,
+                    server,
+                    session,
+                    clear_restore_tasks,
+                )
+            else:
+                start_restore_pre_stop_thread(
+                    self.context.app_runtime,
+                    server,
+                    self.context.snapshot_invalidator,
+                    get_config_snapshot,
+                )
+        except Exception:
+            clear_restore_workflow_state(self.context.app_runtime, session)
+            raise
 
     def reject_restore_apply(
         self,

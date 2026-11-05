@@ -664,3 +664,61 @@ class RestoreSkipSafetyTests(unittest.TestCase):
 
         self.assertIsNone(runtime.restore.session)
         self.assertIn("未创建保护快照", server.logger.warning_messages[0])
+
+
+class RestoreApplyRollbackTests(unittest.TestCase):
+    def make_commands(self, runtime):
+        from mcdr2restic.commands.command_context import CommandContext
+        from mcdr2restic.commands.restore_commands import RestoreCommands
+
+        context = CommandContext(
+            app_runtime=runtime,
+            backup_runner_factory=lambda: None,
+            maintenance_runner_factory=lambda: None,
+            reload_services=mock.Mock(),
+            wake_scheduler=mock.Mock(),
+            snapshot_invalidator=mock.Mock(),
+        )
+        return RestoreCommands(context)
+
+    def test_start_restore_apply_rolls_back_session_and_lock_on_failure(self):
+        runtime = create_runtime()
+        server = FakePluginServer()
+        commands = self.make_commands(runtime)
+        session = build_restore_session()
+        runtime.restore.lock.acquire()
+        with mock.patch(
+            "mcdr2restic.commands.restore_commands.start_restore_pre_stop_thread",
+            side_effect=RuntimeError("cannot start new thread"),
+        ), self.assertRaises(RuntimeError):
+            commands.start_restore_apply(server, session)
+
+        self.assertIsNone(runtime.restore.session)
+        self.assertFalse(runtime.restore.lock.locked())
+
+    def test_start_direct_restore_apply_rolls_back_on_failure(self):
+        runtime = create_runtime()
+        server = FakePluginServer()
+        commands = self.make_commands(runtime)
+        session = build_restore_session(
+            tasks=[
+                {
+                    "type": "snapshot",
+                    "snapshot": "abc123",
+                    "target_directory": "D:/restore-target",
+                }
+            ]
+        )
+        runtime.restore.lock.acquire()
+        with mock.patch(
+            "mcdr2restic.commands.restore_commands.start_direct_restore_thread",
+            side_effect=RuntimeError("cannot start new thread"),
+        ), self.assertRaises(RuntimeError):
+            commands.start_restore_apply(server, session)
+
+        self.assertIsNone(runtime.restore.session)
+        self.assertFalse(runtime.restore.lock.locked())
+
+
+if __name__ == "__main__":
+    unittest.main()
