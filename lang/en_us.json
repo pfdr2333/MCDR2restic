@@ -288,6 +288,7 @@
   "mcdr2restic.error.restore.target_is_working_directory": "restore target directory cannot be the restic working directory itself: {path}",
   "mcdr2restic.error.restore.target_inside_repository": "restore target directory cannot be inside the restic repository: {repository_path}",
   "mcdr2restic.error.restore.target_inside_backup_sources": "restore target directory cannot be inside a backup source directory: {source_path}",
+  "mcdr2restic.error.restore.target_contains_protected": "restore target directory cannot contain a protected directory: {protected_path}",
   "mcdr2restic.info.restore.task_completed_to": "Restore task #{task_id} completed: {snapshot} -> {target}",
   "mcdr2restic.info.restore.direct_completed": "All restore tasks completed",
   "mcdr2restic.warn.restore.direct_failed": "Restore task failed: {error}"

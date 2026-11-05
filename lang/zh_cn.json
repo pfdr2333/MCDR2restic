@@ -223,6 +223,7 @@
   "mcdr2restic.error.restore.target_is_working_directory": "恢复目标目录不能是 restic 工作目录本身: {path}",
   "mcdr2restic.error.restore.target_inside_repository": "恢复目标目录不能位于 restic 仓库内: {repository_path}",
   "mcdr2restic.error.restore.target_inside_backup_sources": "恢复目标目录不能位于备份源目录内: {source_path}",
+  "mcdr2restic.error.restore.target_contains_protected": "恢复目标目录不能包含受保护目录：{protected_path}",
   "mcdr2restic.error.restore.state_missing": "恢复流程状态丢失",
   "mcdr2restic.error.restore.pre_backup_slot_busy": "恢复流程无法创建保护快照：当前已有备份在执行",
   "mcdr2restic.log.restore.pre_backup_started": "正在创建恢复前保护快照，共 {count} 个任务",

@@ -93,7 +93,7 @@ def is_strict_filesystem_absolute_path(path: str) -> bool:
 
 
 def normalize_restore_target_directory(
-    value: Any, restic_cfg: Dict[str, Any]
+    value: Any, restic_cfg: Dict[str, Any], data_dir: str = ""
 ) -> str:
     raw = str(value or "").strip().strip("\"'")
     if not raw:
@@ -104,27 +104,43 @@ def normalize_restore_target_directory(
         target = normalize_filesystem_path(expanded)
     else:
         target = normalize_filesystem_path(os.path.join(workdir, expanded))
-    assert_restore_target_allowed(target, restic_cfg)
+    assert_restore_target_allowed(target, restic_cfg, data_dir=data_dir)
     return target
 
 
-def assert_restore_target_allowed(target: str, restic_cfg: Dict[str, Any]):
+def assert_restore_target_allowed(
+    target: str, restic_cfg: Dict[str, Any], data_dir: str = ""
+):
+    target_path = normalize_filesystem_path(target)
     workdir = get_restic_working_directory(restic_cfg)
-    if normalize_filesystem_path(target) == normalize_filesystem_path(workdir):
+    if target_path == normalize_filesystem_path(workdir):
         raise BackupProblem(
             i18n_key="error.restore.target_is_working_directory", path=target
         )
     repository = get_effective_restic_repository(restic_cfg)
+    repository_path = ""
     if repository and is_local_restic_repository(repository):
         repository_path = resolve_restic_repository_path(restic_cfg, repository)
-        if path_contains_or_equals(repository_path, target):
+        if path_contains_or_equals(repository_path, target_path):
             raise BackupProblem(
                 i18n_key="error.restore.target_inside_repository",
                 repository_path=repository_path,
             )
     for source_path in get_backup_source_paths(restic_cfg):
-        if path_contains_or_equals(source_path, target):
+        if path_contains_or_equals(source_path, target_path):
             raise BackupProblem(
                 i18n_key="error.restore.target_inside_backup_sources",
                 source_path=source_path,
+            )
+    # 目标若为受保护目录的祖先，快照会覆写保护范围本身，同样必须拒绝
+    protected_dirs = [workdir, *get_backup_source_paths(restic_cfg)]
+    if repository_path:
+        protected_dirs.append(repository_path)
+    if data_dir:
+        protected_dirs.append(data_dir)
+    for protected in protected_dirs:
+        if path_contains_or_equals(target_path, protected):
+            raise BackupProblem(
+                i18n_key="error.restore.target_contains_protected",
+                protected_path=protected,
             )

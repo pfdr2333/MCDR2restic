@@ -1,3 +1,4 @@
+import os
 try:
     from .support import (
         REPO_ROOT,
@@ -135,6 +136,66 @@ class RestoreTargetDirectoryTests(unittest.TestCase):
         self.assertEqual(
             result, str(REPO_ROOT.joinpath("restore-out").resolve())
         )
+
+    def test_normalize_target_rejects_parent_of_working_directory(self):
+        restic_cfg = {"working_directory": str(REPO_ROOT)}
+
+        with self.assertRaises(BackupProblem) as error:
+            restore_paths.normalize_restore_target_directory("..", restic_cfg)
+
+        self.assertEqual(
+            error.exception.i18n_key, "error.restore.target_contains_protected"
+        )
+
+    @unittest.skipUnless(os.name == "nt", "drive root only exists on Windows")
+    def test_normalize_target_rejects_drive_root(self):
+        restic_cfg = {"working_directory": str(REPO_ROOT)}
+
+        with self.assertRaises(BackupProblem) as error:
+            restore_paths.normalize_restore_target_directory("C:\\", restic_cfg)
+
+        self.assertEqual(
+            error.exception.i18n_key, "error.restore.target_contains_protected"
+        )
+
+    def test_normalize_target_rejects_target_containing_data_dir(self):
+        restic_cfg = {"working_directory": str(REPO_ROOT.joinpath("restic"))}
+        data_dir = REPO_ROOT.joinpath("config", "mcdr2restic")
+
+        with self.assertRaises(BackupProblem) as error:
+            restore_paths.normalize_restore_target_directory(
+                str(REPO_ROOT.joinpath("config")), restic_cfg, data_dir=str(data_dir)
+            )
+
+        self.assertEqual(
+            error.exception.i18n_key, "error.restore.target_contains_protected"
+        )
+
+    def test_normalize_target_rejects_data_dir_itself(self):
+        restic_cfg = {"working_directory": str(REPO_ROOT)}
+        data_dir = REPO_ROOT.joinpath("config", "mcdr2restic")
+
+        with self.assertRaises(BackupProblem) as error:
+            restore_paths.normalize_restore_target_directory(
+                str(data_dir), restic_cfg, data_dir=str(data_dir)
+            )
+
+        self.assertEqual(
+            error.exception.i18n_key, "error.restore.target_contains_protected"
+        )
+
+    def test_normalize_target_allows_unrelated_directory_with_data_dir(self):
+        restic_cfg = {"working_directory": str(REPO_ROOT)}
+        data_dir = REPO_ROOT.joinpath("config", "mcdr2restic")
+
+        with tempfile.TemporaryDirectory() as target:
+            result = restore_paths.normalize_restore_target_directory(
+                target, restic_cfg, data_dir=str(data_dir)
+            )
+
+            self.assertEqual(
+                result, str(REPO_ROOT.joinpath(target).resolve())
+            )
 
 
 class RestoreTargetCommandTests(unittest.TestCase):

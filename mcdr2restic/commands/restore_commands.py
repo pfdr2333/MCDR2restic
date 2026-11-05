@@ -139,7 +139,9 @@ class RestoreCommands:
 
         snapshot = normalize_restore_snapshot(context.get("snapshot"))
         include_path = self.restore_include_path(cfg, context, item_type)
-        target_directory = self.restore_target_directory(cfg, context, to_dir)
+        target_directory = self.restore_target_directory(
+            cfg, context, to_dir, server.get_data_folder()
+        )
         return add_restore_task_to_repository(
             server,
             self.current_snapshot_cache_config(cfg),
@@ -153,14 +155,18 @@ class RestoreCommands:
         )
 
     def restore_target_directory(
-        self, cfg: Dict[str, Any], context: Dict[str, Any], to_dir: bool
+        self,
+        cfg: Dict[str, Any],
+        context: Dict[str, Any],
+        to_dir: bool,
+        data_dir: str = "",
     ) -> str:
         """Normalize the requested restore target directory, if any."""
 
         if not to_dir:
             return ""
         return normalize_restore_target_directory(
-            context.get("target"), cfg.get("restic", {})
+            context.get("target"), cfg.get("restic", {}), data_dir
         )
 
     def restore_include_path(
