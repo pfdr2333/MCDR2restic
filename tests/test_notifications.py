@@ -224,8 +224,12 @@ class CustomWebhookTests(unittest.TestCase):
         client = mock.Mock()
         app_runtime.service.custom_webhook = client
 
-        dispatcher._notify_webhook(
-            "backup_start", {"label": "正常"}, {"custom_webhook": {"enabled": False}}, "zh_cn"
+        dispatcher._notify_channel(
+            dispatcher._channel_specs()[2],
+            "backup_start",
+            {"label": "正常"},
+            {"custom_webhook": {"enabled": False}},
+            "zh_cn",
         )
 
         client.send_message.assert_not_called()
@@ -237,7 +241,8 @@ class CustomWebhookTests(unittest.TestCase):
         client = mock.Mock()
         app_runtime.service.custom_webhook = client
 
-        dispatcher._notify_webhook(
+        dispatcher._notify_channel(
+            dispatcher._channel_specs()[2],
             "backup_start",
             {"label": "正常", "start_time": "10:00"},
             {"custom_webhook": {"enabled": True}},

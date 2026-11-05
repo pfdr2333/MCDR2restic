@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, NamedTuple, Optional
 
 from mcdr2restic.core.i18n import config_language, server_tr
 from mcdr2restic.core.language import get_mcdr_language
@@ -14,6 +14,16 @@ from mcdr2restic.notifications.message_templates import (
 
 
 ConfigProvider = Callable[[], Dict[str, Any]]
+
+
+class ChannelSpec(NamedTuple):
+    """通知通道的接入参数：配置段、客户端属性、告警键与投递函数。"""
+
+    section: str
+    client_attr: str
+    not_started_key: str
+    send_failed_key: str
+    deliver: Callable[[Any, Dict[str, Any], str, Optional[Dict[str, Any]]], None]
 
 
 class NotificationDispatcher:
@@ -37,9 +47,91 @@ class NotificationDispatcher:
             MessageRenderOptions(logger=self._logger(), language=language),
         )
         self._log(log_text, failure)
-        self._notify_onebot(template_key, values, cfg, language)
-        self._notify_discord(template_key, values, cfg, language)
-        self._notify_webhook(template_key, values, cfg, language)
+        for spec in self._channel_specs():
+            self._notify_channel(spec, template_key, values, cfg, language)
+
+    def _channel_specs(self):
+        return (
+            ChannelSpec(
+                section="onebot",
+                client_attr="onebot",
+                not_started_key="warn.notify.onebot_not_started",
+                send_failed_key="warn.notify.onebot_send_failed",
+                deliver=self._deliver_onebot,
+            ),
+            ChannelSpec(
+                section="discord",
+                client_attr="discord",
+                not_started_key="warn.notify.discord_not_initialized",
+                send_failed_key="warn.notify.discord_send_failed",
+                deliver=self._deliver_client,
+            ),
+            ChannelSpec(
+                section="custom_webhook",
+                client_attr="custom_webhook",
+                not_started_key="warn.notify.webhook_not_initialized",
+                send_failed_key="warn.notify.webhook_send_failed",
+                deliver=self._deliver_client,
+            ),
+        )
+
+    def _notify_channel(
+        self,
+        spec: ChannelSpec,
+        template_key: str,
+        values: Optional[Dict[str, Any]],
+        cfg: Dict[str, Any],
+        language: str,
+    ):
+        channel_cfg = get_config_section(cfg, spec.section)
+        if not channel_cfg.get("enabled", False):
+            return
+        client = getattr(self.app_runtime.service, spec.client_attr)
+        if client is None:
+            self._warn_server(spec.not_started_key, template_key=template_key)
+            return
+        text = render_message(
+            template_key,
+            values,
+            cfg,
+            MessageRenderOptions(
+                prefix=str(channel_cfg.get("message_prefix", "[MCDR2Restic]")),
+                logger=self._logger(),
+                language=language,
+            ),
+        )
+        try:
+            spec.deliver(client, channel_cfg, text, values)
+        except Exception as exc:
+            self._warn_server(spec.send_failed_key, error=exc)
+
+    def _deliver_onebot(
+        self,
+        client: Any,
+        channel_cfg: Dict[str, Any],
+        text: str,
+        values: Optional[Dict[str, Any]],
+    ):
+        # 每个QQ的发送失败已单独告警，不中断其余收件人
+        for qid in channel_cfg.get("admin_qqs", []):
+            self._send_onebot_message(qid, text)
+
+    def _deliver_client(
+        self,
+        client: Any,
+        channel_cfg: Dict[str, Any],
+        text: str,
+        values: Optional[Dict[str, Any]],
+    ):
+        client.send_message(text, values)
+
+    def _send_onebot_message(self, qid: Any, text: str):
+        try:
+            self.app_runtime.service.onebot.send_private_msg(int(qid), text)
+        except Exception as exc:
+            self._warn_server(
+                "warn.notify.onebot_send_failed", user_id=qid, error=exc
+            )
 
     def _logger(self):
         server = self.app_runtime.service.server
@@ -53,102 +145,6 @@ class NotificationDispatcher:
             logger.warning(text)
             return
         logger.info(text)
-
-    def _notify_onebot(
-        self,
-        template_key: str,
-        values: Optional[Dict[str, Any]],
-        cfg: Dict[str, Any],
-        language: str,
-    ):
-        onebot_cfg = get_config_section(cfg, "onebot")
-        if not onebot_cfg.get("enabled", False):
-            return
-        if self.app_runtime.service.onebot is None:
-            self._warn_server(
-                "warn.notify.onebot_not_started", template_key=template_key
-            )
-            return
-        text = render_message(
-            template_key,
-            values,
-            cfg,
-            MessageRenderOptions(
-                prefix=str(onebot_cfg.get("message_prefix", "[MCDR2Restic]")),
-                logger=self._logger(),
-                language=language,
-            ),
-        )
-        for qid in onebot_cfg.get("admin_qqs", []):
-            self._send_onebot_message(qid, text)
-
-    def _send_onebot_message(self, qid: Any, text: str):
-        try:
-            self.app_runtime.service.onebot.send_private_msg(int(qid), text)
-        except Exception as exc:
-            self._warn_server(
-                "warn.notify.onebot_send_failed", user_id=qid, error=exc
-            )
-
-    def _notify_discord(
-        self,
-        template_key: str,
-        values: Optional[Dict[str, Any]],
-        cfg: Dict[str, Any],
-        language: str,
-    ):
-        discord_cfg = get_config_section(cfg, "discord")
-        if not discord_cfg.get("enabled", False):
-            return
-        if self.app_runtime.service.discord is None:
-            self._warn_server(
-                "warn.notify.discord_not_initialized", template_key=template_key
-            )
-            return
-        text = render_message(
-            template_key,
-            values,
-            cfg,
-            MessageRenderOptions(
-                prefix=str(discord_cfg.get("message_prefix", "[MCDR2Restic]")),
-                logger=self._logger(),
-                language=language,
-            ),
-        )
-        try:
-            self.app_runtime.service.discord.send_message(text)
-        except Exception as exc:
-            self._warn_server("warn.notify.discord_send_failed", error=exc)
-
-    def _notify_webhook(
-        self,
-        template_key: str,
-        values: Optional[Dict[str, Any]],
-        cfg: Dict[str, Any],
-        language: str,
-    ):
-        webhook_cfg = get_config_section(cfg, "custom_webhook")
-        if not webhook_cfg.get("enabled", False):
-            return
-        if self.app_runtime.service.custom_webhook is None:
-            self._warn_server(
-                "warn.notify.webhook_not_initialized", template_key=template_key
-            )
-            return
-        text = render_message(
-            template_key,
-            values,
-            cfg,
-            MessageRenderOptions(
-                prefix=str(webhook_cfg.get("message_prefix", "[MCDR2Restic]")),
-                logger=self._logger(),
-                language=language,
-            ),
-        )
-        try:
-            self.app_runtime.service.custom_webhook.send_message(text, values)
-        except Exception as exc:
-            self._warn_server("warn.notify.webhook_send_failed", error=exc)
 
     def _warn(self, text: str):
         logger = self._logger()
