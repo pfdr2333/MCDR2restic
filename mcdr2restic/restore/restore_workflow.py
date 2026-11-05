@@ -44,6 +44,7 @@ from mcdr2restic.restic.restic_lock_recovery import (
 from mcdr2restic.restic.restic_result import assert_restic_success
 from mcdr2restic.restic.restic_service import make_restic_deadline, run_backup_body
 from mcdr2restic.restore.restore_paths import (
+    assert_restore_target_allowed,
     get_restic_working_directory,
     normalize_restore_snapshot,
 )
@@ -532,6 +533,7 @@ def execute_restore_tasks(
     command_root = command_root_from_config(session.cfg)
     ensure_default_restic_executable_available(server, restic_cfg)
     for task in session.tasks:
+        assert_restore_task_target_allowed(server, restic_cfg, task)
         result = run_restic_command_with_lock_recovery(
             ResticOperationContext(
                 app_runtime, server, restic_cfg, deadline, command_root=command_root
@@ -541,6 +543,21 @@ def execute_restore_tasks(
         )
         assert_restic_success(restic_cfg, result, command_root)
         log_restore_task_completed(server, task)
+
+
+def assert_restore_task_target_allowed(
+    server: PluginServerInterface,
+    restic_cfg: Dict[str, Any],
+    task: Dict[str, Any],
+):
+    """Re-check persisted targets against the current config before executing."""
+
+    target = str(task.get("target_directory") or "").strip()
+    if not target:
+        return
+    assert_restore_target_allowed(
+        target, restic_cfg, data_dir=server.get_data_folder()
+    )
 
 
 def log_restore_task_completed(

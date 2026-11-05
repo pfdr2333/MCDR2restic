@@ -252,6 +252,42 @@ class RestoreTargetCommandTests(unittest.TestCase):
         )
         self.assertTrue(restore_workflow.is_direct_restore_session([targeted]))
 
+    def test_execute_restore_tasks_rechecks_target_with_current_config(self):
+        runtime = create_runtime()
+        server = FakePluginServer()
+        executed = mock.Mock()
+
+        with tempfile.TemporaryDirectory() as changed_source:
+            session = build_restore_session(
+                tasks=[
+                    {
+                        "id": 1,
+                        "snapshot": "abc",
+                        "item_type": "full",
+                        "include_path": "/",
+                        "target_directory": changed_source,
+                    }
+                ]
+            )
+            restic_cfg = {
+                "working_directory": str(REPO_ROOT),
+                "backup_command": ["backup", changed_source],
+            }
+            with mock.patch.object(
+                restore_workflow, "run_restic_command_with_lock_recovery", executed
+            ), mock.patch.object(
+                restore_workflow, "ensure_default_restic_executable_available"
+            ):
+                with self.assertRaises(BackupProblem) as error:
+                    restore_workflow.execute_restore_tasks(
+                        runtime, server, restic_cfg, session
+                    )
+
+        self.assertEqual(
+            error.exception.i18n_key, "error.restore.target_inside_backup_sources"
+        )
+        executed.assert_not_called()
+
 
 class RestoreDirectStageTests(unittest.TestCase):
     def test_direct_restore_success_clears_session_and_queue(self):

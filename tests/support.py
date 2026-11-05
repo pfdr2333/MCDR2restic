@@ -231,6 +231,9 @@ class FakePluginServer:
     def get_mcdr_language(self):
         return self.language
 
+    def get_data_folder(self):
+        return ""
+
 
 class FakeCommandSource:
     def __init__(self, language=""):
