@@ -455,7 +455,9 @@ def handle_restore_server_stop(
         return False
     if server_return_code != 0:
         server.logger.warning(
-            server_tr(server, "warn.restore.stop_return_code", code=server_return_code)
+            server_tr(
+                server, "warn.restore.stop_return_code", return_code=server_return_code
+            )
         )
     update_restore_phase(app_runtime, RestorePhase.RESTORING)
     thread = threading.Thread(
@@ -725,7 +727,7 @@ def build_restore_start_timeout_message(
 
 def build_restore_start_stopped_message(language: str, server_return_code: int) -> str:
     return tr(
-        language, "error.restore.start_stopped", server_return_code=server_return_code
+        language, "error.restore.start_stopped", return_code=server_return_code
     )
 
 
