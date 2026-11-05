@@ -1,61 +1,31 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
-import copy
 import json
-import threading
 import urllib.request
 from typing import Any, Dict, List
 
-from mcdreforged.api.all import PluginServerInterface
-
-from mcdr2restic.core.i18n import server_tr
 from mcdr2restic.defaults.default_constants import PLUGIN_ID
+from mcdr2restic.notifications.webhook_base import WebhookClientBase
 
 
-DISCORD_HTTP_SUCCESS_MIN = 200
-DISCORD_HTTP_SUCCESS_MAX = 300
 DISCORD_CONTENT_MAX_CHARS = 2000
 
 
-class DiscordWebhookClient:
-    def __init__(self, server: PluginServerInterface, cfg: Dict[str, Any]):
-        self.server = server
-        self.cfg = copy.deepcopy(cfg)
-        self.enabled = bool(self.cfg.get("enabled", False))
+class DiscordWebhookClient(WebhookClientBase):
+    thread_name = "MCDR2Restic-Discord-Send"
+    url_config_key = "webhook_url"
+    url_empty_message_key = "warn.discord.webhook_url_empty"
+    status_error_message_key = "warn.discord.status_error"
+    send_failed_message_key = "warn.discord.send_failed"
 
-    def send_message(self, text: str):
-        if not self.enabled:
-            return
-        threading.Thread(
-            target=self._send_message,
-            args=(text,),
-            name="MCDR2Restic-Discord-Send",
-            daemon=True,
-        ).start()
+    def send_message(self, text: str) -> None:
+        super().send_message(text)
 
-    def _send_message(self, text: str):
-        webhook_url = str(self.cfg.get("webhook_url", "") or "").strip()
-        if not webhook_url:
-            self.server.logger.warning(
-                server_tr(self.server, "warn.discord.webhook_url_empty")
-            )
-            return
-        request = build_discord_request(webhook_url, self._build_payload(text))
-        timeout = max(1, int(self.cfg.get("send_timeout_seconds", 10)))
-        try:
-            with urllib.request.urlopen(request, timeout=timeout) as response:
-                status = getattr(response, "status", 204)
-                if status < DISCORD_HTTP_SUCCESS_MIN or status >= DISCORD_HTTP_SUCCESS_MAX:
-                    self.server.logger.warning(
-                        server_tr(
-                            self.server, "warn.discord.status_error", status=status
-                        )
-                    )
-        except Exception as exc:
-            self.server.logger.warning(
-                server_tr(self.server, "warn.discord.send_failed", error=exc)
-            )
+    def build_request(
+        self, webhook_url: str, text: str
+    ) -> urllib.request.Request:
+        return build_discord_request(webhook_url, self._build_payload(text))
 
     def _build_payload(self, text: str) -> Dict[str, Any]:
         content = self._with_mentions(text)

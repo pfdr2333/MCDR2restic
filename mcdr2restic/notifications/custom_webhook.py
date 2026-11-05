@@ -3,66 +3,30 @@ from __future__ import annotations
 
 import copy
 import json
-import threading
 import urllib.request
 from typing import Any, Dict, Optional
 
-from mcdreforged.api.all import PluginServerInterface
-
-from mcdr2restic.core.i18n import server_tr
 from mcdr2restic.defaults.default_constants import PLUGIN_ID
 from mcdr2restic.notifications.message_templates import SafeFormatDict
+from mcdr2restic.notifications.webhook_base import WebhookClientBase
 
 
-WEBHOOK_HTTP_SUCCESS_MIN = 200
-WEBHOOK_HTTP_SUCCESS_MAX = 300
 DEFAULT_WEBHOOK_PAYLOAD: Dict[str, Any] = {"content": "{message}"}
 
 
-class CustomWebhookClient:
+class CustomWebhookClient(WebhookClientBase):
     """POST notification text as JSON to a user-defined webhook endpoint."""
-
-    def __init__(self, server: PluginServerInterface, cfg: Dict[str, Any]):
-        self.server = server
-        self.cfg = copy.deepcopy(cfg)
-        self.enabled = bool(self.cfg.get("enabled", False))
 
     def send_message(
         self, text: str, values: Optional[Dict[str, Any]] = None
-    ):
-        if not self.enabled:
-            return
-        threading.Thread(
-            target=self._send_message,
-            args=(text, values),
-            name="MCDR2Restic-Webhook-Send",
-            daemon=True,
-        ).start()
+    ) -> None:
+        super().send_message(text, values)
 
-    def _send_message(self, text: str, values: Optional[Dict[str, Any]]):
-        webhook_url = str(self.cfg.get("url", "") or "").strip()
-        if not webhook_url:
-            self.server.logger.warning(
-                server_tr(self.server, "warn.webhook.url_empty")
-            )
-            return
+    def build_request(
+        self, webhook_url: str, text: str, values: Optional[Dict[str, Any]] = None
+    ) -> urllib.request.Request:
         payload = self._build_payload(text, values)
-        request = build_webhook_request(webhook_url, payload, self.cfg)
-        timeout = max(1, int(self.cfg.get("send_timeout_seconds", 10)))
-        try:
-            with urllib.request.urlopen(request, timeout=timeout) as response:
-                status = getattr(response, "status", 200)
-                if (
-                    status < WEBHOOK_HTTP_SUCCESS_MIN
-                    or status >= WEBHOOK_HTTP_SUCCESS_MAX
-                ):
-                    self.server.logger.warning(
-                        server_tr(self.server, "warn.webhook.status_error", status=status)
-                    )
-        except Exception as exc:
-            self.server.logger.warning(
-                server_tr(self.server, "warn.webhook.send_failed", error=exc)
-            )
+        return build_webhook_request(webhook_url, payload, self.cfg)
 
     def _build_payload(
         self, text: str, values: Optional[Dict[str, Any]]

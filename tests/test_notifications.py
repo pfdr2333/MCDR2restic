@@ -89,7 +89,7 @@ class NotificationTests(unittest.TestCase):
         client = DiscordWebhookClient(FakePluginServer(), {"enabled": False})
 
         with mock.patch(
-            "mcdr2restic.notifications.discord_webhook.threading.Thread"
+            "mcdr2restic.notifications.webhook_base.threading.Thread"
         ) as thread:
             client.send_message("hello")
 
@@ -184,7 +184,7 @@ class CustomWebhookTests(unittest.TestCase):
         client = CustomWebhookClient(server, {"enabled": False})
 
         with mock.patch(
-            "mcdr2restic.notifications.custom_webhook.threading.Thread"
+            "mcdr2restic.notifications.webhook_base.threading.Thread"
         ) as thread:
             client.send_message("hello")
 
