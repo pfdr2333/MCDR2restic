@@ -218,8 +218,7 @@ config_template: |-
     backup_skip_no_player: |-
       __MCDR2RESTIC_MESSAGE_backup_skip_no_player__
     backup_not_ready: |-
-      {prefix} Backup problem
-      The scheduled backup time was reached, but the Minecraft server has not yet been confirmed to be fully running. This backup was skipped.
+      __MCDR2RESTIC_MESSAGE_backup_not_ready__
     schedule_config_error: |-
       __MCDR2RESTIC_MESSAGE_schedule_config_error__
   

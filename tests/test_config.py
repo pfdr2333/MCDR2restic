@@ -49,6 +49,8 @@ except ImportError:
         yaml,
     )
 
+from mcdr2restic.defaults.message_defaults import build_default_messages
+
 
 class ConfigurationTests(unittest.TestCase):
     def test_default_config_constructor_returns_independent_copies(self):
@@ -194,6 +196,18 @@ class ConfigurationTests(unittest.TestCase):
                     template_cfg[section],
                     default_cfg[section],
                     "template drift for {} in {}".format(section, language),
+                )
+
+    def test_default_template_messages_match_config_texts(self):
+        # messages 块必须由标记行从 texts 注入；残留内联文案时 sync 无法自愈（P0-1）
+        for language in ("zh_cn", "en_us"):
+            template_cfg = yaml.safe_load(get_default_config_template(language))
+
+            for key, text in build_default_messages(language).items():
+                self.assertEqual(
+                    template_cfg["messages"][key],
+                    text,
+                    "message drift for {} in {}".format(key, language),
                 )
 
     def test_apply_config_file_migrations_keeps_top_level_comments_with_following_block(
