@@ -30,6 +30,7 @@ minecraft: {}
 restic: {}
 onebot: {}
 discord: {}
+custom_webhook: {}
 notification: {}
 snapshot_cache: {}
 restore: {}
