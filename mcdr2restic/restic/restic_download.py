@@ -28,13 +28,13 @@ from mcdr2restic.defaults.default_constants import (
 )
 from mcdr2restic.defaults.restic_release_defaults import build_restic_fallback_release
 from mcdr2restic.core.models import BackupProblem
+from mcdr2restic.restic.restic_config import resolve_path_against_working_directory
 from mcdr2restic.restic.restic_constants import (
     RESTIC_CFG_AUTO_DOWNLOAD,
     RESTIC_CFG_DOWNLOAD_PROXY_PREFIXES,
     RESTIC_CFG_DOWNLOAD_TIMEOUT_SECONDS,
     RESTIC_CFG_DOWNLOAD_VERSION,
     RESTIC_CFG_EXECUTABLE,
-    RESTIC_CFG_WORKING_DIRECTORY,
 )
 
 
@@ -114,12 +114,9 @@ def resolve_default_restic_install_path(executable: str) -> str:
 
 def resolve_restic_executable_path(restic_cfg: Dict[str, Any], executable: str) -> str:
     expanded = os.path.expanduser(os.path.expandvars(executable))
-    if os.path.isabs(expanded):
-        return os.path.abspath(expanded)
     if is_config_folder_default_restic_path(expanded) or is_bare_restic_name(expanded):
         return resolve_default_restic_install_path(expanded)
-    cwd = restic_cfg.get(RESTIC_CFG_WORKING_DIRECTORY) or os.getcwd()
-    return os.path.abspath(os.path.join(str(cwd), expanded))
+    return resolve_path_against_working_directory(expanded, restic_cfg)
 
 
 def is_config_folder_default_restic_path(executable: str) -> bool:

@@ -80,12 +80,19 @@ def is_local_restic_repository(repository: str) -> bool:
     return not lowered.startswith(remote_prefixes)
 
 
-def resolve_restic_repository_path(restic_cfg: Dict[str, Any], repository: str) -> str:
-    repository = os.path.expanduser(os.path.expandvars(repository))
-    if os.path.isabs(repository):
-        return os.path.abspath(repository)
+def resolve_path_against_working_directory(
+    value: str, restic_cfg: Dict[str, Any]
+) -> str:
+    """展开 ~ 与环境变量后解析路径，相对路径以 restic working_directory 兜底。"""
+    text = os.path.expanduser(os.path.expandvars(str(value)))
+    if os.path.isabs(text):
+        return os.path.abspath(text)
     cwd = restic_cfg.get(RESTIC_CFG_WORKING_DIRECTORY) or os.getcwd()
-    return os.path.abspath(os.path.join(str(cwd), repository))
+    return os.path.abspath(os.path.join(str(cwd), text))
+
+
+def resolve_restic_repository_path(restic_cfg: Dict[str, Any], repository: str) -> str:
+    return resolve_path_against_working_directory(repository, restic_cfg)
 
 
 def assert_backup_sources_do_not_contain_repository(restic_cfg: Dict[str, Any]):
@@ -141,8 +148,7 @@ def find_option_value(args: List[str], names: Set[str]) -> str:
 def get_backup_source_paths(restic_cfg: Dict[str, Any]) -> List[str]:
     args = normalize_command_args(restic_cfg.get(RESTIC_CFG_BACKUP_COMMAND, []))
     sources = extract_restic_backup_sources(args)
-    cwd = str(restic_cfg.get(RESTIC_CFG_WORKING_DIRECTORY) or os.getcwd())
-    return [resolve_backup_source_path(cwd, source) for source in sources]
+    return [resolve_backup_source_path(restic_cfg, source) for source in sources]
 
 
 def extract_restic_backup_sources(args: List[str]) -> List[str]:
@@ -183,11 +189,10 @@ def restic_backup_value_options() -> Set[str]:
     return set(RESTIC_BACKUP_VALUE_OPTIONS)
 
 
-def resolve_backup_source_path(cwd: str, source: str) -> str:
-    source = os.path.expanduser(os.path.expandvars(str(source)))
-    if os.path.isabs(source):
-        return normalize_filesystem_path(source)
-    return normalize_filesystem_path(os.path.join(cwd, source))
+def resolve_backup_source_path(restic_cfg: Dict[str, Any], source: str) -> str:
+    return normalize_filesystem_path(
+        resolve_path_against_working_directory(source, restic_cfg)
+    )
 
 
 def normalize_filesystem_path(path: str) -> str:
