@@ -54,16 +54,6 @@ def get_default_config_template(
     return template
 
 
-DEFAULT_CONFIG_TEMPLATE_ZH = load_base_config_template("zh_cn")
-DEFAULT_CONFIG_TEMPLATE_EN = load_base_config_template("en_us")
-
-
-def adapt_default_config_template_for_platform(
-    template: str, language: str = "zh_cn"
-) -> str:
-    return render_platform_placeholders(template, language)
-
-
 def render_platform_placeholders(template: str, language: str) -> str:
     replacements = {
         MINECRAFT_SAVE_ALL_COMMENT_MARKER: config_template_text(

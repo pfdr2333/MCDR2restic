@@ -6,11 +6,6 @@ from typing import Optional
 from mcdreforged.api.all import CommandSource, PluginServerInterface
 
 
-def is_zh_language(language: str) -> bool:
-    normalized = str(language or "").lower().replace("-", "_")
-    return normalized.startswith("zh")
-
-
 def get_mcdr_language(server: Optional[PluginServerInterface]) -> str:
     if server is None:
         return "zh_cn"

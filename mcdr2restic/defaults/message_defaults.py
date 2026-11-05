@@ -23,9 +23,5 @@ def build_default_messages(language: str = "zh_cn") -> Dict[str, str]:
     }
 
 
-DEFAULT_MESSAGES_ZH = build_default_messages("zh_cn")
-DEFAULT_MESSAGES_EN = build_default_messages("en_us")
-
-
 def get_default_message_template(template_key: str, language: str = "zh_cn") -> str:
     return build_default_messages(language).get(template_key, template_key)
