@@ -7,6 +7,7 @@ from typing import Any, Dict, Optional
 from mcdr2restic.core.i18n import DEFAULT_LANGUAGE, tr
 from mcdr2restic.core.utils import get_config_section
 from mcdr2restic.defaults.default_config import build_default_config
+from mcdr2restic.defaults.default_constants import DEFAULT_MESSAGE_PREFIX
 from mcdr2restic.defaults.message_defaults import get_default_message_template
 
 
@@ -78,7 +79,7 @@ def build_message_values(
             "prefix": str(
                 prefix
                 if prefix is not None
-                else onebot_cfg.get("message_prefix") or "[MCDR2Restic]"
+                else onebot_cfg.get("message_prefix") or DEFAULT_MESSAGE_PREFIX
             ),
             "plugin": "MCDR2Restic",
             "template_key": template_key,

@@ -20,6 +20,8 @@ CONFIG_VERSION: Final[int] = 10
 
 DEFAULT_MAINTENANCE_CRON: Final[str] = "0 0 3 * * *"
 
+DEFAULT_MESSAGE_PREFIX: Final[str] = "[MCDR2Restic]"
+
 PLUGIN_REPOSITORY_URL: Final[str] = "https://github.com/pfdr2333/MCDR2restic"
 
 DEFAULT_UPDATE_API_URL: Final[str] = (

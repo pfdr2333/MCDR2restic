@@ -7,6 +7,7 @@ from mcdr2restic.core.i18n import config_language, server_tr
 from mcdr2restic.core.language import get_mcdr_language
 from mcdr2restic.core.runtime import PluginRuntime
 from mcdr2restic.core.utils import get_config_section
+from mcdr2restic.defaults.default_constants import DEFAULT_MESSAGE_PREFIX
 from mcdr2restic.notifications.message_templates import (
     MessageRenderOptions,
     render_message,
@@ -96,7 +97,9 @@ class NotificationDispatcher:
             values,
             cfg,
             MessageRenderOptions(
-                prefix=str(channel_cfg.get("message_prefix") or "[MCDR2Restic]"),
+                prefix=str(
+                    channel_cfg.get("message_prefix") or DEFAULT_MESSAGE_PREFIX
+                ),
                 logger=self._logger(),
                 language=language,
             ),
