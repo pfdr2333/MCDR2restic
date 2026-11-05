@@ -79,6 +79,7 @@ MCDReforged 插件：调用 [restic](https://restic.readthedocs.io/en/stable/) �
 | `!!restic restore <快照> to <目录> folder <路径>` | 添加文件夹恢复任务到指定目录 |
 | `!!restic restore list` | 查看恢复任务队列 |
 | `!!restic restore apply` | 执行恢复任务队列 |
+| `!!restic restore apply --skip-safety` | 执行恢复任务队列，跳过保护快照 |
 | `!!restic unrestore <ID>\|all` | 删除某个 / 所有恢复任务 |
 | `!!restic reload` | 重载配置 |
 
@@ -86,7 +87,7 @@ MCDReforged 插件：调用 [restic](https://restic.readthedocs.io/en/stable/) �
 
 恢复任务不会立即执行。`restore apply` 时：
 
-- **恢复到服务器工作目录**（默认）：先创建保护快照，再停止 Minecraft、恢复文件、重启服务端；恢复失败自动回滚到保护快照。
+- **恢复到服务器工作目录**（默认）：先创建保护快照，再停止 Minecraft、恢复文件、重启服务端；恢复失败自动回滚到保护快照。加 `--skip-safety` 参数可跳过保护快照，恢复失败时将无法回滚，请谨慎使用。
 - **恢复到指定目录**（所有任务都带 `to` 时）：不停止服务器，直接执行恢复；目标目录不得位于 restic 仓库或备份源目录内。
 
 ## 文档

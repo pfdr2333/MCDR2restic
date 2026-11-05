@@ -79,6 +79,7 @@ Adjust the configuration as needed, then run `!!restic reload`.
 | `!!restic restore <snapshot> to <dir> folder <path>` | Queue a folder restore into a chosen directory |
 | `!!restic restore list` | Show queued restore tasks |
 | `!!restic restore apply` | Apply the restore task queue |
+| `!!restic restore apply --skip-safety` | Apply the restore task queue without a safety snapshot |
 | `!!restic unrestore <ID>\|all` | Delete one / all restore tasks |
 | `!!restic reload` | Reload configuration |
 
@@ -86,7 +87,7 @@ The default command permission level is `3` and can be changed in the configurat
 
 Queued tasks are not executed immediately. When running `restore apply`:
 
-- **Restore into the server working directory** (default): a safety snapshot is created first, then Minecraft is stopped via MCDR, files are restored, and the server starts again; failures roll back to the safety snapshot automatically.
+- **Restore into the server working directory** (default): a safety snapshot is created first, then Minecraft is stopped via MCDR, files are restored, and the server starts again; failures roll back to the safety snapshot automatically. Adding `--skip-safety` skips the safety snapshot — rollback is then impossible, so use it carefully.
 - **Restore into a chosen directory** (when every task carries `to`): the server keeps running while the restore executes; target directories inside the restic repository or backup sources are rejected.
 
 ## Documentation

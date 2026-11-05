@@ -65,6 +65,14 @@ class RestoreReadinessProviders(NamedTuple):
     mc_ready: Callable[[PluginRuntime, PluginServerInterface], bool]
 
 
+class RestoreQueueContext(NamedTuple):
+    """恢复任务队列所属的仓库上下文。"""
+
+    cfg: Dict[str, Any]
+    snapshot_cfg: Dict[str, Any]
+    cache_key: str
+
+
 def get_restore_apply_rejection(
     app_runtime: PluginRuntime,
     server: PluginServerInterface,
@@ -84,19 +92,19 @@ def get_restore_apply_rejection(
 
 def create_restore_session(
     tasks: List[Dict[str, Any]],
-    cfg: Dict[str, Any],
-    snapshot_cfg: Dict[str, Any],
-    cache_key: str,
+    queue: RestoreQueueContext,
     language: str,
+    skip_safety_snapshot: bool = False,
 ) -> RestoreSession:
     return RestoreSession(
         tasks=tasks,
-        cfg=cfg,
-        snapshot_cfg=snapshot_cfg,
-        cache_key=cache_key,
+        cfg=queue.cfg,
+        snapshot_cfg=queue.snapshot_cfg,
+        cache_key=queue.cache_key,
         language=language,
         phase=RestorePhase.PRE_BACKUP,
         started_at=now_text(),
+        skip_safety_snapshot=skip_safety_snapshot,
     )
 
 
@@ -214,6 +222,14 @@ def run_restore_pre_stop_stage(
             server,
             server_tr(server, "error.restore.state_missing"),
             failure=True,
+        )
+        return
+    if session.skip_safety_snapshot:
+        server.logger.warning(
+            server_tr(server, "warn.restore.safety_snapshot_skipped")
+        )
+        request_minecraft_stop_for_restore(
+            app_runtime, server, session, "", config_snapshot_provider
         )
         return
     if not acquire_restore_pre_backup_slot(app_runtime):
@@ -555,6 +571,15 @@ def try_rollback_after_restore_failure(
     session: RestoreSession,
     restore_error: str,
 ) -> str:
+    if session.skip_safety_snapshot:
+        server.logger.warning(
+            server_tr(
+                server,
+                "warn.restore.skip_safety_no_rollback",
+                error=restore_error,
+            )
+        )
+        return ""
     server.logger.warning(
         server_tr(
             server, "warn.restore.restore_stage_failed_rollback", error=restore_error
@@ -769,7 +794,13 @@ def handle_restore_server_startup(
     error = str(session.error or "")
     rollback_error = str(session.rollback_error or "")
     if error:
-        if rollback_error:
+        if session.skip_safety_snapshot:
+            message = server_tr(
+                server,
+                "warn.restore.completed_with_restart_skipped_safety",
+                restore_error=error,
+            )
+        elif rollback_error:
             message = server_tr(
                 server,
                 "warn.restore.completed_with_restart_and_failed_rollback",

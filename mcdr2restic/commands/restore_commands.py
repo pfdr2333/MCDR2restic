@@ -33,6 +33,7 @@ from mcdr2restic.restore.restore_paths import (
     normalize_restore_target_directory,
 )
 from mcdr2restic.restore.restore_workflow import (
+    RestoreQueueContext,
     RestoreReadinessProviders,
     create_restore_session,
     get_restore_apply_rejection,
@@ -255,6 +256,18 @@ class RestoreCommands:
     def command_restore_apply(self, source: CommandSource) -> None:
         """Start the restore workflow for the queued tasks."""
 
+        self.apply_restore_queue(source, skip_safety_snapshot=False)
+
+    def command_restore_apply_skip_safety(self, source: CommandSource) -> None:
+        """Start the restore workflow without a pre-restore safety snapshot."""
+
+        self.apply_restore_queue(source, skip_safety_snapshot=True)
+
+    def apply_restore_queue(
+        self, source: CommandSource, skip_safety_snapshot: bool
+    ) -> None:
+        """Start the restore workflow for the queued tasks."""
+
         if not self.context.check_command_permission(source):
             return
         server = self.context.server_from_source(source)
@@ -270,10 +283,17 @@ class RestoreCommands:
             return
         self.start_restore_apply(
             server,
-            create_restore_session(tasks, cfg, snapshot_cfg, cache_key, language),
+            create_restore_session(
+                tasks,
+                RestoreQueueContext(cfg, snapshot_cfg, cache_key),
+                language,
+                skip_safety_snapshot=skip_safety_snapshot,
+            ),
         )
         if is_direct_restore_session(tasks):
             reply_tr(source, server, "info.restore.direct_apply_started")
+        elif skip_safety_snapshot:
+            reply_tr(source, server, "info.restore.apply_started_skip_safety")
         else:
             reply_tr(source, server, "info.restore.apply_started")
 

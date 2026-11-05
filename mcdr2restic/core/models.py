@@ -143,6 +143,7 @@ class RestoreSession:
     error: str = ""
     safety_snapshot_id: str = ""
     rollback_error: str = ""
+    skip_safety_snapshot: bool = False
 
     def __post_init__(self):
         self.phase = normalize_restore_phase(self.phase)

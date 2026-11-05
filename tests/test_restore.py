@@ -492,3 +492,81 @@ class RestoreWorkflowTests(unittest.TestCase):
         self.assertIsNone(runtime.restore.session)
         self.assertFalse(runtime.restore.lock.locked())
         self.assertIn("再次停止", server.logger.warning_messages[0])
+
+
+class RestoreSkipSafetyTests(unittest.TestCase):
+    def test_pre_stop_stage_skips_safety_snapshot_and_backup_slot(self):
+        runtime = create_runtime()
+        server = FakePluginServer()
+        session = build_restore_session(skip_safety_snapshot=True)
+        runtime.restore.lock.acquire()
+        runtime.restore.session = session
+
+        with mock.patch.object(
+            restore_workflow, "create_restore_safety_snapshot"
+        ) as create_snapshot, mock.patch.object(
+            restore_workflow, "request_minecraft_stop_for_restore"
+        ) as request_stop:
+            restore_workflow.run_restore_pre_stop_stage(
+                runtime, server, mock.Mock(), mock.Mock()
+            )
+
+        create_snapshot.assert_not_called()
+        request_stop.assert_called_once()
+        self.assertEqual(request_stop.call_args.args[3], "")
+        self.assertFalse(runtime.backup.lock.locked())
+        self.assertIn("跳过恢复前保护快照", server.logger.warning_messages[0])
+
+    def test_pre_stop_stage_still_creates_safety_snapshot_by_default(self):
+        runtime = create_runtime()
+        server = FakePluginServer()
+        session = build_restore_session()
+        runtime.restore.lock.acquire()
+        runtime.restore.session = session
+
+        with mock.patch.object(
+            restore_workflow,
+            "create_restore_safety_snapshot",
+            return_value="abcdef12",
+        ) as create_snapshot, mock.patch.object(
+            restore_workflow, "request_minecraft_stop_for_restore"
+        ) as request_stop, mock.patch.object(
+            restore_workflow, "release_restore_pre_backup_slot"
+        ) as release_slot:
+            restore_workflow.run_restore_pre_stop_stage(
+                runtime, server, mock.Mock(), mock.Mock()
+            )
+
+        create_snapshot.assert_called_once()
+        self.assertEqual(request_stop.call_args.args[3], "abcdef12")
+        release_slot.assert_called_once()
+
+    def test_rollback_skipped_when_safety_snapshot_skipped(self):
+        runtime = create_runtime()
+        server = FakePluginServer()
+        session = build_restore_session(skip_safety_snapshot=True)
+
+        with mock.patch.object(
+            restore_workflow, "rollback_to_safety_snapshot"
+        ) as rollback:
+            rollback_error = restore_workflow.try_rollback_after_restore_failure(
+                runtime, server, {}, session, "boom"
+            )
+
+        rollback.assert_not_called()
+        self.assertEqual(rollback_error, "")
+        self.assertIn("不执行回滚", server.logger.warning_messages[0])
+
+    def test_startup_message_reports_missing_rollback_when_safety_skipped(self):
+        runtime = create_runtime()
+        server = FakePluginServer()
+        session = build_restore_session(skip_safety_snapshot=True)
+        session.error = "boom"
+        session.phase = restore_workflow.RestorePhase.STARTING
+        runtime.restore.lock.acquire()
+        runtime.restore.session = session
+
+        restore_workflow.handle_restore_server_startup(runtime, server)
+
+        self.assertIsNone(runtime.restore.session)
+        self.assertIn("未创建保护快照", server.logger.warning_messages[0])

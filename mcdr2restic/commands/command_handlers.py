@@ -83,7 +83,15 @@ class CommandHandlers:
         return (
             Literal("restore")
             .then(Literal("list").runs(self.restore.command_restore_list))
-            .then(Literal("apply").runs(self.restore.command_restore_apply))
+            .then(
+                Literal("apply")
+                .runs(self.restore.command_restore_apply)
+                .then(
+                    Literal("--skip-safety").runs(
+                        self.restore.command_restore_apply_skip_safety
+                    )
+                )
+            )
             .then(
                 Text("snapshot")
                 .runs(self.restore.command_restore_add_full)
