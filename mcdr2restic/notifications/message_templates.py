@@ -67,10 +67,11 @@ def build_message_values(
     data = SafeFormatDict()
     data.update(
         {
+            # message_prefix 显式置空（YAML null）时 get 返回 None，需回退默认前缀（P3-5）
             "prefix": str(
                 prefix
                 if prefix is not None
-                else onebot_cfg.get("message_prefix", "[MCDR2Restic]")
+                else onebot_cfg.get("message_prefix") or "[MCDR2Restic]"
             ),
             "plugin": "MCDR2Restic",
             "template_key": template_key,

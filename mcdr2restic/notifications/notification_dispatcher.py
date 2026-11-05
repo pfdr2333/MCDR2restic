@@ -96,7 +96,7 @@ class NotificationDispatcher:
             values,
             cfg,
             MessageRenderOptions(
-                prefix=str(channel_cfg.get("message_prefix", "[MCDR2Restic]")),
+                prefix=str(channel_cfg.get("message_prefix") or "[MCDR2Restic]"),
                 logger=self._logger(),
                 language=language,
             ),

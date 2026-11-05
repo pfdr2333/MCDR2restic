@@ -107,6 +107,16 @@ class NotificationTests(unittest.TestCase):
             render_message("custom", {"name": "ok"}, cfg), "[T] ok {missing}"
         )
 
+    def test_message_prefix_null_falls_back_to_default(self):
+        # message_prefix 显式置空（YAML null）时不得渲染成字面 "None"（P3-5）
+        cfg = {
+            "onebot": {"message_prefix": None},
+            "messages": {"custom": "{prefix} {name}"},
+        }
+        self.assertEqual(
+            render_message("custom", {"name": "ok"}, cfg), "[MCDR2Restic] ok"
+        )
+
     def test_discord_mentions_are_explicit_and_ordered(self):
         cfg = {
             "mention_everyone": True,
