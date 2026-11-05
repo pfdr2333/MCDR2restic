@@ -86,7 +86,9 @@ class NotificationDispatcher:
         try:
             self.app_runtime.service.onebot.send_private_msg(int(qid), text)
         except Exception as exc:
-            self._warn_server("warn.notify.onebot_send_failed", qid=qid, error=exc)
+            self._warn_server(
+                "warn.notify.onebot_send_failed", user_id=qid, error=exc
+            )
 
     def _notify_discord(
         self,

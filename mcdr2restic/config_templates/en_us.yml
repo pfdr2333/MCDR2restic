@@ -234,8 +234,8 @@ texts:
     Detail: {detail}
     End time: {end_time}
   "template.message.backup_not_ready": |-
-    {prefix} Backup problem
-    The schedule fired, but the Minecraft server has not reached startup state. This backup was skipped.
+    {prefix} Backup skipped
+    {message}
   "template.message.backup_skip_no_player": |-
     {prefix} Backup skipped
     No players joined or left during this period, and nobody was online at the final check

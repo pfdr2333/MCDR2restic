@@ -232,8 +232,8 @@ texts:
     詳情: {detail}
     結束時間: {end_time}
   "template.message.backup_not_ready": |-
-    {prefix} 備份異常
-    到達備份時間，但 Minecraft 服務端尚未確認正常執行，跳過本次備份
+    {prefix} 備份已跳過
+    {message}
   "template.message.backup_skip_no_player": |-
     {prefix} 跳過備份
     本週期沒有玩家加入或退出，觸發檢查時也沒有玩家線上
