@@ -205,6 +205,7 @@
   "mcdr2restic.error.config.migration_write_failed": "Failed to write migrated configuration {path}: {error}",
   "mcdr2restic.log.plugin.loaded": "MCDR2Restic loaded",
   "mcdr2restic.warn.plugin.previous_shutdown_failed": "An exception occurred while shutting down the previous plugin instance:\n{error}",
+  "mcdr2restic.warn.plugin.unload_wait_restore": "A restore workflow is running; plugin unload will wait until it finishes",
   "mcdr2restic.reason.plugin_reload": "plugin reload",
   "mcdr2restic.reason.plugin_unload": "plugin unload",
   "mcdr2restic.log.plugin.server_started": "Minecraft startup completed; backups are now allowed",

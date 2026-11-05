@@ -207,6 +207,7 @@
   "mcdr2restic.error.config.migration_write_failed": "寫入遷移後的配置檔案失敗 {path}: {error}",
   "mcdr2restic.log.plugin.loaded": "MCDR2Restic 已載入",
   "mcdr2restic.warn.plugin.previous_shutdown_failed": "清理上一外掛例項時發生異常:\n{error}",
+  "mcdr2restic.warn.plugin.unload_wait_restore": "恢復流程進行中，外掛解除安裝將等待其完成後再繼續",
   "mcdr2restic.reason.plugin_reload": "外掛過載",
   "mcdr2restic.reason.plugin_unload": "外掛解除安裝",
   "mcdr2restic.log.plugin.server_started": "檢測到 Minecraft 服務端啟動完成，允許備份",

@@ -207,6 +207,7 @@
   "mcdr2restic.error.config.migration_write_failed": "写入迁移后的配置文件失败 {path}: {error}",
   "mcdr2restic.log.plugin.loaded": "MCDR2Restic 已加载",
   "mcdr2restic.warn.plugin.previous_shutdown_failed": "清理上一插件实例时发生异常:\n{error}",
+  "mcdr2restic.warn.plugin.unload_wait_restore": "恢复流程进行中，插件卸载将等待其完成后再继续",
   "mcdr2restic.reason.plugin_reload": "插件重载",
   "mcdr2restic.reason.plugin_unload": "插件卸载",
   "mcdr2restic.log.plugin.server_started": "检测到 Minecraft 服务端启动完成，允许备份",

@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+import time
 import traceback
 from typing import Any, Dict, Optional
 
@@ -12,6 +13,7 @@ from mcdr2restic.commands.command_context import CommandContext
 from mcdr2restic.commands.command_handlers import CommandHandlers
 from mcdr2restic.core.runtime import PluginRuntime, create_runtime
 from mcdr2restic.restore.restore_workflow import (
+    get_restore_session,
     handle_restore_server_startup,
     handle_restore_server_stop,
     is_restore_running,
@@ -99,7 +101,31 @@ class PluginEntrypoint:
         self.runtime.service.server_ready = server_is_running(self.runtime, server)
 
     def on_unload(self, server: PluginServerInterface):
+        self.wait_for_active_restore(server)
         self.shutdown_runtime(server, server_tr(server, "reason.plugin_unload"))
+
+    def wait_for_active_restore(self, server: PluginServerInterface):
+        """重载窗口内恢复流程未完成时推迟卸载。
+
+        MCDR 卸载是同步的：等待期间本实例仍是注册插件，on_server_stop 仍派发到
+        本实例，恢复流程可自然走完，新实例加载后不会出现会话悬空或双实例并发
+        restore。MCDR 整体停止不经此等待（stopping 已置位时直接放行）。
+        """
+        if self.runtime.service.stopping.is_set():
+            return
+        if not self.restore_active():
+            return
+        server.logger.warning(server_tr(server, "warn.plugin.unload_wait_restore"))
+        while self.restore_active():
+            if self.runtime.service.stopping.is_set():
+                return
+            time.sleep(0.5)
+
+    def restore_active(self) -> bool:
+        return (
+            get_restore_session(self.runtime) is not None
+            or is_restore_running(self.runtime)
+        )
 
     def on_server_startup(self, server: PluginServerInterface):
         self.runtime.service.server_ready = True
