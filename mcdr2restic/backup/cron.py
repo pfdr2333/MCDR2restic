@@ -150,9 +150,16 @@ def parse_range(base: str, minimum: int, maximum: int) -> Tuple[int, int, bool]:
         return minimum, maximum, True
     if "-" in base:
         start_text, end_text = base.split("-", 1)
-        return int(start_text), int(end_text), False
-    value = int(base)
+        return parse_cron_int(start_text), parse_cron_int(end_text), False
+    value = parse_cron_int(base)
     return value, value, False
+
+
+def parse_cron_int(text: str) -> int:
+    try:
+        return int(text)
+    except ValueError as exc:
+        raise CronError("error.cron.value_not_integer", value=text) from exc
 
 
 def iter_field_values(

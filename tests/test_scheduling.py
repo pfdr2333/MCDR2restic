@@ -23,6 +23,8 @@ except ImportError:
         unittest,
     )
 
+from mcdr2restic.backup.cron import parse_field_part
+
 
 class SchedulingTests(unittest.TestCase):
     def test_parse_daily_time(self):
@@ -31,6 +33,26 @@ class SchedulingTests(unittest.TestCase):
     def test_parse_daily_time_fails_fast(self):
         with self.assertRaises(ValueError):
             parse_daily_time("25:00")
+
+    def test_parse_daily_time_non_integer_is_localized(self):
+        with self.assertRaises(Exception) as error:
+            parse_daily_time("aa:30")
+
+        self.assertEqual(
+            error.exception.i18n_key, "error.schedule.daily_time_not_integer"
+        )
+        self.assertIn("aa:30", tr_error("en_us", error.exception))
+
+    def test_interval_seconds_non_integer_is_localized(self):
+        with self.assertRaises(Exception) as error:
+            compute_maintenance_wait_seconds(
+                {"maintenance_schedule": {"interval_seconds": "abc"}}
+            )
+
+        self.assertEqual(
+            error.exception.i18n_key, "error.schedule.interval_not_integer"
+        )
+        self.assertIn("abc", tr_error("en_us", error.exception))
 
     def test_maintenance_schedule_empty_cron_uses_default(self):
         wait_seconds, due_text = compute_maintenance_wait_seconds(
@@ -89,6 +111,13 @@ class CronTests(unittest.TestCase):
             cron.next_after(datetime(2024, 1, 6, 23, 59, 59)),
             datetime(2024, 1, 7, 0, 0, 0),
         )
+
+    def test_cron_value_not_integer_is_localized(self):
+        with self.assertRaises(Exception) as error:
+            parse_field_part("abc", 0, 59)
+
+        self.assertEqual(error.exception.i18n_key, "error.cron.value_not_integer")
+        self.assertIn("abc", tr_error("en_us", error.exception))
 
     def test_cron_error_carries_i18n_key(self):
         with self.assertRaises(Exception) as error:

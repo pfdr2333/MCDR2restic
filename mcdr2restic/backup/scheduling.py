@@ -31,8 +31,13 @@ def parse_daily_time(text: str) -> Tuple[int, int]:
     parts = str(text or "").strip().split(":")
     if len(parts) != 2:
         raise LocalizedValueError("error.schedule.daily_time_format")
-    hour = int(parts[0])
-    minute = int(parts[1])
+    try:
+        hour = int(parts[0])
+        minute = int(parts[1])
+    except ValueError as exc:
+        raise LocalizedValueError(
+            "error.schedule.daily_time_not_integer", value=text
+        ) from exc
     if hour < 0 or hour > 23 or minute < 0 or minute > 59:
         raise LocalizedValueError("error.schedule.daily_time_range", value=text)
     return hour, minute
@@ -81,7 +86,13 @@ def compute_schedule_wait_seconds(
 ) -> Optional[Tuple[float, str]]:
     if not isinstance(schedule, dict):
         schedule = {}
-    interval_seconds = int(schedule.get("interval_seconds", 0))
+    raw_interval = schedule.get("interval_seconds", 0)
+    try:
+        interval_seconds = int(raw_interval)
+    except (TypeError, ValueError) as exc:
+        raise LocalizedValueError(
+            "error.schedule.interval_not_integer", value=raw_interval
+        ) from exc
     if interval_seconds > 0:
         return float(interval_seconds), tr(
             language, "status.schedule.fixed_interval", seconds=interval_seconds
