@@ -3,6 +3,8 @@ try:
 except ImportError:
     from support import FakePluginServer, mock, unittest
 
+import time
+
 from mcdr2restic.backup.backup_scheduler import BackupScheduler, SchedulerDependencies
 from mcdr2restic.core.models import BackupTrigger
 
@@ -122,3 +124,22 @@ class BackupSchedulerTests(unittest.TestCase):
         scheduler._handle_no_player_activity_skip({"notification": True})
 
         notifier.assert_not_called()
+
+    def test_wait_honors_wakeup_set_before_wait_starts(self):
+        # 两次 _wait 之间到达的 wakeup 不得被随后的 clear 抹掉
+        scheduler, _, _, _ = self.make_scheduler()
+
+        scheduler.wakeup()
+
+        started = time.monotonic()
+        self.assertTrue(scheduler._wait(30.0))
+        self.assertLess(time.monotonic() - started, 1.0)
+        self.assertFalse(scheduler.wakeup_event.is_set())
+
+    def test_wait_returns_false_when_deadline_reached_without_wakeup(self):
+        scheduler, _, _, _ = self.make_scheduler()
+
+        started = time.monotonic()
+        self.assertFalse(scheduler._wait(0.05))
+        self.assertGreaterEqual(time.monotonic() - started, 0.05)
+        self.assertFalse(scheduler.wakeup_event.is_set())

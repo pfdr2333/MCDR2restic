@@ -57,6 +57,7 @@ class BackupScheduler:
         self.admin_notifier = dependencies.admin_notifier
         self.stop_event = threading.Event()
         self.wakeup_event = threading.Event()
+        self._wakeup_state_lock = threading.Lock()
         self.thread = threading.Thread(
             target=self._normal_main, name="MCDR2Restic-Scheduler-Normal", daemon=True
         )
@@ -85,7 +86,8 @@ class BackupScheduler:
             self.maintenance_thread.join(timeout=5)
 
     def wakeup(self):
-        self.wakeup_event.set()
+        with self._wakeup_state_lock:
+            self.wakeup_event.set()
 
     def _normal_main(self):
         self._run_schedule_loop(
@@ -243,13 +245,19 @@ class BackupScheduler:
 
     def _wait(self, seconds: float) -> bool:
         end = time.monotonic() + max(0.0, seconds)
-        self.wakeup_event.clear()
+        # 先取走等待开始前已到达的唤醒再清事件，否则两次 _wait 之间的 wakeup 会被抹掉
+        with self._wakeup_state_lock:
+            pending_wakeup = self.wakeup_event.is_set()
+            self.wakeup_event.clear()
         while not self.stop_event.is_set():
+            if pending_wakeup:
+                return True
             remaining = end - time.monotonic()
             if remaining <= 0:
                 return False
             if self.wakeup_event.wait(timeout=min(30.0, remaining)):
-                self.wakeup_event.clear()
+                with self._wakeup_state_lock:
+                    self.wakeup_event.clear()
                 return True
         return True
 
