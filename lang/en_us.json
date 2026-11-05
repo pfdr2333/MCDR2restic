@@ -135,7 +135,7 @@
   "mcdr2restic.error.backup.cancel_requested_with_failure": "Stop requested{detail}",
   "mcdr2restic.debug.minecraft.server_probe_failed": "MCDR probe {label} failed; using compatibility fallback: {error}",
   "mcdr2restic.debug.player.joined_recorded": "Recorded player join and kept this waiting period eligible for backup: {player}",
-  "mcdr2restic.debug.player.left_recorded": "Recorded player leave; estimated online count: {player} -> {current_online}",
+  "mcdr2restic.debug.player.left_recorded": "Recorded player leave: {player}, estimated online count: {current_online}",
   "mcdr2restic.debug.player.sample_unsupported": "Online player sampling is unavailable because this MCDR build does not support rcon_query",
   "mcdr2restic.debug.player.sample_failed": "Online player sampling failed ({reason}): {error}",
   "mcdr2restic.debug.player.sample_missing_result": "Online player sampling returned no result ({reason}); make sure MCDR RCON is enabled",

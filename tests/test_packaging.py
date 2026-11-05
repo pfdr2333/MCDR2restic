@@ -67,6 +67,8 @@ class PackagingTests(unittest.TestCase):
         self.assertIn("lang/zh_tw.json", names)
         self.assertIn("mcdr2restic/config_templates/zh_cn.yml", names)
         self.assertIn("mcdr2restic/config_templates/zh_tw.yml", names)
+        # restic 下载信任锚点（P0-3），缺失会直接破坏校验链路
+        self.assertIn("mcdr2restic/defaults/restic_release.yml", names)
         self.assertIn("mcdreforged.plugin.json", names)
         self.assertIn("requirements.txt", names)
         self.assertIn("README.md", names)
