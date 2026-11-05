@@ -114,14 +114,15 @@ def migrate_config_file_or_raise(
     if updated == original:
         return
 
-    source_version = read_config_file_version(original, path)
+    source_data = validate_config_text(original, path)
+    source_version = config_version_from_mapping(source_data, path)
+    warn_deprecated_config_keys(server, source_data)
     validate_config_text(updated, path)
     atomically_replace_config_with_backup(path, updated, source_version)
     server.logger.info(server_tr(server, "info.config.migrated", name=CONFIG_NAME))
 
 
-def read_config_file_version(text: str, path: str) -> int:
-    data = validate_config_text(text, path)
+def config_version_from_mapping(data: Dict[str, Any], path: str) -> int:
     version = data.get("config_version")
     if version is None:
         return 0
@@ -131,6 +132,32 @@ def read_config_file_version(text: str, path: str) -> int:
         raise ConfigError(
             "error.config.version_invalid", path=path, value=version
         ) from exc
+
+
+DEPRECATED_SCHEDULE_KEYS = (
+    "require_player_joined_in_wait_period",
+    "online_check_interval_seconds",
+)
+
+
+def collect_deprecated_config_keys(cfg: Dict[str, Any]) -> List[str]:
+    schedule = cfg.get("schedule")
+    if not isinstance(schedule, dict):
+        return []
+    return [
+        "schedule.{}".format(key)
+        for key in DEPRECATED_SCHEDULE_KEYS
+        if key in schedule
+    ]
+
+
+def warn_deprecated_config_keys(
+    server: PluginServerInterface, cfg: Dict[str, Any]
+):
+    for key in collect_deprecated_config_keys(cfg):
+        server.logger.warning(
+            server_tr(server, "warn.config.deprecated_key_removed", config_key=key)
+        )
 
 
 def validate_config_text(text: str, path: str) -> Dict[str, Any]:
@@ -362,15 +389,11 @@ def remove_deprecated_schedule_lines(lines: List[str]) -> List[str]:
 def deprecated_schedule_line_indexes(
     lines: List[str], start: int, end: int
 ) -> Set[int]:
-    deprecated_keys = {
-        "require_player_joined_in_wait_period",
-        "online_check_interval_seconds",
-    }
     remove_indexes: Set[int] = set()
     key_pattern = re.compile(r"^\s+([A-Za-z_][A-Za-z0-9_-]*)\s*:")
     for index in range(start + 1, end):
         match = key_pattern.match(lines[index])
-        if not match or match.group(1) not in deprecated_keys:
+        if not match or match.group(1) not in DEPRECATED_SCHEDULE_KEYS:
             continue
         remove_indexes.add(index)
         remove_indexes.update(deprecated_schedule_comment_indexes(lines, start, index))

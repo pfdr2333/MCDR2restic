@@ -196,6 +196,37 @@ class ConfigurationTests(unittest.TestCase):
             ["enabled: false\n"],
         )
 
+    def test_config_migration_warns_about_deprecated_keys(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            server = FakeServer(temp_dir)
+            server.logger = FakeLogger()
+            config_path = os.path.join(temp_dir, "config.yml")
+            with open(config_path, "w", encoding="utf8") as file:
+                file.write(
+                    "schedule:\n"
+                    "  require_player_joined_in_wait_period: true\n"
+                    "  online_check_interval_seconds: 60\n"
+                    "config_version: 8\n"
+                )
+
+            migrate_config_file(server, "en_us", build_default_config("en_us"))
+
+        warnings = "\n".join(server.logger.warning_messages)
+        self.assertIn("schedule.require_player_joined_in_wait_period", warnings)
+        self.assertIn("schedule.online_check_interval_seconds", warnings)
+
+    def test_config_migration_stays_silent_on_clean_config(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            server = FakeServer(temp_dir)
+            server.logger = FakeLogger()
+            config_path = os.path.join(temp_dir, "config.yml")
+            with open(config_path, "w", encoding="utf8") as file:
+                file.write("enabled: true\nschedule:\n  interval_seconds: 0\n")
+
+            migrate_config_file(server, "en_us", build_default_config("en_us"))
+
+        self.assertEqual(server.logger.warning_messages, [])
+
     def test_config_migration_creates_versioned_backup_and_replaces_atomically(self):
         original = "enabled: true\nconfig_version: 8\n"
         with tempfile.TemporaryDirectory() as temp_dir:

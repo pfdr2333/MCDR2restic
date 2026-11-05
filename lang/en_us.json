@@ -190,6 +190,7 @@
   "mcdr2restic.info.config.default_created": "Generated default config file {path}",
   "mcdr2restic.warn.config.migration_failed": "Failed to migrate config file {name}: {error}",
   "mcdr2restic.warn.config.auto_repaired_block_scalar_indentation": "Detected broken multiline text indentation in the config file and repaired it automatically: {path}",
+  "mcdr2restic.warn.config.deprecated_key_removed": "Deprecated config key {config_key} was found; it has been migrated or removed automatically",
   "mcdr2restic.info.config.migrated": "Migrated and completed config file {name}",
   "mcdr2restic.error.config.read_failed": "Failed to read configuration file {path}: {error}",
   "mcdr2restic.error.config.yaml_invalid": "Configuration file contains invalid YAML: {path}",
