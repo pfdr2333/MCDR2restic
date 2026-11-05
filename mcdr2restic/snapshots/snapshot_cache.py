@@ -44,7 +44,7 @@ from mcdr2restic.snapshots.snapshot_db import (
 )
 from mcdr2restic.snapshots.snapshot_importer import import_restic_snapshots_to_sql
 from mcdr2restic.config.state_store import merge_defaults
-from mcdr2restic.core.utils import now_text, sha256_text
+from mcdr2restic.core.utils import get_config_section, now_text, sha256_text
 
 
 def build_snapshot_cache_key(restic_cfg: Dict[str, Any]) -> str:
@@ -252,9 +252,7 @@ def resolve_snapshot_invalidation_context(
         if config_snapshot_provider is not None
         else build_default_config()
     )
-    resolved_restic_cfg = (
-        cfg.get("restic", {}) if isinstance(cfg.get("restic"), dict) else {}
-    )
+    resolved_restic_cfg = get_config_section(cfg, "restic")
     return (
         target,
         resolved_restic_cfg,

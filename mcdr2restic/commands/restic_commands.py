@@ -9,6 +9,7 @@ from mcdr2restic.commands.command_context import CommandContext
 from mcdr2restic.config.state_store import get_config_snapshot
 from mcdr2restic.core.i18n import reply_tr, server_tr, source_error_text
 from mcdr2restic.core.models import BackupProblem
+from mcdr2restic.core.utils import get_config_section
 from mcdr2restic.restore.restore_workflow import is_restore_running
 from mcdr2restic.restic.restic_constants import (
     RESTIC_COMMAND_INIT,
@@ -54,7 +55,7 @@ class ResticCommands:
             return
         server = self.context.server_from_source(source)
         cfg = get_config_snapshot(self.context.app_runtime)
-        restic_cfg = cfg.get("restic", {}) if isinstance(cfg.get("restic"), dict) else {}
+        restic_cfg = get_config_section(cfg, "restic")
         if self.reject_manual_restic_command(source):
             return
 

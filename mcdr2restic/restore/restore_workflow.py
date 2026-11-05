@@ -403,7 +403,7 @@ def handle_restore_pre_stop_failure(
 
 
 def build_pre_restore_backup_command(cfg: Dict[str, Any]) -> List[str]:
-    restic_cfg = cfg.get("restic", {}) if isinstance(cfg.get("restic"), dict) else {}
+    restic_cfg = get_config_section(cfg, "restic")
     args = normalize_command_args(restic_cfg.get(RESTIC_CFG_BACKUP_COMMAND, []))
     tag = str(
         get_config_section(cfg, "restore").get(
