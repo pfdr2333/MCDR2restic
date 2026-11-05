@@ -198,6 +198,7 @@
   "warn.webhook.url_empty": "Custom webhook notifications are enabled, but url is empty",
   "warn.webhook.status_error": "Custom webhook returned an unexpected status code: {status}",
   "warn.webhook.send_failed": "Custom webhook send failed: {error}",
+  "warn.webhook.template_render_failed": "Failed to render custom webhook template; sent as-is: {error}",
   "warn.notify.webhook_not_initialized": "Custom webhook is not initialized, cannot send notification: {template_key}",
   "warn.notify.webhook_send_failed": "Failed to send custom webhook notification: {error}",
   "warn.notify.backup_notify_failed": "Failed to send backup notification: {error}",

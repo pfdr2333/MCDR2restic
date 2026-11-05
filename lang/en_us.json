@@ -198,6 +198,7 @@
   "mcdr2restic.warn.webhook.url_empty": "Custom webhook notifications are enabled, but url is empty",
   "mcdr2restic.warn.webhook.status_error": "Custom webhook returned an unexpected status code: {status}",
   "mcdr2restic.warn.webhook.send_failed": "Custom webhook send failed: {error}",
+  "mcdr2restic.warn.webhook.template_render_failed": "Failed to render custom webhook template; sent as-is: {error}",
   "mcdr2restic.warn.notify.webhook_not_initialized": "Custom webhook is not initialized, cannot send notification: {template_key}",
   "mcdr2restic.warn.notify.webhook_send_failed": "Failed to send custom webhook notification: {error}",
   "mcdr2restic.warn.notify.backup_notify_failed": "Failed to send backup notification: {error}",

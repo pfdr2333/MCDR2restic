@@ -196,6 +196,7 @@
   "mcdr2restic.warn.webhook.url_empty": "自定義 Webhook 已啟用，但 url 為空",
   "mcdr2restic.warn.webhook.status_error": "自定義 Webhook 返回異常狀態碼：{status}",
   "mcdr2restic.warn.webhook.send_failed": "自定義 Webhook 傳送失敗：{error}",
+  "mcdr2restic.warn.webhook.template_render_failed": "自定義 Webhook 模板渲染失敗，已按原樣傳送：{error}",
   "mcdr2restic.warn.notify.webhook_not_initialized": "自定義 Webhook 未初始化，無法傳送通知：{template_key}",
   "mcdr2restic.warn.notify.webhook_send_failed": "傳送自定義 Webhook 通知失敗：{error}",
   "mcdr2restic.warn.notify.backup_notify_failed": "傳送備份通知失敗：{error}",

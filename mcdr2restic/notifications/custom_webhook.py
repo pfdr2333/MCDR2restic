@@ -4,9 +4,10 @@ from __future__ import annotations
 import copy
 import json
 import urllib.request
-from typing import Any, Dict, Optional
+from typing import Any, Callable, Dict, Optional
 
 from mcdr2restic.defaults.default_constants import PLUGIN_ID
+from mcdr2restic.core.i18n import server_tr
 from mcdr2restic.notifications.message_templates import SafeFormatDict
 from mcdr2restic.notifications.webhook_base import WebhookClientBase
 
@@ -36,7 +37,16 @@ class CustomWebhookClient(WebhookClientBase):
         data["plugin"] = "MCDR2Restic"
         for key, value in (values or {}).items():
             data[str(key)] = "" if value is None else str(value)
-        return render_payload_leaves(self._payload_template(), data)
+        return render_payload_leaves(
+            self._payload_template(), data, self._log_template_render_error
+        )
+
+    def _log_template_render_error(self, template: str, exc: Exception):
+        self.server.logger.warning(
+            server_tr(
+                self.server, "warn.webhook.template_render_failed", error=exc
+            )
+        )
 
     def _payload_template(self) -> Dict[str, Any]:
         payload = self.cfg.get("payload")
@@ -45,22 +55,27 @@ class CustomWebhookClient(WebhookClientBase):
         return payload
 
 
-def render_payload_leaves(payload: Any, data: Dict[str, Any]) -> Any:
+def render_payload_leaves(
+    payload: Any, data: Dict[str, Any], on_render_error: Optional[Callable[[str, Exception], None]] = None
+) -> Any:
     if not isinstance(data, SafeFormatDict):
         safe_data = SafeFormatDict()
         safe_data.update(data)
         data = safe_data
     if isinstance(payload, dict):
         return {
-            key: render_payload_leaves(value, data)
+            key: render_payload_leaves(value, data, on_render_error)
             for key, value in payload.items()
         }
     if isinstance(payload, list):
-        return [render_payload_leaves(value, data) for value in payload]
+        return [render_payload_leaves(value, data, on_render_error) for value in payload]
     if isinstance(payload, str):
         try:
             return payload.format_map(data)
-        except Exception:
+        except Exception as exc:
+            # 回退为原样发送，但必须留下告警避免静默错误
+            if on_render_error is not None:
+                on_render_error(payload, exc)
             return payload
     return payload
 

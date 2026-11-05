@@ -196,6 +196,7 @@
   "warn.webhook.url_empty": "自定义 Webhook 已启用，但 url 为空",
   "warn.webhook.status_error": "自定义 Webhook 返回异常状态码：{status}",
   "warn.webhook.send_failed": "自定义 Webhook 发送失败：{error}",
+  "warn.webhook.template_render_failed": "自定义 Webhook 模板渲染失败，已按原样发送：{error}",
   "warn.notify.webhook_not_initialized": "自定义 Webhook 未初始化，无法发送通知：{template_key}",
   "warn.notify.webhook_send_failed": "发送自定义 Webhook 通知失败：{error}",
   "warn.notify.backup_notify_failed": "发送备份通知失败：{error}",

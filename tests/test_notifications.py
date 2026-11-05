@@ -169,6 +169,18 @@ class CustomWebhookTests(unittest.TestCase):
 
         self.assertEqual(payload["content"], "ok {label} {missing}")
 
+    def test_webhook_payload_invalid_template_warns_and_falls_back(self):
+        server = FakePluginServer()
+        broken_template = {"content": "{message"}
+        client = CustomWebhookClient(server, {"enabled": True, "payload": broken_template})
+
+        payload = client._build_payload("正文", {})
+
+        self.assertEqual(payload, {"content": "{message"})
+        self.assertTrue(
+            any("模板渲染失败" in message for message in server.logger.warning_messages)
+        )
+
     def test_webhook_payload_values_override_defaults(self):
         client = CustomWebhookClient(
             FakePluginServer(),
