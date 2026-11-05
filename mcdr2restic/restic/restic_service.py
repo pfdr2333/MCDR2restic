@@ -164,7 +164,7 @@ def wait_for_save_all_flush(
             sleep_or_cancel(app_runtime, timeout)
         return
 
-    watcher = app_runtime.save_flush_watcher
+    watcher = app_runtime.service.save_flush_watcher
     watcher.arm(patterns)
     started = time.monotonic()
     try:

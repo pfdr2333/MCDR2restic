@@ -5,15 +5,18 @@ except ImportError:
 
 
 class RuntimeTests(unittest.TestCase):
-    def test_grouped_runtime_state_keeps_compatibility_properties(self):
-        runtime = create_runtime()
-        server = object()
-        runtime.config = {"enabled": True}
-        runtime.backup_cancel.set()
+    def test_created_runtimes_have_independent_state(self):
+        first = create_runtime()
+        second = create_runtime()
 
-        runtime.prepare_for_load(server, server_ready=True)
+        first.service.stopping.set()
+        first.backup.cancel.set()
+        first.config_state.config = {"enabled": True}
 
-        self.assertIs(runtime.config_state.config, runtime.config)
-        self.assertIs(runtime.service.server, server)
-        self.assertTrue(runtime.service.server_ready)
-        self.assertFalse(runtime.backup.cancel.is_set())
+        self.assertFalse(second.service.stopping.is_set())
+        self.assertFalse(second.backup.cancel.is_set())
+        self.assertEqual(second.config_state.config, {})
+
+
+if __name__ == "__main__":
+    unittest.main()

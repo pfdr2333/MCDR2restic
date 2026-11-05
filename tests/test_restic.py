@@ -570,7 +570,7 @@ class WaitForSaveAllFlushTests(unittest.TestCase):
         def fake_execute(_runtime, _server, command, label):
             executed.append(command)
             if label == "save-all":
-                runtime.save_flush_watcher.notify_output(
+                runtime.service.save_flush_watcher.notify_output(
                     SimpleNamespace(is_user=False, content="Saved the game")
                 )
 
@@ -583,7 +583,7 @@ class WaitForSaveAllFlushTests(unittest.TestCase):
 
         self.assertEqual(executed, ["save-all flush"])
         self.assertIn("已完成", server.logger.info_messages[0])
-        self.assertFalse(runtime.save_flush_watcher.is_armed())
+        self.assertFalse(runtime.service.save_flush_watcher.is_armed())
 
     def test_flush_wait_timeout_falls_back_with_warning(self):
         runtime = create_runtime()
@@ -611,7 +611,7 @@ class WaitForSaveAllFlushTests(unittest.TestCase):
             )
 
         self.assertEqual(slept, [10])
-        self.assertFalse(runtime.save_flush_watcher.is_armed())
+        self.assertFalse(runtime.service.save_flush_watcher.is_armed())
 
     def test_zero_timeout_still_sends_save_all_without_waiting(self):
         runtime = create_runtime()
@@ -628,7 +628,7 @@ class WaitForSaveAllFlushTests(unittest.TestCase):
             )
 
         self.assertEqual(executed, ["save-all flush"])
-        self.assertFalse(runtime.save_flush_watcher.is_armed())
+        self.assertFalse(runtime.service.save_flush_watcher.is_armed())
 
     def test_empty_patterns_uses_fixed_sleep(self):
         runtime = create_runtime()

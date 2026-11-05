@@ -58,7 +58,7 @@ class MaintenanceRunner:
 
     def _acquire_slot_waiting(self) -> bool:
         while True:
-            if self.app_runtime.plugin_stopping.is_set():
+            if self.app_runtime.service.stopping.is_set():
                 return False
             if self.app_runtime.backup.lock.acquire(timeout=1.0):
                 return True

@@ -97,7 +97,7 @@ class BackupRunner:
             )
             return False
         if not self._acquire_backup_slot(wait_for_slot):
-            if self.app_runtime.plugin_stopping.is_set():
+            if self.app_runtime.service.stopping.is_set():
                 server.logger.info(
                     tr(language, "info.backup.skipped_on_plugin_stop", label=label_text)
                 )
@@ -115,7 +115,7 @@ class BackupRunner:
 
         while True:
             # 卸载时立即放弃等待，避免僵尸线程在关闭过程中拿到锁执行备份
-            if self.app_runtime.plugin_stopping.is_set():
+            if self.app_runtime.service.stopping.is_set():
                 return False
             if self.app_runtime.backup.lock.acquire(blocking=False):
                 return True
