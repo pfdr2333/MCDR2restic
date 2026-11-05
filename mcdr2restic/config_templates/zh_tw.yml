@@ -227,10 +227,10 @@ config_template: |-
 texts:
   "template.message.backup_failure": |-
     {prefix} 備份異常
-    觸發: {label}
-    狀態: {status}
-    詳情: {detail}
-    結束時間: {end_time}
+    觸發：{label}
+    狀態：{status}
+    詳情：{detail}
+    結束時間：{end_time}
   "template.message.backup_not_ready": |-
     {prefix} 備份已跳過
     {message}
@@ -239,13 +239,13 @@ texts:
     本週期沒有玩家加入或退出，觸發檢查時也沒有玩家線上
   "template.message.backup_start": |-
     {prefix} 備份開始
-    觸發: {label}
-    時間: {start_time}
+    觸發：{label}
+    時間：{start_time}
   "template.message.backup_success": |-
     {prefix} 備份成功
-    觸發: {label}
-    耗時: {duration_seconds} 秒
-    結束時間: {end_time}
+    觸發：{label}
+    耗時：{duration_seconds} 秒
+    結束時間：{end_time}
   "template.message.schedule_config_error": |-
     {prefix} 排程配置錯誤
     計算下次備份時間失敗：{error}
