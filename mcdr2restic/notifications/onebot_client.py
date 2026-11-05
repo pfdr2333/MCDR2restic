@@ -94,7 +94,11 @@ class OneBotClient:
         except Exception as exc:
             if not self.stop_event.is_set():
                 self.server.logger.warning(
-                    server_tr(self.server, "warn.onebot.connection_error", error=exc)
+                    server_tr(
+                        self.server,
+                        "warn.onebot.connection_error",
+                        error=self._safe_url(str(exc)),
+                    )
                 )
         finally:
             self.connected_event.clear()
@@ -114,7 +118,11 @@ class OneBotClient:
     def _handle_connection_error(self, _ws, error):
         if not self.stop_event.is_set():
             self.server.logger.warning(
-                server_tr(self.server, "warn.onebot.connection_error", error=error)
+                server_tr(
+                    self.server,
+                    "warn.onebot.connection_error",
+                    error=self._safe_url(str(error)),
+                )
             )
 
     def _handle_connection_closed(self, _ws, _close_status_code, _close_msg):

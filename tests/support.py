@@ -140,6 +140,7 @@ from mcdr2restic.notifications.discord_webhook import (
     truncate_discord_content,
 )
 from mcdr2restic.notifications.notification_dispatcher import NotificationDispatcher
+from mcdr2restic.notifications.onebot_client import OneBotClient
 from mcdr2restic.restic.restic_download import (
     ResticDownloadTarget,
     expected_restic_sha256,
@@ -294,6 +295,7 @@ __all__ = [
     "FakePluginServer",
     "FakeServer",
     "NotificationDispatcher",
+    "OneBotClient",
     "Path",
     "PermissiveCommandSource",
     "ProbeServer",
