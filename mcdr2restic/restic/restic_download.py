@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import bz2
+import contextlib
 import hashlib
 import json
 import os
@@ -410,15 +411,36 @@ def sha256_file(path: str) -> str:
 def install_restic_archive(
     archive_path: str, asset_keyword: str, output_name: str, target_path: str
 ):
-    if asset_keyword.endswith(".zip"):
-        install_restic_zip(archive_path, output_name, target_path)
-    elif asset_keyword.endswith(".bz2"):
-        install_restic_bz2(archive_path, target_path)
-    else:
-        raise BackupProblem(
-            i18n_key="error.restic.archive_unsupported", asset_keyword=asset_keyword
-        )
-    make_executable_on_posix(target_path)
+    # 先解压到同目录临时文件再原子替换：中断不会在目标路径留下残缺二进制，
+    # 存在性检查也不必区分"完整安装"与"半截文件"
+    temp_path = build_install_temp_path(target_path)
+    try:
+        if asset_keyword.endswith(".zip"):
+            install_restic_zip(archive_path, output_name, temp_path)
+        elif asset_keyword.endswith(".bz2"):
+            install_restic_bz2(archive_path, temp_path)
+        else:
+            raise BackupProblem(
+                i18n_key="error.restic.archive_unsupported",
+                asset_keyword=asset_keyword,
+            )
+        make_executable_on_posix(temp_path)
+        os.replace(temp_path, target_path)
+    except BaseException:
+        remove_quietly(temp_path)
+        raise
+
+
+def build_install_temp_path(target_path: str) -> str:
+    directory = os.path.dirname(target_path) or "."
+    return os.path.join(
+        directory, "{}.tmp-{}".format(os.path.basename(target_path), os.getpid())
+    )
+
+
+def remove_quietly(path: str):
+    with contextlib.suppress(OSError):
+        os.remove(path)
 
 
 def install_restic_zip(archive_path: str, output_name: str, target_path: str):

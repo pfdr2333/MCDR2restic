@@ -1,5 +1,7 @@
+import bz2
 import hashlib
 import os
+import zipfile
 
 try:
     from .support import (
@@ -11,6 +13,7 @@ try:
         extract_sha256_from_sums,
         fetch_restic_release_metadata,
         get_default_restic_version,
+        install_restic_archive,
         install_restic_from_urls,
         mock,
         tempfile,
@@ -27,6 +30,7 @@ except ImportError:
         extract_sha256_from_sums,
         fetch_restic_release_metadata,
         get_default_restic_version,
+        install_restic_archive,
         install_restic_from_urls,
         mock,
         tempfile,
@@ -188,6 +192,73 @@ class DefaultVersionTests(unittest.TestCase):
             build_default_config()["restic"]["download_version"],
             get_default_restic_version(),
         )
+
+
+class ResticInstallArchiveTests(unittest.TestCase):
+    def build_zip_archive(self, temp_dir: str) -> str:
+        archive_path = os.path.join(temp_dir, "restic-download.zip")
+        with zipfile.ZipFile(archive_path, "w") as archive:
+            archive.writestr("restic.exe", FAKE_BINARY)
+        return archive_path
+
+    def build_bz2_archive(self, temp_dir: str) -> str:
+        archive_path = os.path.join(temp_dir, "restic-download.bz2")
+        with open(archive_path, "wb") as file:
+            file.write(bz2.compress(FAKE_BINARY))
+        return archive_path
+
+    def test_install_zip_writes_target_content(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            archive_path = self.build_zip_archive(temp_dir)
+            target_path = os.path.join(temp_dir, "restic.exe")
+
+            install_restic_archive(archive_path, ".zip", "restic.exe", target_path)
+
+            with open(target_path, "rb") as file:
+                self.assertEqual(file.read(), FAKE_BINARY)
+            self.assertEqual(
+                [name for name in os.listdir(temp_dir) if ".tmp-" in name], []
+            )
+
+    def test_install_bz2_writes_target_content(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            archive_path = self.build_bz2_archive(temp_dir)
+            target_path = os.path.join(temp_dir, "restic")
+
+            install_restic_archive(archive_path, ".bz2", "restic", target_path)
+
+            with open(target_path, "rb") as file:
+                self.assertEqual(file.read(), FAKE_BINARY)
+
+    def test_install_interruption_keeps_target_absent_and_cleans_temp(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            archive_path = self.build_zip_archive(temp_dir)
+            target_path = os.path.join(temp_dir, "restic.exe")
+
+            with mock.patch(
+                DOWNLOAD_MODULE + ".os.replace", side_effect=OSError("interrupted")
+            ), self.assertRaises(OSError):
+                install_restic_archive(archive_path, ".zip", "restic.exe", target_path)
+
+            self.assertFalse(os.path.exists(target_path))
+            self.assertEqual(
+                [name for name in os.listdir(temp_dir) if ".tmp-" in name], []
+            )
+
+    def test_install_failure_keeps_existing_binary_intact(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            target_path = os.path.join(temp_dir, "restic")
+            with open(target_path, "wb") as file:
+                file.write(b"old-binary")
+            archive_path = self.build_bz2_archive(temp_dir)
+
+            with mock.patch(
+                DOWNLOAD_MODULE + ".os.replace", side_effect=OSError("interrupted")
+            ), self.assertRaises(OSError):
+                install_restic_archive(archive_path, ".bz2", "restic", target_path)
+
+            with open(target_path, "rb") as file:
+                self.assertEqual(file.read(), b"old-binary")
 
 
 def write_fake_archive(temp_dir: str) -> str:

@@ -149,6 +149,7 @@ from mcdr2restic.notifications.onebot_client import OneBotClient
 from mcdr2restic.restic.restic_download import (
     ResticDownloadTarget,
     expected_restic_sha256,
+    install_restic_archive,
     extract_sha256_from_sums,
     fetch_restic_release_metadata,
     install_restic_from_urls,
@@ -350,6 +351,7 @@ __all__ = [
     "i18n",
     "import_restic_snapshots_to_sql",
     "insert_snapshot_row",
+    "install_restic_archive",
     "install_restic_from_urls",
     "io",
     "is_default_restic_executable_path",
