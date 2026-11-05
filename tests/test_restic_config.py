@@ -1,3 +1,5 @@
+import os
+
 try:
     from .support import BackupProblem, mock, unittest
 except ImportError:
@@ -129,3 +131,45 @@ class ResticConfigTests(unittest.TestCase):
         }
 
         restic_config.assert_backup_sources_do_not_contain_repository(cfg)
+
+
+@unittest.skipUnless(os.name == "nt", "verbatim/UNC forms are Windows-specific")
+class CanonicalPathComparisonTests(unittest.TestCase):
+    def test_verbatim_drive_prefix_is_stripped(self):
+        self.assertEqual(
+            restic_config.canonical_path_for_comparison(r"\\?\C:\dir"),
+            r"C:\dir",
+        )
+
+    def test_verbatim_prefix_dotdot_collapses_after_strip(self):
+        # ".." 在 verbatim 内不会被 realpath/normpath 折叠，剥除后必须补折叠
+        self.assertEqual(
+            restic_config.canonical_path_for_comparison(r"\\?\C:\dir\other\.."),
+            r"C:\dir",
+        )
+
+    def test_verbatim_unc_prefix_becomes_plain_unc(self):
+        self.assertEqual(
+            restic_config.canonical_path_for_comparison(r"\\?\UNC\server\share\dir"),
+            r"\\server\share\dir",
+        )
+
+    def test_local_admin_share_unc_maps_to_drive(self):
+        self.assertEqual(
+            restic_config.canonical_path_for_comparison(r"\\LOCALHOST\c$\Users\me"),
+            r"C:\Users\me",
+        )
+
+    def test_remote_admin_share_unc_is_not_mapped(self):
+        self.assertEqual(
+            restic_config.canonical_path_for_comparison(r"\\fileserver\c$\dir"),
+            r"\\fileserver\c$\dir",
+        )
+
+    def test_path_contains_or_equals_accepts_equivalent_forms(self):
+        contains = restic_config.path_contains_or_equals
+
+        self.assertTrue(contains(r"C:\base", r"\\?\C:\base\sub"))
+        self.assertTrue(contains(r"\\localhost\c$\base", r"C:\base\sub"))
+        self.assertTrue(contains(r"C:\base", r"C:\base"))
+        self.assertFalse(contains(r"C:\base", r"C:\basement"))

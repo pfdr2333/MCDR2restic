@@ -4,6 +4,7 @@ from __future__ import annotations
 import os
 import re
 import shlex
+import socket
 from typing import Any, Dict, List, Sequence, Set
 
 from mcdr2restic.core.models import BackupProblem
@@ -199,9 +200,61 @@ def normalize_filesystem_path(path: str) -> str:
     return os.path.realpath(os.path.abspath(os.path.normpath(path)))
 
 
+# Windows 的 verbatim 前缀与 UNC 等价写法不会被 realpath/normpath 归一，
+# commonpath 会因盘符形态不同而失配，恢复目标校验可借此绕过（P0-5）。
+# 剥除仅用于比较，落盘与执行仍使用 normalize_filesystem_path 的结果。
+WINDOWS_VERBATIM_UNC_PREFIX = "\\\\?\\UNC\\"
+WINDOWS_VERBATIM_PREFIX = "\\\\?\\"
+# 管理共享 \\主机\X$\… 与盘符 X:\… 指向同一位置，可确定性互映射；
+# 普通共享无法离线判定，不做映射。
+LOCAL_UNC_ADMIN_SHARE_PATTERN = re.compile(
+    r"^(?:\\\\(?P<host>[^\\/]+)\\)(?P<share>[A-Za-z])\$(?P<rest>\\.*)?$"
+)
+_local_unc_host_names: Set[str] | None = None
+
+
+def _local_unc_host_candidates() -> Set[str]:
+    global _local_unc_host_names
+    if _local_unc_host_names is None:
+        candidates = {"localhost", "127.0.0.1", "::1"}
+        try:
+            hostname = socket.gethostname().rstrip(".").lower()
+        except Exception:
+            hostname = ""
+        if hostname:
+            candidates.add(hostname)
+            candidates.add(hostname.split(".")[0])
+        _local_unc_host_names = candidates
+    return _local_unc_host_names
+
+
+def map_local_admin_share_unc_to_drive(text: str) -> str:
+    match = LOCAL_UNC_ADMIN_SHARE_PATTERN.match(text)
+    if not match:
+        return text
+    host = match.group("host").rstrip(".").lower()
+    if host not in _local_unc_host_candidates():
+        return text
+    rest = match.group("rest") or "\\"
+    return f"{match.group('share').upper()}:{rest}"
+
+
+def canonical_path_for_comparison(path: str) -> str:
+    if os.name != "nt":
+        return str(path or "")
+    text = str(path or "")
+    if text.upper().startswith(WINDOWS_VERBATIM_UNC_PREFIX):
+        text = "\\\\" + text[len(WINDOWS_VERBATIM_UNC_PREFIX):]
+    elif text.upper().startswith(WINDOWS_VERBATIM_PREFIX):
+        text = text[len(WINDOWS_VERBATIM_PREFIX):]
+    text = map_local_admin_share_unc_to_drive(text)
+    # verbatim 内的 ".." 不会被 normpath/realpath 折叠，剥除后需补一次
+    return os.path.normpath(text)
+
+
 def path_contains_or_equals(parent: str, child: str) -> bool:
-    parent_path = normalize_filesystem_path(parent)
-    child_path = normalize_filesystem_path(child)
+    parent_path = canonical_path_for_comparison(normalize_filesystem_path(parent))
+    child_path = canonical_path_for_comparison(normalize_filesystem_path(child))
     try:
         common = os.path.commonpath([parent_path, child_path])
     except ValueError:

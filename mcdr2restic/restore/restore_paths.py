@@ -7,6 +7,7 @@ from typing import Any, Dict, List
 
 from mcdr2restic.core.models import BackupProblem
 from mcdr2restic.restic.restic_config import (
+    canonical_path_for_comparison,
     get_backup_source_paths,
     get_effective_restic_repository,
     is_local_restic_repository,
@@ -51,8 +52,9 @@ def resolve_restore_relative_path(raw: str, restic_cfg: Dict[str, Any]) -> str:
     workdir = get_restic_working_directory(restic_cfg)
     expanded = os.path.expanduser(os.path.expandvars(raw))
     if os.path.isabs(expanded) and path_contains_or_equals(workdir, expanded):
-        absolute = normalize_filesystem_path(expanded)
-        return os.path.relpath(absolute, workdir)
+        # 规范化保留 \\?\ 等前缀形态，relpath 两侧必须同为常规形态
+        absolute = canonical_path_for_comparison(normalize_filesystem_path(expanded))
+        return os.path.relpath(absolute, canonical_path_for_comparison(workdir))
     if is_strict_filesystem_absolute_path(expanded):
         raise BackupProblem(i18n_key="error.restore.path_outside_workdir", path=raw)
     return raw
@@ -111,9 +113,11 @@ def normalize_restore_target_directory(
 def assert_restore_target_allowed(
     target: str, restic_cfg: Dict[str, Any], data_dir: str = ""
 ):
-    target_path = normalize_filesystem_path(target)
+    target_path = canonical_path_for_comparison(normalize_filesystem_path(target))
     workdir = get_restic_working_directory(restic_cfg)
-    if target_path == normalize_filesystem_path(workdir):
+    if os.path.normcase(target_path) == os.path.normcase(
+        canonical_path_for_comparison(workdir)
+    ):
         raise BackupProblem(
             i18n_key="error.restore.target_is_working_directory", path=target
         )

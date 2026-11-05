@@ -157,6 +157,82 @@ class RestoreTargetDirectoryTests(unittest.TestCase):
             error.exception.i18n_key, "error.restore.target_contains_protected"
         )
 
+    @unittest.skipUnless(os.name == "nt", "verbatim prefix only exists on Windows")
+    def test_normalize_target_rejects_verbatim_working_directory(self):
+        restic_cfg = {"working_directory": str(REPO_ROOT)}
+
+        with self.assertRaises(BackupProblem) as error:
+            restore_paths.normalize_restore_target_directory(
+                "\\\\?\\" + str(REPO_ROOT), restic_cfg
+            )
+
+        self.assertEqual(
+            error.exception.i18n_key, "error.restore.target_is_working_directory"
+        )
+
+    @unittest.skipUnless(os.name == "nt", "verbatim prefix only exists on Windows")
+    def test_normalize_target_rejects_verbatim_parent_of_working_directory(self):
+        restic_cfg = {"working_directory": str(REPO_ROOT)}
+
+        with self.assertRaises(BackupProblem) as error:
+            restore_paths.normalize_restore_target_directory(
+                "\\\\?\\" + str(REPO_ROOT.parent), restic_cfg
+            )
+
+        self.assertEqual(
+            error.exception.i18n_key, "error.restore.target_contains_protected"
+        )
+
+    @unittest.skipUnless(os.name == "nt", "verbatim prefix only exists on Windows")
+    def test_normalize_target_rejects_verbatim_drive_root(self):
+        restic_cfg = {"working_directory": str(REPO_ROOT)}
+
+        with self.assertRaises(BackupProblem) as error:
+            restore_paths.normalize_restore_target_directory(
+                "\\\\?\\C:\\", restic_cfg
+            )
+
+        self.assertEqual(
+            error.exception.i18n_key, "error.restore.target_contains_protected"
+        )
+
+    @unittest.skipUnless(os.name == "nt", "admin share UNC is Windows-specific")
+    def test_normalize_target_rejects_admin_share_unc_of_working_directory(self):
+        restic_cfg = {"working_directory": str(REPO_ROOT)}
+
+        with self.assertRaises(BackupProblem) as error:
+            restore_paths.normalize_restore_target_directory(
+                "\\\\localhost\\c$\\" + str(REPO_ROOT)[3:], restic_cfg
+            )
+
+        self.assertEqual(
+            error.exception.i18n_key, "error.restore.target_is_working_directory"
+        )
+
+    @unittest.skipUnless(os.name == "nt", "verbatim UNC prefix is Windows-specific")
+    def test_normalize_target_rejects_verbatim_unc_of_working_directory(self):
+        restic_cfg = {"working_directory": str(REPO_ROOT)}
+
+        with self.assertRaises(BackupProblem) as error:
+            restore_paths.normalize_restore_target_directory(
+                "\\\\?\\UNC\\localhost\\c$\\" + str(REPO_ROOT)[3:], restic_cfg
+            )
+
+        self.assertEqual(
+            error.exception.i18n_key, "error.restore.target_is_working_directory"
+        )
+
+    @unittest.skipUnless(os.name == "nt", "verbatim prefix only exists on Windows")
+    def test_normalize_target_accepts_verbatim_unrelated_directory(self):
+        restic_cfg = {"working_directory": str(REPO_ROOT)}
+
+        with tempfile.TemporaryDirectory() as target:
+            result = restore_paths.normalize_restore_target_directory(
+                "\\\\?\\" + target, restic_cfg
+            )
+
+            self.assertEqual(result, "\\\\?\\" + target)
+
     def test_normalize_target_rejects_target_containing_data_dir(self):
         restic_cfg = {"working_directory": str(REPO_ROOT.joinpath("restic"))}
         data_dir = REPO_ROOT.joinpath("config", "mcdr2restic")
