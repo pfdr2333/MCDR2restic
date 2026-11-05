@@ -202,6 +202,32 @@ class BackupRunnerTests(unittest.TestCase):
             BackupRunStatus.CANCELED.value,
         )
 
+    def test_entry_does_not_erase_cancel_arrived_before_thread_start(self):
+        # cancel_running_backup 先 set 再 join，线程入口 clear 不得抹掉窗口内的取消（P1-7）
+        runtime, runner = self.make_runner()
+        server = FakePluginServer()
+        runtime.backup.lock.acquire()
+        runtime.backup.cancel.set()
+
+        def fake_body(*args, **kwargs):
+            # 入口不得清除取消标记，备份体首个检查点应立即放弃执行
+            self.assertTrue(runtime.backup.cancel.is_set())
+            raise BackupCanceled(i18n_key="error.backup.cancel_requested")
+
+        with tempfile.TemporaryDirectory() as data_dir:
+            server.get_data_folder = lambda: data_dir
+            with mock.patch(
+                "mcdr2restic.backup.backup_runner.run_backup_body",
+                side_effect=fake_body,
+            ):
+                runner._run_with_acquired_lock(server, "manual")
+
+        self.assertFalse(runtime.backup.lock.locked())
+        self.assertEqual(
+            runtime.config_state.config["runtime"]["last_backup_status"],
+            BackupRunStatus.CANCELED.value,
+        )
+
     def test_run_with_acquired_lock_survives_notify_crash(self):
         runtime, runner = self.make_runner()
         runner.admin_notifier = mock.Mock(side_effect=RuntimeError("onebot broken"))

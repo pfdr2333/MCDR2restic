@@ -5,6 +5,7 @@ except ImportError:
 
 import threading
 
+from mcdr2restic.core.models import BackupCanceled
 from mcdr2restic.restic.maintenance_runner import MaintenanceRunner
 
 
@@ -98,6 +99,26 @@ class MaintenanceRunnerTests(unittest.TestCase):
         finally:
             runtime.backup.lock.release()
         self.assertTrue(any("stopping" in m for m in server.logger.info_messages))
+
+    def test_entry_does_not_erase_cancel_arrived_before_thread_start(self):
+        # 线程入口 clear 不得抹掉拿锁与线程启动之间到达的取消请求（P1-7）
+        runtime, runner = self.make_runner()
+        runtime.config_state.config = {"language": "en_us"}
+        server = FakePluginServer(language="en_us")
+        runtime.backup.lock.acquire()
+        runtime.backup.cancel.set()
+
+        def fake_body(*args, **kwargs):
+            self.assertTrue(runtime.backup.cancel.is_set())
+            raise BackupCanceled(i18n_key="error.backup.cancel_requested")
+
+        with mock.patch(
+            "mcdr2restic.restic.maintenance_runner.run_maintenance_body",
+            side_effect=fake_body,
+        ):
+            self.assertFalse(runner._run_with_acquired_lock(server))
+
+        self.assertFalse(runtime.backup.lock.locked())
 
     def test_label_set_before_config_snapshot(self):
         # 等待方轮询 give_up_when 依赖 label，取快照窗口内必须已标记 maintenance（P1-6）

@@ -128,7 +128,10 @@ class BackupRunner:
         # 调度触发的备份经 run_locked 进入，这里统一登记执行线程供卸载时取消
         self.app_runtime.backup.thread = threading.current_thread()
         self.app_runtime.backup.label = label
-        self.app_runtime.backup.cancel.clear()
+        # 取消请求可能在拿锁与线程启动之间到达，clear 前必须检查，
+        # 否则 "!!restic stop" 会表现为已请求取消但备份照跑（P1-7）
+        if not self.app_runtime.backup.cancel.is_set():
+            self.app_runtime.backup.cancel.clear()
         started = time.monotonic()
         start_time = now_text()
         cfg = get_config_snapshot(self.app_runtime)

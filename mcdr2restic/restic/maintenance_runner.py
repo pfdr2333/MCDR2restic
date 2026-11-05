@@ -68,7 +68,9 @@ class MaintenanceRunner:
         try:
             cfg = get_config_snapshot(self.app_runtime)
             language = config_language(cfg, get_mcdr_language(server))
-            self.app_runtime.backup.cancel.clear()
+            # 取消请求可能在拿锁与线程启动之间到达，clear 前必须检查（P1-7）
+            if not self.app_runtime.backup.cancel.is_set():
+                self.app_runtime.backup.cancel.clear()
             server.logger.info(tr(language, "info.maintenance.started"))
             run_maintenance_body(
                 self.app_runtime, server, cfg, self.snapshot_invalidator
