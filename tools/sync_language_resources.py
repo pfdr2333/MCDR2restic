@@ -199,12 +199,12 @@ def language_config_block(language: str) -> str:
     if language.startswith("zh"):
         return (
             "# 插件语言。默认会写入生成配置时 MCDR 传入的语言。\n"
-            "# 可填写已有语言文件名；未匹配时回退 en_us。\n"
+            "# 可填写已有语言文件名，如 zh_cn、zh_tw、en_us；未匹配时回退 en_us。\n"
             "language: __MCDR2RESTIC_LANGUAGE__\n\n"
         )
     return (
         "# Plugin language. The generated default uses the language passed by MCDR.\n"
-        "# Use an existing language file name; unknown values fall back to en_us.\n"
+        "# Use an existing language file name, such as zh_cn, zh_tw, or en_us; unknown values fall back to en_us.\n"
         "language: __MCDR2RESTIC_LANGUAGE__\n\n"
     )
 
