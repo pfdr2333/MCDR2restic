@@ -9,6 +9,7 @@ from mcdreforged.api.all import PluginServerInterface
 from mcdr2restic.core.i18n import server_tr
 from mcdr2restic.core.language import get_mcdr_language
 from mcdr2restic.core.models import BackupCanceled, BackupProblem
+from mcdr2restic.core.utils import get_config_section
 from mcdr2restic.restic.restic_termination import (
     TerminateResult,
     terminate_process,
@@ -44,7 +45,8 @@ def try_force_save_on(
     if server is None:
         return
     cfg = config_snapshot_provider(app_runtime)
-    command = cfg.get("minecraft", {}).get("save_on_command", "save-on")
+    minecraft_cfg = get_config_section(cfg, "minecraft")
+    command = minecraft_cfg.get("save_on_command", "save-on")
     if not command or not server_is_running(app_runtime, server):
         return
     try:
@@ -52,7 +54,7 @@ def try_force_save_on(
             server_tr(server, "log.minecraft.restore_save_on", reason=reason)
         )
         server.execute(command)
-        wait = float(cfg.get("minecraft", {}).get("wait_after_save_on_seconds", 1))
+        wait = float(minecraft_cfg.get("wait_after_save_on_seconds", 1))
         if wait > 0:
             time.sleep(min(wait, 5.0))
     except Exception as exc:

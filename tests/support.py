@@ -122,7 +122,11 @@ from mcdr2restic.defaults.default_config import build_default_config
 from mcdr2restic.defaults.default_config_templates import get_default_config_template
 from mcdr2restic.defaults.message_defaults import get_default_message_template
 from mcdr2restic.defaults.restic_release_defaults import get_default_restic_version
-from mcdr2restic.minecraft.minecraft_service import server_is_running, try_call_bool
+from mcdr2restic.minecraft.minecraft_service import (
+    server_is_running,
+    try_call_bool,
+    try_force_save_on,
+)
 from mcdr2restic.minecraft.player_activity import (
     parse_online_list_output,
     runtime_player_set,
@@ -418,6 +422,7 @@ __all__ = [
     "tr_error",
     "truncate_discord_content",
     "try_call_bool",
+    "try_force_save_on",
     "unittest",
     "verify_plugin",
     "verify_restic_download",

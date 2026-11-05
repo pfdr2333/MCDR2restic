@@ -175,7 +175,13 @@ class PluginEntrypoint:
         self.stop_update_checker()
         self.stop_scheduler()
         self.cancel_running_backup(reason)
-        try_force_save_on(self.runtime, server, reason, get_config_snapshot)
+        try:
+            try_force_save_on(self.runtime, server, reason, get_config_snapshot)
+        except Exception as exc:
+            # 卸载清理必须走完，save-on 恢复失败只降级为告警
+            server.logger.warning(
+                server_tr(server, "warn.minecraft.save_on_shutdown_failed", error=exc)
+            )
         self.stop_onebot()
         self.runtime.service.discord = None
         self.runtime.service.custom_webhook = None

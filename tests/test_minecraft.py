@@ -8,6 +8,7 @@ try:
         runtime_player_set,
         server_is_running,
         try_call_bool,
+        try_force_save_on,
         unittest,
     )
 except ImportError:
@@ -20,6 +21,7 @@ except ImportError:
         runtime_player_set,
         server_is_running,
         try_call_bool,
+        try_force_save_on,
         unittest,
     )
 
@@ -72,3 +74,10 @@ class MinecraftServiceTests(unittest.TestCase):
 
         self.assertTrue(server_is_running(runtime, server))
         self.assertEqual(server.startup_calls, 1)
+
+    def test_try_force_save_on_tolerates_scalar_minecraft_section(self):
+        runtime = create_runtime()
+        server = ProbeServer()
+
+        # minecraft 段写成标量时按空段处理，走默认命令并在服务端未运行时静默跳过
+        try_force_save_on(runtime, server, "test", lambda rt: {"minecraft": True})

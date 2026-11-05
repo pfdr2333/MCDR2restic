@@ -99,3 +99,21 @@ class PluginUnloadRestoreTests(unittest.TestCase):
         self.assertTrue(
             any("恢复流程进行中" in m for m in server.logger.warning_messages)
         )
+
+
+class ShutdownGuardTests(unittest.TestCase):
+    def test_shutdown_runtime_continues_after_save_on_failure(self):
+        runtime = create_runtime()
+        entrypoint = PluginEntrypoint(runtime, BootstrapResult(logs=[]))
+        server = FakePluginServer()
+
+        with mock.patch(
+            "mcdr2restic.core.plugin.try_force_save_on",
+            side_effect=RuntimeError("boom"),
+        ), mock.patch.object(entrypoint, "stop_onebot") as stop_onebot:
+            entrypoint.shutdown_runtime(server, "reason")
+
+        stop_onebot.assert_called_once()
+        self.assertTrue(
+            any("save-on" in m for m in server.logger.warning_messages)
+        )
