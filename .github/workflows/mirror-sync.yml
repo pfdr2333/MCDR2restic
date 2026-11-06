@@ -1,0 +1,50 @@
+name: Sync restic mirror
+
+on:
+  workflow_dispatch:
+    inputs:
+      versions:
+        description: "Restic versions to sync (space separated). Empty = pinned + latest."
+        required: false
+        type: string
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sync-restic-mirror
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.10"
+
+      # 凭证仅经环境变量流转；同步失败不影响插件发布（本 job 与 build 无依赖）
+      - name: Sync restic assets to self-hosted mirror
+        env:
+          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          CF_ZONE_ID: ${{ secrets.CF_ZONE_ID }}
+          CF_WAF_TOKEN: ${{ secrets.CF_WAF_TOKEN }}
+          CF_R2_ACCESS_KEY_ID: ${{ secrets.CF_R2_ACCESS_KEY_ID }}
+          CF_R2_SECRET_ACCESS_KEY: ${{ secrets.CF_R2_SECRET_ACCESS_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SYNC_VERSIONS: ${{ github.event.inputs.versions }}
+        run: |
+          if [ -n "$SYNC_VERSIONS" ]; then
+            # shellcheck disable=SC2086
+            python tools/sync_restic_mirror.py $SYNC_VERSIONS
+          else
+            python tools/sync_restic_mirror.py
+          fi
