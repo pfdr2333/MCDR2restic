@@ -259,6 +259,7 @@
   "mcdr2restic.warn.restore.stop_return_code": "Restore workflow observed a non-zero Minecraft stop return code: {return_code}",
   "mcdr2restic.error.restore.state_missing_after_stop": "Restore workflow state was lost before running restore",
   "mcdr2restic.info.restore.task_completed": "Restore task #{task_id} completed: {snapshot} -> {include_path}",
+  "mcdr2restic.info.restore.task_completed_full": "Restore task #{task_id} completed: {snapshot} (full snapshot)",
   "mcdr2restic.info.restore.tasks_completed_starting_server": "All restore tasks completed; starting Minecraft",
   "mcdr2restic.warn.restore.restore_stage_failed_rollback": "Restore failed; rolling back to the safety snapshot: {error}",
   "mcdr2restic.warn.restore.skip_safety_no_rollback": "No safety snapshot was created for this restore; rollback is not available: {error}",

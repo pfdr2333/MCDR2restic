@@ -263,6 +263,7 @@
   "warn.restore.stop_return_code": "恢复流程检测到 Minecraft 停止返回码非 0：{return_code}",
   "error.restore.state_missing_after_stop": "恢复流程状态丢失，无法执行 restore",
   "info.restore.task_completed": "恢复任务 #{task_id} 完成：{snapshot} -> {include_path}",
+  "info.restore.task_completed_full": "恢复任务 #{task_id} 完成：{snapshot}（整份快照）",
   "info.restore.task_completed_to": "恢复任务 #{task_id} 完成：{snapshot} -> {target}",
   "info.restore.tasks_completed_starting_server": "恢复任务全部完成，正在启动 Minecraft 服务端",
   "info.restore.direct_completed": "恢复任务全部完成",

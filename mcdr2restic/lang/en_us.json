@@ -259,6 +259,7 @@
   "warn.restore.stop_return_code": "Restore workflow observed a non-zero Minecraft stop return code: {return_code}",
   "error.restore.state_missing_after_stop": "Restore workflow state was lost before running restore",
   "info.restore.task_completed": "Restore task #{task_id} completed: {snapshot} -> {include_path}",
+  "info.restore.task_completed_full": "Restore task #{task_id} completed: {snapshot} (full snapshot)",
   "info.restore.tasks_completed_starting_server": "All restore tasks completed; starting Minecraft",
   "warn.restore.restore_stage_failed_rollback": "Restore failed; rolling back to the safety snapshot: {error}",
   "warn.restore.skip_safety_no_rollback": "No safety snapshot was created for this restore; rollback is not available: {error}",

@@ -94,9 +94,11 @@ def clear_restore_tasks(
 def format_restore_task(row: sqlite3.Row, translate_or_language: Any) -> str:
     item_type = str(row["item_type"])
     type_text = localized_restore_item_type(item_type, translate_or_language)
-    line = "  {}. [{}] {} -> {}".format(
-        row["id"], type_text, row["snapshot"], row["include_path"]
-    )
+    line = "  {}. [{}] {}".format(row["id"], type_text, row["snapshot"])
+    # 整份快照任务的 include_path 恒为 "/"，展示出来只是噪音，仅文件/文件夹任务显示
+    include_path = str(row["include_path"] or "")
+    if include_path and include_path != "/":
+        line += " -> {}".format(include_path)
     target_directory = str(row["target_directory"] or "")
     if target_directory:
         translate = normalize_translate(translate_or_language)

@@ -1,4 +1,5 @@
 import os
+import sqlite3
 try:
     from .support import (
         REPO_ROOT,
@@ -885,6 +886,66 @@ class PreRestoreBackupCommandTests(unittest.TestCase):
             )
 
             self.assertEqual(args, ["--tag", "mcdr2restic-pre-restore"])
+
+
+class RestoreTaskDisplayTests(unittest.TestCase):
+    @staticmethod
+    def make_task_row(include_path, item_type="full", target_directory=""):
+        conn = sqlite3.connect(":memory:")
+        conn.row_factory = sqlite3.Row
+        try:
+            return conn.execute(
+                "select ? as id, ? as snapshot, ? as include_path,"
+                " ? as item_type, ? as target_directory",
+                (1, "abc123", include_path, item_type, target_directory),
+            ).fetchone()
+        finally:
+            conn.close()
+
+    def test_format_restore_task_full_omits_root_include_path(self):
+        from mcdr2restic.restore.restore_task_repository import (
+            format_restore_task,
+        )
+
+        line = format_restore_task(self.make_task_row("/"), "zh_cn")
+
+        self.assertEqual(line, "  1. [整份快照] abc123")
+
+    def test_format_restore_task_file_shows_include_path(self):
+        from mcdr2restic.restore.restore_task_repository import (
+            format_restore_task,
+        )
+
+        line = format_restore_task(
+            self.make_task_row("world/level.dat", item_type="file"), "zh_cn"
+        )
+
+        self.assertEqual(line, "  1. [文件] abc123 -> world/level.dat")
+
+    def test_log_restore_task_completed_full_uses_dedicated_message(self):
+        server = FakePluginServer()
+
+        restore_workflow.log_restore_task_completed(
+            server, {"id": 3, "snapshot": "abc123", "include_path": "/"}
+        )
+
+        self.assertEqual(
+            server.logger.info_messages,
+            ["恢复任务 #3 完成：abc123（整份快照）"],
+        )
+
+    def test_log_restore_task_completed_file_keeps_include_path(self):
+        server = FakePluginServer()
+
+        restore_workflow.log_restore_task_completed(
+            server,
+            {"id": 4, "snapshot": "abc123", "include_path": "world/level.dat"},
+        )
+
+        self.assertEqual(
+            server.logger.info_messages,
+            ["恢复任务 #4 完成：abc123 -> world/level.dat"],
+        )
 
 
 if __name__ == "__main__":

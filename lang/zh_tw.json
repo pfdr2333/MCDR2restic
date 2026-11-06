@@ -263,6 +263,7 @@
   "mcdr2restic.warn.restore.stop_return_code": "恢復流程檢測到 Minecraft 停止返回碼非 0：{return_code}",
   "mcdr2restic.error.restore.state_missing_after_stop": "恢復流程狀態丟失，無法執行 restore",
   "mcdr2restic.info.restore.task_completed": "恢復任務 #{task_id} 完成：{snapshot} -> {include_path}",
+  "mcdr2restic.info.restore.task_completed_full": "恢復任務 #{task_id} 完成：{snapshot}（整份快照）",
   "mcdr2restic.info.restore.task_completed_to": "恢復任務 #{task_id} 完成：{snapshot} -> {target}",
   "mcdr2restic.info.restore.tasks_completed_starting_server": "恢復任務全部完成，正在啟動 Minecraft 服務端",
   "mcdr2restic.info.restore.direct_completed": "恢復任務全部完成",

@@ -563,21 +563,32 @@ def log_restore_task_completed(
     server: PluginServerInterface, task: Dict[str, Any]
 ):
     target_directory = str(task.get("target_directory") or "").strip()
-    key = (
-        "info.restore.task_completed_to"
-        if target_directory
-        else "info.restore.task_completed"
-    )
-    server.logger.info(
-        server_tr(
+    include_path = str(task.get("include_path") or "")
+    if target_directory:
+        message = server_tr(
             server,
-            key,
+            "info.restore.task_completed_to",
             task_id=task.get("id"),
             snapshot=task.get("snapshot"),
-            include_path=task.get("include_path"),
             target=target_directory,
         )
-    )
+    elif include_path and include_path != "/":
+        message = server_tr(
+            server,
+            "info.restore.task_completed",
+            task_id=task.get("id"),
+            snapshot=task.get("snapshot"),
+            include_path=include_path,
+        )
+    else:
+        # 整份快照任务 include_path 恒为 "/"，单列一个不带路径的文案
+        message = server_tr(
+            server,
+            "info.restore.task_completed_full",
+            task_id=task.get("id"),
+            snapshot=task.get("snapshot"),
+        )
+    server.logger.info(message)
 
 
 def try_rollback_after_restore_failure(
