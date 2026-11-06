@@ -226,6 +226,7 @@
   "reason.plugin_unload": "插件卸载",
   "log.plugin.server_started": "检测到 Minecraft 服务端启动完成，允许备份",
   "warn.plugin.server_stopped_cancel_backup": "Minecraft 服务端已停止，正在请求中止当前备份",
+  "reason.backup.manual_stop": "手动停止",
   "reason.server_stopped": "服务端停止",
   "reason.mcdr_stop": "MCDR 停止",
   "reason.backup_finally": "备份收尾",

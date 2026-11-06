@@ -5,7 +5,7 @@ from mcdreforged.api.all import CommandSource
 
 from mcdr2restic.commands.command_context import CommandContext
 from mcdr2restic.config.config_loader import load_config, save_enabled_unlocked
-from mcdr2restic.core.i18n import reply_tr
+from mcdr2restic.core.i18n import reply_tr, server_tr
 from mcdr2restic.core.models import BackupTrigger
 from mcdr2restic.minecraft.minecraft_service import (
     is_backup_running,
@@ -43,7 +43,9 @@ class BackupCommands:
     def reply_stop_result(self, source: CommandSource):
         server = self.context.server_from_source(source)
         if is_backup_running(self.context.app_runtime):
-            request_cancel_current_backup(self.context.app_runtime, "manual stop")
+            request_cancel_current_backup(
+                self.context.app_runtime, server_tr(server, "reason.backup.manual_stop")
+            )
             reply_tr(source, server, "info.backup.disabled_cancel_requested")
             return
         reply_tr(source, server, "info.backup.disabled")

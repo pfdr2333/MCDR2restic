@@ -228,6 +228,7 @@
   "mcdr2restic.reason.plugin_unload": "plugin unload",
   "mcdr2restic.log.plugin.server_started": "Minecraft startup completed; backups are now allowed",
   "mcdr2restic.warn.plugin.server_stopped_cancel_backup": "Minecraft stopped; requesting cancellation for the current backup",
+  "mcdr2restic.reason.backup.manual_stop": "manual stop",
   "mcdr2restic.reason.server_stopped": "server stopped",
   "mcdr2restic.reason.mcdr_stop": "MCDR stop",
   "mcdr2restic.reason.backup_finally": "backup finalization",

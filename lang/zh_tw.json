@@ -226,6 +226,7 @@
   "mcdr2restic.reason.plugin_unload": "外掛解除安裝",
   "mcdr2restic.log.plugin.server_started": "檢測到 Minecraft 服務端啟動完成，允許備份",
   "mcdr2restic.warn.plugin.server_stopped_cancel_backup": "Minecraft 服務端已停止，正在請求中止當前備份",
+  "mcdr2restic.reason.backup.manual_stop": "手動停止",
   "mcdr2restic.reason.server_stopped": "服務端停止",
   "mcdr2restic.reason.mcdr_stop": "MCDR 停止",
   "mcdr2restic.reason.backup_finally": "備份收尾",

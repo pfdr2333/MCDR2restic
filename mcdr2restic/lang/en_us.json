@@ -228,6 +228,7 @@
   "reason.plugin_unload": "plugin unload",
   "log.plugin.server_started": "Minecraft startup completed; backups are now allowed",
   "warn.plugin.server_stopped_cancel_backup": "Minecraft stopped; requesting cancellation for the current backup",
+  "reason.backup.manual_stop": "manual stop",
   "reason.server_stopped": "server stopped",
   "reason.mcdr_stop": "MCDR stop",
   "reason.backup_finally": "backup finalization",
