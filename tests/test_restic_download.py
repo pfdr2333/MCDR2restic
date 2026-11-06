@@ -267,11 +267,12 @@ class ResticDownloadVerifyTests(unittest.TestCase):
             with open(path, "wb") as file:
                 file.write(FAKE_BINARY)
 
-        with tempfile.TemporaryDirectory() as temp_dir, mock.patch(
+        with mock.patch(
             DOWNLOAD_MODULE + ".download_file", side_effect=fake_download
-        ), mock.patch(DOWNLOAD_MODULE + ".install_restic_archive", installed):
-            with self.assertRaises(BackupProblem) as error:
-                install_restic_from_urls(server, bad_target)
+        ), mock.patch(
+            DOWNLOAD_MODULE + ".install_restic_archive", installed
+        ), self.assertRaises(BackupProblem) as error:
+            install_restic_from_urls(server, bad_target)
 
         self.assertEqual(
             error.exception.i18n_key, "error.restic.auto_download_failed"

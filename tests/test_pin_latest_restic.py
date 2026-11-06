@@ -104,7 +104,10 @@ class RenderManifestTests(unittest.TestCase):
 
         self.assertIn("version: v0.19.2", rendered)
         self.assertIn("  - name: restic_0.19.2_linux_amd64.bz2", rendered)
-        self.assertIn("    url: https://github.com/restic/restic/releases/download/v0.19.2/restic_0.19.2_linux_amd64.bz2", rendered)
+        self.assertIn(
+            "    url: https://github.com/restic/restic/releases/download/v0.19.2/restic_0.19.2_linux_amd64.bz2",
+            rendered,
+        )
         self.assertIn("    sha256: " + LINUX_DIGEST, rendered)
         self.assertIn("    sha256: " + WINDOWS_DIGEST, rendered)
         self.assertTrue(rendered.endswith("\n"))

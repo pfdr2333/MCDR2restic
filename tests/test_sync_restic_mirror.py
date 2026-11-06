@@ -155,7 +155,7 @@ class SyncVersionUploadTests(unittest.TestCase):
                 "tools.sync_restic_mirror.mirror_already_synced", return_value=False
             ), mock.patch(
                 "tools.sync_restic_mirror.upload_object",
-                side_effect=lambda *args: uploaded.append(args[5]),
+                side_effect=lambda *args: uploaded.append(args[2]),
             ), mock.patch(
                 "tools.sync_restic_mirror.fetch_waf_rules",
                 return_value={"rules": [per_path_rule("/v0.19.1/SHA256SUMS")]},

@@ -185,15 +185,11 @@ def mirror_already_synced(version: str, github_sums_text: str) -> bool:
         return False
 
 
-def upload_object(
-    account_id: str,
-    bucket: str,
-    access_key: str,
-    secret_key: str,
-    version: str,
-    name: str,
-    local_path: Path,
-):
+def upload_object(credentials: dict, version: str, name: str, local_path: Path):
+    account_id = credentials["account_id"]
+    bucket = credentials["bucket"]
+    access_key = credentials["access_key"]
+    secret_key = credentials["secret_key"]
     content_type = CONTENT_TYPES.get(name) or CONTENT_TYPES.get(
         Path(name).suffix, "application/octet-stream"
     )
@@ -299,7 +295,9 @@ def append_waf_paths(rules: list, new_paths: list) -> tuple:
         for path in todo:
             expression, count = re.subn(
                 r"(http\.request\.uri\.path\s+in\s*\{)([^{}]*)(\})",
-                lambda match: '{}{} "{}" }}'.format(
+                # 默认参固化循环变量：subn 虽然当次迭代即调用，但显式绑定
+                # 才能通过 B023 的晚绑定检查
+                lambda match, path=path: '{}{} "{}" }}'.format(
                     match.group(1), match.group(2).rstrip(), path
                 ),
                 expression,
@@ -368,15 +366,7 @@ def sync_version(version: str, manifest_path: Path, credentials: dict):
             # SUMS 必须一并上传：它同时是 mirror_already_synced 的幂等标记，
             # 不上传则跳过检查永远 404，每次同步都会白做一遍下载+上传
             for name in names:
-                upload_object(
-                    credentials["account_id"],
-                    credentials["bucket"],
-                    credentials["access_key"],
-                    credentials["secret_key"],
-                    version,
-                    name,
-                    paths[name],
-                )
+                upload_object(credentials, version, name, paths[name])
 
         waf_paths = ["/{}/{}".format(version, name) for name in names]
         ruleset = fetch_waf_rules(credentials["zone_id"], credentials["waf_token"])
