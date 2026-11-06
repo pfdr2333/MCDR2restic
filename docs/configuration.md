@@ -235,13 +235,13 @@ restic:
   executable: "./config/mcdr2restic/restic"   # Windows 可改为 '.\config\mcdr2restic\restic.exe'
   working_directory: ""
   repository: "./restic-repo"
-  password: "请改成你自己的强密码"
+  password: "123456"   # 默认示例密码，正式使用请修改
   password_file: ""
   use_path_restic: false
   auto_init_local_repository: true
   environment: {}
   maintenance_commands:
-    - ["forget", "--keep-daily", "7", "--prune"]
+    - ["forget", "--keep-within", "1d", "--keep-daily", "7", "--prune"]
   backup_command:
     - "backup"
     - "./server/world"
@@ -362,12 +362,14 @@ restic:
 
 这一段就是维护时真正执行的 `restic` 命令列表。
 
-常见示例：
+常见示例（同样是默认值）：
 
 ```yaml
 maintenance_commands:
-  - ["forget", "--keep-daily", "7", "--prune"]
+  - ["forget", "--keep-within", "1d", "--keep-daily", "7", "--prune"]
 ```
+
+含义：24 小时内的备份全部保留，之后每天保留最近的一个，共保留 7 天。`--keep-within` 不能省——缺了它旧快照永远不会过期，`--prune` 也就腾不出空间。
 
 ### `backup_command`
 
@@ -427,6 +429,8 @@ backup_command:
 控制 `backup` / `restore --json` 进度在日志中的回显间隔。默认每 5 秒输出一条进度。
 
 ### 高级：成功码和错误判定
+
+下面只是节选示例，不是完整默认值：默认 `error_regexes` 共 4 条（还包含 `permission denied`、`no such file or directory` 等模式），`ignore_error_regexes` 共 2 条。完整清单以 `config.yml` 中的模板注释为准，照抄节选会削弱错误判定。
 
 ```yaml
 success_exit_codes:
@@ -496,7 +500,7 @@ custom_webhook:
 说明：
 
 - 插件会向 `url` 发送 JSON POST 请求，请求体就是 `payload` 的结构
-- `payload` 里字符串值支持模板变量：`{message}` 是完整通知正文，`{prefix}`、`{label}`、`{status}`、`{start_time}`、`{end_time}`、`{duration_seconds}`、`{detail}`、`{error}` 也可用；不认识的变量会原样保留
+- `payload` 里字符串值支持模板变量：`{message}` 是完整通知正文（开头已含 `message_prefix` 配置的前缀），`{label}`、`{status}`、`{start_time}`、`{end_time}`、`{duration_seconds}`、`{detail}`、`{error}` 也可用；不认识的变量会原样保留
 - `headers` 可以加认证头，例如 `Authorization: Bearer xxx`
 - 以飞书为例，把 `payload` 改成下面这样即可：
 
@@ -552,7 +556,9 @@ restore:
 - 这份保护快照会带上 `pre_restore_backup_tag`
 - 如果恢复阶段失败，插件会尝试回滚到这份保护快照
 
-恢复到指定目录的行为见[状态与恢复](restore.md)，它不依赖这里的停服超时配置。
+`start_timeout_seconds` 是恢复完成后等待服务器重启就绪的超时（秒），超时会把本次恢复判定为失败。
+
+恢复到指定目录（`to`）不经历停服与重启，行为见[状态与恢复](restore.md)。
 
 ## 10. 自定义通知文本
 
@@ -652,7 +658,7 @@ maintenance_schedule:
 
 restic:
   maintenance_commands:
-    - ["forget", "--keep-daily", "7", "--prune"]
+    - ["forget", "--keep-within", "1d", "--keep-daily", "7", "--prune"]
 ```
 
 ## 13. 配置迁移和备份文件
