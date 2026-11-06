@@ -1,8 +1,17 @@
-name: CI
+name: CI/CD
 
+# CD（发版 / 文档部署）与 CI 合并在同一工作流：跨 workflow 无法用 needs 表达
+# 依赖，workflow_run 链在 tag 推送场景下 head_sha / head_branch 判断都易踩坑。
+# release 与 docs 系列 job 通过 needs 挂在全部 CI job 之后——任一 CI job 失败，
+# CD 直接跳过，实现“CI 失败禁止 CD”。push 触发不筛分支，tag 推送同样先跑 CI。
 on:
   push:
   pull_request:
+  workflow_dispatch:
+
+# CI 各 job 不需要写权限；写权限按需下发到 release / docs-deploy 两个 job
+permissions:
+  contents: read
 
 jobs:
   lint:
@@ -148,3 +157,119 @@ jobs:
           name: coverage-${{ matrix.os }}-${{ matrix.python-version }}
           path: .coverage
           if-no-files-found: ignore
+
+  # ---------- CD：仅在 CI 全绿后执行；tag 推送自动发布，workflow_dispatch 手动触发 ----------
+
+  release:
+    name: Build and publish release
+    needs: [lint, typecheck, language-sync, test]
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.10"
+
+      - name: Pin latest restic release into the bundle manifest
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python tools/pin_latest_restic.py
+
+      - name: Build MCDR archive
+        run: python tools/pack_plugin.py --output-dir dist
+
+      - name: Validate archive contents
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from zipfile import ZipFile
+
+          root = Path(".")
+          metadata = json.loads((root / "mcdreforged.plugin.json").read_text(encoding="utf8"))
+          archives = sorted((root / "dist").glob("*.mcdr"))
+          assert len(archives) == 1, archives
+          with ZipFile(archives[0]) as archive:
+              names = set(archive.namelist())
+          required = {
+              "mcdreforged.plugin.json",
+              "requirements.txt",
+              f"{metadata['entrypoint']}/__init__.py",
+          }
+          for resource in metadata.get("resources", []):
+              required.add(resource + "/")
+              assert any(name.startswith(resource + "/") for name in names), resource
+          assert required - names <= {resource + "/" for resource in metadata.get("resources", [])}
+          assert all("\\" not in name for name in names)
+          assert not any("__pycache__" in name or name.endswith((".pyc", ".pyo")) for name in names)
+          print(f"Validated {archives[0].name} with {len(names)} entries")
+          PY
+
+      - name: Upload MCDR archive
+        uses: actions/upload-artifact@v5
+        with:
+          name: mcdr2restic-plugin
+          path: dist/*.mcdr
+          if-no-files-found: error
+
+      - name: Publish GitHub release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.mcdr
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+  docs-build:
+    name: Build docs site
+    needs: [lint, typecheck, language-sync, test]
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements-docs.txt
+
+      - name: Install docs dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --requirement requirements-docs.txt
+
+      - name: Build documentation
+        run: python -m mkdocs build --strict --site-dir site
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  docs-deploy:
+    name: Deploy to GitHub Pages
+    needs: docs-build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    concurrency:
+      group: github-pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4
