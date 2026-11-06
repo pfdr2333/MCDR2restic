@@ -753,3 +753,22 @@ class StateFileDurabilityTests(unittest.TestCase):
             runtime.config_state.state["runtime"]["last_player_joined"],
             "player @ 2026-01-01 00:00:00",
         )
+
+    def test_persist_player_state_saves_on_fresh_boot(self):
+        # 节流基准是负无穷哨兵：开机不足 30 秒（monotonic 值很小）时首次调用也必须立即落盘
+        runtime = create_runtime()
+        server = FakePluginServer()
+        runtime.config_state.config = {
+            "runtime": {"last_player_joined": "player @ 2026-01-01 00:00:00"}
+        }
+
+        with mock.patch(
+            "mcdr2restic.minecraft.player_activity_service.time.monotonic",
+            return_value=10.0,
+        ), mock.patch(
+            "mcdr2restic.minecraft.player_activity_service.save_config_unlocked"
+        ) as save:
+            persist_player_state(runtime, server)
+
+        self.assertEqual(save.call_count, 1)
+        self.assertEqual(runtime.config_state.player_state_persisted_at, 10.0)

@@ -17,7 +17,8 @@ class ConfigRuntimeState:
     state: Dict[str, Any] = field(default_factory=dict)
     language: str = ""
     lock: threading.RLock = field(default_factory=threading.RLock)
-    player_state_persisted_at: float = 0.0
+    # 负无穷表示从未落盘：0.0 会在开机不足 30 秒的机器上被节流窗口误伤
+    player_state_persisted_at: float = float("-inf")
 
 
 @dataclass
