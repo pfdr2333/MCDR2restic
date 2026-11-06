@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import json
 import urllib.request
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from mcdr2restic.defaults.default_constants import PLUGIN_ID
 from mcdr2restic.notifications.webhook_base import WebhookClientBase
@@ -19,11 +19,11 @@ class DiscordWebhookClient(WebhookClientBase):
     status_error_message_key = "warn.discord.status_error"
     send_failed_message_key = "warn.discord.send_failed"
 
-    def send_message(self, text: str) -> None:
-        super().send_message(text)
-
     def build_request(
-        self, webhook_url: str, text: str
+        self,
+        webhook_url: str,
+        text: str,
+        values: Optional[Dict[str, Any]] = None,
     ) -> urllib.request.Request:
         return build_discord_request(webhook_url, self._build_payload(text))
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 import copy
 import threading
 import urllib.request
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from mcdreforged.api.all import PluginServerInterface
 
@@ -33,17 +33,23 @@ class WebhookClientBase:
         self.cfg = copy.deepcopy(cfg)
         self.enabled = bool(self.cfg.get("enabled", False))
 
-    def send_message(self, *args: Any) -> None:
+    # 统一签名契约：dispatcher 对所有 webhook 通道都传 (text, values)，
+    # 子类不得收窄参数，否则绑定实参时抛 TypeError、通知整体失效
+    def send_message(
+        self, text: str, values: Optional[Dict[str, Any]] = None
+    ) -> None:
         if not self.enabled:
             return
         threading.Thread(
             target=self._send_message,
-            args=args,
+            args=(text, values),
             name=self.thread_name,
             daemon=True,
         ).start()
 
-    def _send_message(self, *args: Any) -> None:
+    def _send_message(
+        self, text: str, values: Optional[Dict[str, Any]] = None
+    ) -> None:
         webhook_url = str(self.cfg.get(self.url_config_key, "") or "").strip()
         if not webhook_url:
             self.server.logger.warning(
@@ -53,7 +59,7 @@ class WebhookClientBase:
         try:
             # 构造请求与解析超时同样可能因垃圾配置抛错，必须与 urlopen 一起受保护，
             # 否则 daemon 线程静默死亡、通知无声丢失
-            request = self.build_request(webhook_url, *args)
+            request = self.build_request(webhook_url, text, values)
             timeout = max(1, int(self.cfg.get("send_timeout_seconds", 10)))
             with urllib.request.urlopen(request, timeout=timeout) as response:
                 status = getattr(response, "status", WEBHOOK_HTTP_SUCCESS_MIN)

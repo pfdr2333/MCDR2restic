@@ -18,11 +18,6 @@ DEFAULT_WEBHOOK_PAYLOAD: Dict[str, Any] = {"content": "{message}"}
 class CustomWebhookClient(WebhookClientBase):
     """POST notification text as JSON to a user-defined webhook endpoint."""
 
-    def send_message(
-        self, text: str, values: Optional[Dict[str, Any]] = None
-    ) -> None:
-        super().send_message(text, values)
-
     def build_request(
         self, webhook_url: str, text: str, values: Optional[Dict[str, Any]] = None
     ) -> urllib.request.Request:

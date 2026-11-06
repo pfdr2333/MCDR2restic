@@ -37,6 +37,8 @@ except ImportError:
         unittest,
     )
 
+import inspect
+import threading
 from datetime import date
 
 
@@ -391,3 +393,59 @@ class CustomWebhookTests(unittest.TestCase):
         onebot.send_private_msg.assert_has_calls(
             [mock.call(111, "text"), mock.call(222, "text")]
         )
+
+
+class ChannelContractTests(unittest.TestCase):
+    """dispatcher 与三通道客户端之间的签名契约（P0-1 回归防护）。"""
+
+    def test_deliver_specs_accept_uniform_arguments(self):
+        app_runtime = create_runtime()
+        dispatcher = NotificationDispatcher(app_runtime, dict)
+
+        for spec in dispatcher._channel_specs():
+            with self.subTest(channel=spec.section):
+                inspect.signature(spec.deliver).bind(None, {}, "text", {})
+
+    def test_webhook_clients_accept_text_and_values(self):
+        for client_cls in (DiscordWebhookClient, CustomWebhookClient):
+            with self.subTest(client=client_cls.__name__):
+                signature = inspect.signature(client_cls.send_message)
+                signature.bind(mock.Mock(), "text", {"label": "x"})
+
+    def test_dispatcher_delivers_real_discord_client_with_payload_intact(self):
+        app_runtime = create_runtime()
+        dispatcher = NotificationDispatcher(app_runtime, dict)
+        server = FakePluginServer()
+        app_runtime.service.server = server
+        client = DiscordWebhookClient(
+            server,
+            {"enabled": True, "webhook_url": "https://example.test/discord"},
+        )
+        app_runtime.service.discord = client
+        response = mock.MagicMock(status=204)
+        response.__enter__.return_value = response
+        requests = []
+        delivered = threading.Event()
+
+        def record(request, timeout=None):
+            requests.append(request)
+            delivered.set()
+            return response
+
+        with mock.patch(
+            "mcdr2restic.notifications.webhook_base.urllib.request.urlopen",
+            side_effect=record,
+        ):
+            dispatcher._notify_channel(
+                dispatcher._channel_specs()[1],
+                "backup_start",
+                {"label": "正常"},
+                {"discord": {"enabled": True}},
+                "zh_cn",
+            )
+            self.assertTrue(delivered.wait(timeout=5))
+
+        self.assertEqual(server.logger.warning_messages, [])
+        payload = json.loads(requests[0].data)
+        self.assertIn("备份开始", payload["content"])
+        self.assertIn("allowed_mentions", payload)
