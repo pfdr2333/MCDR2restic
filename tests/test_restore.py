@@ -149,9 +149,11 @@ class RestoreTargetDirectoryTests(unittest.TestCase):
     @unittest.skipUnless(os.name == "nt", "drive root only exists on Windows")
     def test_normalize_target_rejects_drive_root(self):
         restic_cfg = {"working_directory": str(REPO_ROOT)}
+        # 盘根取仓库所在盘符：CI runner 把仓库检出在 D:\，硬编码 C:\ 会误判
+        drive_root = os.path.splitdrive(str(REPO_ROOT))[0] + "\\"
 
         with self.assertRaises(BackupProblem) as error:
-            restore_paths.normalize_restore_target_directory("C:\\", restic_cfg)
+            restore_paths.normalize_restore_target_directory(drive_root, restic_cfg)
 
         self.assertEqual(
             error.exception.i18n_key, "error.restore.target_contains_protected"
@@ -186,10 +188,11 @@ class RestoreTargetDirectoryTests(unittest.TestCase):
     @unittest.skipUnless(os.name == "nt", "verbatim prefix only exists on Windows")
     def test_normalize_target_rejects_verbatim_drive_root(self):
         restic_cfg = {"working_directory": str(REPO_ROOT)}
+        drive_root = os.path.splitdrive(str(REPO_ROOT))[0] + "\\"
 
         with self.assertRaises(BackupProblem) as error:
             restore_paths.normalize_restore_target_directory(
-                "\\\\?\\C:\\", restic_cfg
+                "\\\\?\\" + drive_root, restic_cfg
             )
 
         self.assertEqual(
@@ -305,7 +308,10 @@ class RestoreTargetDirectoryTests(unittest.TestCase):
                 "\\\\?\\" + target, restic_cfg
             )
 
-            self.assertEqual(result, "\\\\?\\" + target)
+            # 部分 Windows 环境（如 CI runner）realpath 会解析出 8.3 短名，
+            # 字符串全等断言不成立，验证 verbatim 前缀保留 + 同目录即可
+            self.assertTrue(result.startswith("\\\\?\\"))
+            self.assertTrue(os.path.samefile(result, target))
 
     def test_normalize_target_rejects_target_containing_data_dir(self):
         restic_cfg = {"working_directory": str(REPO_ROOT.joinpath("restic"))}
