@@ -19,6 +19,8 @@ from mcdr2restic.config.config_template import (
     get_minecraft_save_all_done_patterns_lines,
     get_minecraft_wait_save_all_completion_lines,
     get_restic_auto_init_lines,
+    get_restic_disk_check_enabled_lines,
+    get_restic_disk_check_min_free_percent_lines,
     get_restic_password_file_lines,
     get_restic_password_lines,
     get_restic_progress_interval_lines,
@@ -375,6 +377,11 @@ def ensure_restic_migration_lines(
 def restic_migration_builders() -> List[Tuple[str, ResticLineBuilder]]:
     return [
         ("repository", get_restic_repository_lines),
+        ("disk_check_enabled", get_restic_disk_check_enabled_lines),
+        (
+            "disk_check_min_free_percent",
+            get_restic_disk_check_min_free_percent_lines,
+        ),
         ("password", get_restic_password_lines),
         ("password_file", get_restic_password_file_lines),
         ("use_path_restic", get_restic_use_path_restic_lines),

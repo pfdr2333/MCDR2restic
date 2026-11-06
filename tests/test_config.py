@@ -181,6 +181,26 @@ class ConfigurationTests(unittest.TestCase):
             yaml.safe_load(migrated)["restic"]["use_path_restic"], False
         )
 
+    def test_apply_config_file_migrations_appends_restic_disk_check_keys(self):
+        # 磁盘预检是既有 restic 块的新增键：老配置文件必须物理补写，
+        # 只靠 merge_defaults 兜底会重演 a10a6b2（文件侧静默缺键）
+        lines = [
+            "restic:\n",
+            "  executable: restic\n",
+            '  repository: "./restic-repo"\n',
+            '  password: "secret"\n',
+        ]
+        cfg = build_default_config("zh_cn")
+
+        migrated = "".join(apply_config_file_migrations(lines, "zh_cn", cfg))
+        restic_section = yaml.safe_load(migrated)["restic"]
+
+        self.assertEqual(migrated.count("disk_check_enabled:"), 1)
+        self.assertEqual(migrated.count("disk_check_min_free_percent:"), 1)
+        self.assertIs(restic_section["disk_check_enabled"], True)
+        self.assertEqual(restic_section["disk_check_min_free_percent"], 10.0)
+        self.assertEqual(migrated.count("备份前检查本地仓库所在磁盘的剩余空间"), 1)
+
     def test_apply_config_file_migrations_appends_minecraft_save_all_keys(self):
         # v0.6.0 后 minecraft 块新增的 save-all 确认键，必须能追加进老配置既有块
         lines = [

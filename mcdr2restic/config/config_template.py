@@ -72,6 +72,18 @@ def get_restic_repository_lines(language: str, restic: Dict[str, Any]) -> List[s
     return get_restic_scalar_lines(language, restic, "repository")
 
 
+def get_restic_disk_check_enabled_lines(
+    language: str, restic: Dict[str, Any]
+) -> List[str]:
+    return get_restic_scalar_lines(language, restic, "disk_check_enabled")
+
+
+def get_restic_disk_check_min_free_percent_lines(
+    language: str, restic: Dict[str, Any]
+) -> List[str]:
+    return get_restic_scalar_lines(language, restic, "disk_check_min_free_percent")
+
+
 def get_restic_password_lines(language: str, restic: Dict[str, Any]) -> List[str]:
     return get_restic_scalar_lines(language, restic, "password")
 
