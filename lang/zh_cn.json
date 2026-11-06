@@ -325,5 +325,9 @@
   "mcdr2restic.label.trigger.restore_pre_backup": "恢复前保护快照",
   "mcdr2restic.info.restic.download_progress": "正在下载 restic：{downloaded} / {total}（{percent}%，{speed}）",
   "mcdr2restic.error.restic.release_manifest_missing": "内置 restic 信任清单缺失或格式异常，无法确定要下载的版本",
-  "mcdr2restic.error.restic.checksum_manifest_missing": "内置清单未提供 restic 资产的 SHA256 校验值，已取消安装未校验的下载：{version}"
+  "mcdr2restic.error.restic.checksum_manifest_missing": "内置清单未提供 restic 资产的 SHA256 校验值，已取消安装未校验的下载：{version}",
+  "mcdr2restic.info.restic.auto_upgrade.start": "检测到 restic {installed_version} 低于内置信任版本 {trusted_version}，开始自动升级",
+  "mcdr2restic.info.restic.auto_upgrade.skipped_newer": "检测到 restic {installed_version} 高于内置信任版本 {trusted_version}，跳过自动升级",
+  "mcdr2restic.warn.restic.auto_upgrade.probe_failed": "无法获取 restic 版本信息，已跳过自动升级：{error}",
+  "mcdr2restic.warn.restic.auto_upgrade.failed": "restic 自动升级失败，继续使用当前版本 {installed_version}：{error}"
 }

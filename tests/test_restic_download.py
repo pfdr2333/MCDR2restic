@@ -10,8 +10,10 @@ try:
         FakePluginServer,
         RESTIC_DOWNLOAD_TIMEOUT_SECONDS,
         ResticDownloadTarget,
+        ResticVersionProbeError,
         build_download_urls,
         build_self_mirror_url,
+        compare_restic_versions,
         download_and_install_restic,
         download_bytes,
         download_file,
@@ -20,6 +22,8 @@ try:
         install_restic_from_urls,
         make_download_progress_reporter,
         mock,
+        parse_restic_version_number,
+        probe_restic_version,
         select_restic_release_asset,
         tempfile,
         unittest,
@@ -31,8 +35,10 @@ except ImportError:
         FakePluginServer,
         RESTIC_DOWNLOAD_TIMEOUT_SECONDS,
         ResticDownloadTarget,
+        ResticVersionProbeError,
         build_download_urls,
         build_self_mirror_url,
+        compare_restic_versions,
         download_and_install_restic,
         download_bytes,
         download_file,
@@ -41,6 +47,8 @@ except ImportError:
         install_restic_from_urls,
         make_download_progress_reporter,
         mock,
+        parse_restic_version_number,
+        probe_restic_version,
         select_restic_release_asset,
         tempfile,
         unittest,
@@ -366,6 +374,200 @@ class EnsureDefaultResticAvailableTests(unittest.TestCase):
             ensure_default_restic_executable_available(server, cfg)
 
         install.assert_called_once()
+
+
+class ResticVersionHelpersTests(unittest.TestCase):
+    def test_parse_version_number_accepts_v_prefix_and_padding(self):
+        self.assertEqual(parse_restic_version_number("v0.19.1"), (0, 19, 1))
+        self.assertEqual(parse_restic_version_number("0.18.0"), (0, 18, 0))
+        self.assertEqual(parse_restic_version_number(" v0.19 "), (0, 19))
+
+    def test_parse_version_number_rejects_unrecognizable_text(self):
+        self.assertIsNone(parse_restic_version_number("latest"))
+        self.assertIsNone(parse_restic_version_number(""))
+        self.assertIsNone(parse_restic_version_number("v0.19.1-beta"))
+
+    def test_compare_versions_pads_missing_segments(self):
+        self.assertEqual(compare_restic_versions("0.19", "v0.19.0"), 0)
+        self.assertEqual(compare_restic_versions("0.18.0", "v0.19.1"), -1)
+        self.assertEqual(compare_restic_versions("0.20.0", "v0.19.1"), 1)
+
+    def test_compare_versions_returns_zero_when_unparsable(self):
+        self.assertEqual(compare_restic_versions("latest", "v0.19.1"), 0)
+        self.assertEqual(compare_restic_versions("0.18.0", ""), 0)
+
+    def test_probe_parses_version_from_command_output(self):
+        completed = mock.Mock(
+            stdout="restic 0.18.0 compiled with go1.23.4 on windows/amd64\n",
+            stderr="",
+        )
+
+        with mock.patch(
+            DOWNLOAD_MODULE + ".subprocess.run", return_value=completed
+        ) as run:
+            version = probe_restic_version("restic.exe")
+
+        self.assertEqual(version, "0.18.0")
+        run.assert_called_once()
+        self.assertEqual(run.call_args.args[0], ["restic.exe", "version"])
+
+    def test_probe_accepts_v_prefixed_output(self):
+        completed = mock.Mock(
+            stdout="restic v0.19.1 compiled with go1.23.4\n", stderr=""
+        )
+
+        with mock.patch(DOWNLOAD_MODULE + ".subprocess.run", return_value=completed):
+            self.assertEqual(probe_restic_version("restic"), "0.19.1")
+
+    def test_probe_raises_when_output_unrecognizable(self):
+        completed = mock.Mock(stdout="not-a-restic-binary", stderr="")
+
+        with mock.patch(
+            DOWNLOAD_MODULE + ".subprocess.run", return_value=completed
+        ), self.assertRaises(ResticVersionProbeError):
+            probe_restic_version("restic.exe")
+
+    def test_probe_raises_when_process_unstartable(self):
+        with mock.patch(
+            DOWNLOAD_MODULE + ".subprocess.run", side_effect=OSError("boom")
+        ), self.assertRaises(ResticVersionProbeError):
+            probe_restic_version("missing-restic")
+
+
+class EnsureDefaultResticUpgradeTests(unittest.TestCase):
+    def test_upgrades_outdated_default_path_binary(self):
+        server = FakePluginServer()
+        cfg = {"executable": "restic", "use_path_restic": False}
+
+        with mock.patch(
+            DOWNLOAD_MODULE + ".os.path.exists", return_value=True
+        ), mock.patch(
+            DOWNLOAD_MODULE + ".probe_restic_version", return_value="0.18.0"
+        ), mock.patch(
+            DOWNLOAD_MODULE + ".get_default_restic_version", return_value="v0.19.1"
+        ), mock.patch(
+            DOWNLOAD_MODULE + ".install_default_restic_for_platform"
+        ) as install:
+            ensure_default_restic_executable_available(server, cfg)
+
+        install.assert_called_once()
+        self.assertTrue(
+            any("开始自动升级" in m for m in server.logger.info_messages)
+        )
+
+    def test_keeps_newer_binary_without_downgrade(self):
+        server = FakePluginServer()
+        cfg = {"executable": "restic", "use_path_restic": False}
+
+        with mock.patch(
+            DOWNLOAD_MODULE + ".os.path.exists", return_value=True
+        ), mock.patch(
+            DOWNLOAD_MODULE + ".probe_restic_version", return_value="0.20.0"
+        ), mock.patch(
+            DOWNLOAD_MODULE + ".get_default_restic_version", return_value="v0.19.1"
+        ), mock.patch(
+            DOWNLOAD_MODULE + ".install_default_restic_for_platform"
+        ) as install:
+            ensure_default_restic_executable_available(server, cfg)
+
+        install.assert_not_called()
+        self.assertTrue(
+            any("跳过自动升级" in m for m in server.logger.info_messages)
+        )
+
+    def test_keeps_binary_when_versions_equal(self):
+        server = FakePluginServer()
+        cfg = {"executable": "restic", "use_path_restic": False}
+
+        with mock.patch(
+            DOWNLOAD_MODULE + ".os.path.exists", return_value=True
+        ), mock.patch(
+            DOWNLOAD_MODULE + ".probe_restic_version", return_value="0.19.1"
+        ), mock.patch(
+            DOWNLOAD_MODULE + ".get_default_restic_version", return_value="v0.19.1"
+        ), mock.patch(
+            DOWNLOAD_MODULE + ".install_default_restic_for_platform"
+        ) as install:
+            ensure_default_restic_executable_available(server, cfg)
+
+        install.assert_not_called()
+        self.assertEqual(server.logger.info_messages, [])
+        self.assertEqual(server.logger.warning_messages, [])
+
+    def test_skips_probe_when_trusted_version_unparsable(self):
+        server = FakePluginServer()
+        cfg = {"executable": "restic", "use_path_restic": False}
+
+        with mock.patch(
+            DOWNLOAD_MODULE + ".os.path.exists", return_value=True
+        ), mock.patch(
+            DOWNLOAD_MODULE + ".get_default_restic_version", return_value="latest"
+        ), mock.patch(DOWNLOAD_MODULE + ".probe_restic_version") as probe:
+            ensure_default_restic_executable_available(server, cfg)
+
+        probe.assert_not_called()
+
+    def test_probe_failure_warns_without_raising(self):
+        server = FakePluginServer()
+        cfg = {"executable": "restic", "use_path_restic": False}
+
+        with mock.patch(
+            DOWNLOAD_MODULE + ".os.path.exists", return_value=True
+        ), mock.patch(
+            DOWNLOAD_MODULE + ".get_default_restic_version", return_value="v0.19.1"
+        ), mock.patch(
+            DOWNLOAD_MODULE + ".probe_restic_version",
+            side_effect=ResticVersionProbeError("boom"),
+        ), mock.patch(
+            DOWNLOAD_MODULE + ".install_default_restic_for_platform"
+        ) as install:
+            ensure_default_restic_executable_available(server, cfg)
+
+        install.assert_not_called()
+        self.assertTrue(
+            any("已跳过自动升级" in m for m in server.logger.warning_messages)
+        )
+
+    def test_upgrade_failure_warns_without_raising(self):
+        server = FakePluginServer()
+        cfg = {"executable": "restic", "use_path_restic": False}
+
+        with mock.patch(
+            DOWNLOAD_MODULE + ".os.path.exists", return_value=True
+        ), mock.patch(
+            DOWNLOAD_MODULE + ".probe_restic_version", return_value="0.18.0"
+        ), mock.patch(
+            DOWNLOAD_MODULE + ".get_default_restic_version", return_value="v0.19.1"
+        ), mock.patch(
+            DOWNLOAD_MODULE + ".install_default_restic_for_platform",
+            side_effect=BackupProblem(
+                i18n_key="error.restic.auto_download_failed", error="network down"
+            ),
+        ):
+            ensure_default_restic_executable_available(server, cfg)
+
+        self.assertTrue(
+            any(
+                "自动升级失败" in m and "0.18.0" in m
+                for m in server.logger.warning_messages
+            )
+        )
+
+    def test_system_restic_short_circuits_before_probe(self):
+        server = FakePluginServer()
+        cfg = {"executable": "restic", "use_path_restic": True}
+
+        with mock.patch(
+            DOWNLOAD_MODULE + ".os.path.exists", return_value=True
+        ), mock.patch(
+            DOWNLOAD_MODULE + ".find_system_restic", return_value="/usr/bin/restic"
+        ), mock.patch(DOWNLOAD_MODULE + ".probe_restic_version") as probe, mock.patch(
+            DOWNLOAD_MODULE + ".install_default_restic_for_platform"
+        ) as install:
+            ensure_default_restic_executable_available(server, cfg)
+
+        probe.assert_not_called()
+        install.assert_not_called()
 
 
 class SelectReleaseAssetTests(unittest.TestCase):

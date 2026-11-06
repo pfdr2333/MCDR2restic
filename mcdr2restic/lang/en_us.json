@@ -325,5 +325,9 @@
   "warn.restore.direct_failed": "Restore task failed: {error}",
   "info.restic.download_progress": "Downloading restic: {downloaded} / {total} ({percent}%, {speed})",
   "error.restic.release_manifest_missing": "Bundled trusted restic manifest is missing or malformed; cannot determine the version to download",
-  "error.restic.checksum_manifest_missing": "Bundled manifest provides no SHA256 checksum for the restic asset; unverified download installation cancelled: {version}"
+  "error.restic.checksum_manifest_missing": "Bundled manifest provides no SHA256 checksum for the restic asset; unverified download installation cancelled: {version}",
+  "info.restic.auto_upgrade.start": "restic {installed_version} is older than the trusted version {trusted_version}, upgrading automatically",
+  "info.restic.auto_upgrade.skipped_newer": "restic {installed_version} is newer than the trusted version {trusted_version}, skipping upgrade",
+  "warn.restic.auto_upgrade.probe_failed": "Failed to determine the restic version, upgrade skipped: {error}",
+  "warn.restic.auto_upgrade.failed": "restic upgrade failed, keeping current version {installed_version}: {error}"
 }

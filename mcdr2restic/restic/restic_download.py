@@ -9,6 +9,7 @@ import platform
 import re
 import shutil
 import stat
+import subprocess
 import sys
 import tempfile
 import time
@@ -30,7 +31,10 @@ from mcdr2restic.defaults.default_constants import (
     PLUGIN_ID,
     RESTIC_PROGRESS_INTERVAL_SECONDS,
 )
-from mcdr2restic.defaults.restic_release_defaults import build_restic_fallback_release
+from mcdr2restic.defaults.restic_release_defaults import (
+    build_restic_fallback_release,
+    get_default_restic_version,
+)
 from mcdr2restic.core.models import BackupProblem
 from mcdr2restic.restic.restic_config import resolve_path_against_working_directory
 from mcdr2restic.restic.restic_constants import (
@@ -45,6 +49,10 @@ RESTIC_DOWNLOAD_TIMEOUT_SECONDS = 120
 # 因此每次尝试另设整体 deadline
 RESTIC_DOWNLOAD_ATTEMPT_DEADLINE_SECONDS = 300
 DOWNLOAD_CHUNK_BYTES = 256 * 1024
+# 版本探测是本地进程调用，等待预算远小于网络下载；探测失败一律按跳过升级处理
+RESTIC_VERSION_PROBE_TIMEOUT_SECONDS = 30
+# 匹配 "restic 0.18.0" / "restic v0.19.1" 形式的版本输出
+RESTIC_VERSION_OUTPUT_PATTERN = re.compile(r"restic\s+v?(\d+(?:\.\d+)+)")
 
 
 def find_system_restic() -> Optional[str]:
@@ -66,11 +74,116 @@ def ensure_default_restic_executable_available(
     if not is_default_restic_executable_path(executable):
         return
     target_path = resolve_restic_executable_path(restic_cfg, executable)
-    if os.path.exists(target_path):
-        return
+    # 系统 PATH 的 restic 不归插件管；开关开启且系统存在时，
+    # 即使配置目录留有插件下载的旧副本也只会使用系统的
     if system_restic_preferred(restic_cfg) and find_system_restic():
         return
+    if os.path.exists(target_path):
+        upgrade_default_restic_if_outdated(server, target_path)
+        return
     install_default_restic_for_platform(server, target_path)
+
+
+def upgrade_default_restic_if_outdated(
+    server: PluginServerInterface, target_path: str
+):
+    """把插件自管路径上过旧的 restic 升级到内置信任版本。
+
+    仅向上升级：版本相同、更新或无法比较时保留现状；探测与升级
+    失败都只告警，不阻断后续 restic 操作。
+    """
+    trusted_version = get_default_restic_version()
+    if parse_restic_version_number(trusted_version) is None:
+        return
+    try:
+        installed_version = probe_restic_version(target_path)
+    except ResticVersionProbeError as exc:
+        server.logger.warning(
+            server_tr(server, "warn.restic.auto_upgrade.probe_failed", error=exc)
+        )
+        return
+    order = compare_restic_versions(installed_version, trusted_version)
+    if order > 0:
+        # 用户手动放置了更高版本，尊重现状
+        server.logger.info(
+            server_tr(
+                server,
+                "info.restic.auto_upgrade.skipped_newer",
+                installed_version=installed_version,
+                trusted_version=trusted_version,
+            )
+        )
+        return
+    if order < 0:
+        server.logger.info(
+            server_tr(
+                server,
+                "info.restic.auto_upgrade.start",
+                installed_version=installed_version,
+                trusted_version=trusted_version,
+            )
+        )
+        try:
+            install_default_restic_for_platform(server, target_path)
+        except Exception as exc:
+            server.logger.warning(
+                server_tr(
+                    server,
+                    "warn.restic.auto_upgrade.failed",
+                    installed_version=installed_version,
+                    error=exc,
+                )
+            )
+
+
+class ResticVersionProbeError(Exception):
+    """restic 版本探测失败：进程无法启动、超时或输出无法识别。"""
+
+
+def probe_restic_version(executable_path: str) -> str:
+    """运行 restic version 并返回形如 0.18.0 的版本号。
+
+    进程无法启动、超时或输出无法识别时抛 ResticVersionProbeError。
+    """
+    try:
+        completed = subprocess.run(
+            [executable_path, "version"],
+            capture_output=True,
+            text=True,
+            errors="replace",
+            timeout=RESTIC_VERSION_PROBE_TIMEOUT_SECONDS,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise ResticVersionProbeError(
+            str(exc) or exc.__class__.__name__
+        ) from exc
+    for output in (completed.stdout, completed.stderr):
+        match = RESTIC_VERSION_OUTPUT_PATTERN.search(output or "")
+        if match:
+            return match.group(1)
+    detail = (completed.stdout or "").strip() or (completed.stderr or "").strip()
+    raise ResticVersionProbeError(detail[:200] or "no restic version output")
+
+
+def parse_restic_version_number(version: str) -> Optional[Tuple[int, ...]]:
+    """把 v0.19.1 形式的版本串解析为数字元组，无法解析时返回 None。"""
+    match = re.fullmatch(r"v?(\d+(?:\.\d+)+)", str(version or "").strip())
+    if not match:
+        return None
+    return tuple(int(part) for part in match.group(1).split("."))
+
+
+def compare_restic_versions(left: str, right: str) -> int:
+    """逐段数值比较版本，缺失段按 0 补齐；任一无法解析时返回 0。"""
+    left_parts = parse_restic_version_number(left)
+    right_parts = parse_restic_version_number(right)
+    if left_parts is None or right_parts is None:
+        return 0
+    width = max(len(left_parts), len(right_parts))
+    left_padded = left_parts + (0,) * (width - len(left_parts))
+    right_padded = right_parts + (0,) * (width - len(right_parts))
+    return (left_padded > right_padded) - (left_padded < right_padded)
 
 
 def install_default_restic_for_platform(

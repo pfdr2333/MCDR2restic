@@ -325,5 +325,9 @@
   "label.trigger.restore_pre_backup": "恢復前保護快照",
   "info.restic.download_progress": "正在下載 restic：{downloaded} / {total}（{percent}%，{speed}）",
   "error.restic.release_manifest_missing": "內建 restic 信任清單缺失或格式異常，無法確定要下載的版本",
-  "error.restic.checksum_manifest_missing": "內建清單未提供 restic 資產的 SHA256 校驗值，已取消安裝未校驗的下載：{version}"
+  "error.restic.checksum_manifest_missing": "內建清單未提供 restic 資產的 SHA256 校驗值，已取消安裝未校驗的下載：{version}",
+  "info.restic.auto_upgrade.start": "檢測到 restic {installed_version} 低於內建信任版本 {trusted_version}，開始自動升級",
+  "info.restic.auto_upgrade.skipped_newer": "檢測到 restic {installed_version} 高於內建信任版本 {trusted_version}，跳過自動升級",
+  "warn.restic.auto_upgrade.probe_failed": "無法獲取 restic 版本資訊，已跳過自動升級：{error}",
+  "warn.restic.auto_upgrade.failed": "restic 自動升級失敗，繼續使用當前版本 {installed_version}：{error}"
 }
