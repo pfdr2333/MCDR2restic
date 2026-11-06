@@ -429,6 +429,8 @@ backup_command:
 
 ### 高级：成功码和错误判定
 
+下面只是节选示例，不是完整默认值：默认 `error_regexes` 共 4 条（还包含 `permission denied`、`no such file or directory` 等模式），`ignore_error_regexes` 共 2 条。完整清单以 `config.yml` 中的模板注释为准，照抄节选会削弱错误判定。
+
 ```yaml
 success_exit_codes:
   - 0
