@@ -26,6 +26,32 @@ jobs:
       - name: Run ruff
         run: ruff check .
 
+  typecheck:
+    name: Type check (mypy)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --requirement requirements-dev.txt
+
+      # 显式跑两个 platform 目标，与测试矩阵的 OS 覆盖对齐：
+      # mypy 会按目标平台剪除 sys.platform 分支，单一目标会漏查另一平台的代码路径
+      - name: Run mypy (linux target)
+        run: mypy --platform linux mcdr2restic tools
+
+      - name: Run mypy (win32 target)
+        run: mypy --platform win32 mcdr2restic tools
+
   language-sync:
     name: Language resources sync check
     runs-on: ubuntu-latest
