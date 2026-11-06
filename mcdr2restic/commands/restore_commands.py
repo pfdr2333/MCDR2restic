@@ -221,7 +221,8 @@ class RestoreCommands:
         server = self.context.server_from_source(source)
         cfg = get_config_snapshot(self.context.app_runtime)
         translate = make_source_translate(source, server)
-        task_id = int(context.get("task_id"))
+        # 语法定义了必填 Integer("task_id")，缺失只可能是解析层缺陷
+        task_id = int(context["task_id"])
         deleted = delete_restore_task(
             server,
             self.current_snapshot_cache_config(cfg),

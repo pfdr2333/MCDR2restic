@@ -44,7 +44,8 @@ def add_restore_task(
                     record.target_directory,
                 ),
             )
-        return int(cursor.lastrowid)
+        # INSERT 后必有 rowid；or 0 仅满足 sqlite3 对 lastrowid 的 Optional 声明
+        return int(cursor.lastrowid or 0)
 
 
 def list_restore_tasks(

@@ -182,7 +182,8 @@ class OnlineSample(NamedTuple):
 
     command: str
     result: Any
-    count: int
+    # count 会遮蔽 tuple.count 方法，故改名
+    player_count: int
     names: list
 
 
@@ -195,11 +196,11 @@ def record_online_sample(
         ensure_runtime(app_runtime.config_state.config)
         runtime_state = app_runtime.config_state.config["runtime"]
         runtime_state["known_online_players"] = resolve_known_online_players(
-            runtime_state, sample.count, sample.names
+            runtime_state, sample.player_count, sample.names
         )
         mark_player_activity_unlocked(
             runtime_state,
-            sample.count,
+            sample.player_count,
             "rcon {}".format(sample.command),
             tail_text(str(sample.result), 300),
         )

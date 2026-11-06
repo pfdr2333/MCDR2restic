@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from mcdr2restic.core.i18n import tr
 
@@ -125,8 +125,8 @@ class ResticCommandResult:
     stdout: str
     stderr: str
     duration_seconds: float
-    summary: Dict[str, Any] = None
-    json_errors: List[str] = None
+    summary: Optional[Dict[str, Any]] = None
+    json_errors: Optional[List[str]] = None
     snapshot_id: str = ""
 
 
@@ -134,9 +134,9 @@ class ResticCommandResult:
 class ResticProgressState:
     phase: str
     language: str
-    status: Dict[str, Any] = None
-    summary: Dict[str, Any] = None
-    json_errors: List[str] = None
+    status: Optional[Dict[str, Any]] = None
+    summary: Optional[Dict[str, Any]] = None
+    json_errors: Optional[List[str]] = None
     last_text: str = ""
     seen_json: bool = False
     started_at: float = 0.0

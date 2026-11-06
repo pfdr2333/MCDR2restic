@@ -207,8 +207,11 @@ def restic_error_message(payload: Dict[str, Any], error_value: Any) -> str:
 
 
 def get_restic_percent(payload: Dict[str, Any]) -> str:
+    raw_value = payload.get("percent_done")
+    if raw_value is None:
+        return "?"
     try:
-        value = float(payload.get("percent_done"))
+        value = float(raw_value)
     except Exception:
         return "?"
     if value <= 1.0:

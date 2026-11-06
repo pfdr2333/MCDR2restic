@@ -9,6 +9,7 @@ import errno
 import os
 import platform
 import re
+import sys
 import socket
 from dataclasses import dataclass
 from typing import Any, Optional
@@ -172,7 +173,7 @@ def process_exists(pid: int) -> bool:
 
     if pid <= 0:
         return False
-    if os.name == "nt":
+    if sys.platform == "win32":
         return process_exists_windows(pid)
     return process_exists_posix(pid)
 
@@ -194,6 +195,10 @@ def process_exists_posix(pid: int) -> bool:
 def process_exists_windows(pid: int) -> bool:
     """Check process existence on Windows via OpenProcess."""
 
+    # 调用方已按 win32 分派；显式平台守卫让静态检查器在非 Windows 目标下跳过
+    # 本函数体，且直接误用时快速失败
+    if sys.platform != "win32":
+        raise RuntimeError("process_exists_windows is only available on Windows")
     access = WINDOWS_PROCESS_QUERY_LIMITED_INFORMATION | WINDOWS_SYNCHRONIZE
     kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
     handle = kernel32.OpenProcess(access, False, pid)

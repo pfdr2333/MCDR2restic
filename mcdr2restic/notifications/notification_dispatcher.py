@@ -123,7 +123,7 @@ class NotificationDispatcher:
             return
         # 每个QQ的发送失败已单独告警，不中断其余收件人
         for qid in admin_qqs:
-            self._send_onebot_message(qid, text)
+            self._send_onebot_message(client, qid, text)
 
     def _deliver_client(
         self,
@@ -134,9 +134,10 @@ class NotificationDispatcher:
     ):
         client.send_message(text, values)
 
-    def _send_onebot_message(self, qid: Any, text: str):
+    def _send_onebot_message(self, client: Any, qid: Any, text: str):
+        # 上游 _notify_channel 已确认 client 非空，这里直接复用，避免重复读取产生 Optional
         try:
-            self.app_runtime.service.onebot.send_private_msg(int(qid), text)
+            client.send_private_msg(int(qid), text)
         except Exception as exc:
             self._warn_server(
                 "warn.notify.onebot_send_failed", user_id=qid, error=exc

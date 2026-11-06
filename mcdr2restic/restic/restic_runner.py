@@ -85,7 +85,7 @@ class ResticStreamSession:
     app_runtime: PluginRuntime
     process: subprocess.Popen
     progress: ResticProgressState
-    progress_interval: int
+    progress_interval: float
     deadline: Optional[float]
     output_queue: "queue.Queue[Tuple[str, Optional[str]]]"
 
@@ -117,7 +117,8 @@ def run_restic_command(
     deadline: Optional[float],
 ) -> ResticCommandResult:
     args = normalize_restic_phase_args(configured_args, phase)
-    executable, cwd, env, command = build_restic_process_command(restic_cfg, args)
+    # executable 已并入 command[0]；launch 路径不再单独取用
+    _executable, cwd, env, command = build_restic_process_command(restic_cfg, args)
     ensure_restic_deadline_available(deadline, phase)
     started = time.monotonic()
     process = start_restic_process(command, cwd, env, phase)
@@ -251,7 +252,7 @@ def read_restic_process_output(
     app_runtime: PluginRuntime,
     process: subprocess.Popen,
     progress: ResticProgressState,
-    progress_interval: int,
+    progress_interval: float,
     deadline: Optional[float],
 ) -> ResticProcessOutcome:
     output_queue: "queue.Queue[Tuple[str, Optional[str]]]" = queue.Queue()

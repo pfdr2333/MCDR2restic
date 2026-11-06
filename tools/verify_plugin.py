@@ -10,7 +10,8 @@ from pathlib import Path
 from zipfile import ZipFile
 
 try:
-    from .pack_plugin import (
+    # 相对导入仅作包形态兜底；直跑脚本时走下方绝对导入，mypy 无法解析非包目录下的相对名
+    from .pack_plugin import (  # type: ignore[import-not-found]
         PLUGIN_METADATA_FILE,
         build_archive_filename,
         iter_archive_entries,

@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple, cast
 
 from mcdr2restic.backup.cron import CronExpression
 from mcdr2restic.core.i18n import FALLBACK_LANGUAGE, tr
@@ -46,12 +46,14 @@ def parse_daily_time(text: str) -> Tuple[int, int]:
 def compute_wait_seconds(
     cfg: Dict[str, Any], language: str = FALLBACK_LANGUAGE
 ) -> Tuple[float, str]:
-    return compute_schedule_wait_seconds(
+    wait = compute_schedule_wait_seconds(
         get_config_section(cfg, "schedule"),
         DEFAULT_NORMAL_CRON,
         disabled_when_zero_cron=False,
         language=language,
     )
+    # 该参数组合下 callee 唯一的 None 分支（禁用 cron）不可达
+    return cast(Tuple[float, str], wait)
 
 
 def compute_force_wait_seconds(

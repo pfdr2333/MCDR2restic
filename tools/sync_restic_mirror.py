@@ -24,6 +24,7 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path
+from typing import Callable
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_MANIFEST_PATH = REPO_ROOT / "mcdr2restic" / "defaults" / "restic_release.yml"
@@ -260,6 +261,14 @@ def put_waf_rules(zone_id: str, waf_token: str, ruleset_id: str, rules: list):
         raise SystemExit("update WAF ruleset failed: {}".format(payload.get("errors")))
 
 
+def make_path_in_rule_appender(path: str) -> Callable[[re.Match[str]], str]:
+    """固化循环变量为参数：规避 lambda 晚绑定（B023），也让类型检查器可推断。"""
+
+    return lambda match: '{}{} "{}" }}'.format(
+        match.group(1), match.group(2).rstrip(), path
+    )
+
+
 def append_waf_paths(rules: list, new_paths: list) -> tuple:
     """按既有规则结构自适应追加路径；返回 (新规则数组, 实际追加数)。
 
@@ -295,11 +304,7 @@ def append_waf_paths(rules: list, new_paths: list) -> tuple:
         for path in todo:
             expression, count = re.subn(
                 r"(http\.request\.uri\.path\s+in\s*\{)([^{}]*)(\})",
-                # 默认参固化循环变量：subn 虽然当次迭代即调用，但显式绑定
-                # 才能通过 B023 的晚绑定检查
-                lambda match, path=path: '{}{} "{}" }}'.format(
-                    match.group(1), match.group(2).rstrip(), path
-                ),
+                make_path_in_rule_appender(path),
                 expression,
                 count=1,
             )

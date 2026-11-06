@@ -4,6 +4,7 @@ from __future__ import annotations
 import os
 import signal
 import subprocess
+import sys
 from dataclasses import dataclass
 from typing import Any, Optional
 
@@ -34,7 +35,8 @@ def terminate_process(process: subprocess.Popen) -> TerminateResult:
 
 def try_graceful_terminate(process: subprocess.Popen) -> str:
     try:
-        if os.name == "nt":
+        # 用 sys.platform 而非 os.name：行为等价（win32 与 nt），且静态检查器能据此收窄 POSIX 专属属性
+        if sys.platform == "win32":
             process.terminate()
         else:
             os.killpg(os.getpgid(process.pid), signal.SIGTERM)
@@ -49,7 +51,7 @@ def try_graceful_terminate(process: subprocess.Popen) -> str:
 
 def try_force_kill(process: subprocess.Popen) -> str:
     try:
-        if os.name == "nt":
+        if sys.platform == "win32":
             process.kill()
         else:
             os.killpg(os.getpgid(process.pid), signal.SIGKILL)
