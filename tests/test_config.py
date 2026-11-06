@@ -156,6 +156,31 @@ class ConfigurationTests(unittest.TestCase):
         self.assertIn("use_path_restic: false\n", migrated)
         self.assertIn("auto_init_local_repository: true\n", migrated)
 
+    def test_apply_config_file_migrations_appends_restic_keys_without_comment_duplication(self):
+        # 相邻缺失键在模板中共享注释段，提取片段不得吞并后随注释，
+        # 否则一次迁移会把同一注释段追加多次
+        lines = [
+            "enabled: true\n",
+            "restic:\n",
+            "  executable: restic\n",
+            '  repository: "D:/backups/repo"\n',
+            '  password: "secret"\n',
+        ]
+        cfg = build_default_config("zh_cn")
+
+        migrated = "".join(apply_config_file_migrations(lines, "zh_cn", cfg))
+
+        for comment in (
+            "优先使用系统 PATH 中安装的 restic",
+            "本地仓库缺失时自动执行 restic init",
+            "backup/restore --json 进度回显间隔",
+        ):
+            self.assertEqual(migrated.count(comment), 1, comment)
+        self.assertEqual(migrated.count("use_path_restic:"), 1)
+        self.assertEqual(
+            yaml.safe_load(migrated)["restic"]["use_path_restic"], False
+        )
+
     def test_config_migration_warns_about_removed_restore_timeout(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             server = FakeServer(temp_dir)

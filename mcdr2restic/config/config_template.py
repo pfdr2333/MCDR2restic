@@ -176,8 +176,14 @@ def find_comment_run_start(lines: List[str], key_index: int) -> int:
 def find_nested_entry_end(lines: List[str], key_index: int) -> int:
     indent = nested_key_indent(lines[key_index])
     sibling = re.compile(r"^{}\S[^:]*:".format(re.escape(indent)))
+    # 同缩进注释行是下一个条目的注释段：模板注释一律写在键上方，
+    # 片段吞并它会让迁移追加重复注释、重写/删除条目误伤后随注释
+    comment_boundary = "{}#".format(indent)
     for index in range(key_index + 1, len(lines)):
-        if TOP_LEVEL_KEY_PATTERN.match(lines[index]) or sibling.match(lines[index]):
+        line = lines[index]
+        if TOP_LEVEL_KEY_PATTERN.match(line) or sibling.match(line):
+            return index
+        if line.startswith(comment_boundary):
             return index
     return len(lines)
 
