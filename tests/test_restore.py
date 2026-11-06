@@ -948,5 +948,65 @@ class RestoreTaskDisplayTests(unittest.TestCase):
         )
 
 
+class RestoreCancelTests(unittest.TestCase):
+    def test_execute_restore_tasks_stops_between_tasks_when_canceled(self):
+        from mcdr2restic.core.models import BackupCanceled
+
+        runtime = create_runtime()
+        server = FakePluginServer()
+        runtime.backup.cancel.set()
+        session = build_restore_session(
+            tasks=[
+                {
+                    "id": 1,
+                    "snapshot": "abc123",
+                    "item_type": "full",
+                    "include_path": "/",
+                    "target_directory": "",
+                }
+            ]
+        )
+
+        with mock.patch.object(
+            restore_workflow, "ensure_default_restic_executable_available"
+        ), mock.patch.object(
+            restore_workflow, "run_restic_command_with_lock_recovery"
+        ) as run_command:
+            with self.assertRaises(BackupCanceled):
+                restore_workflow.execute_restore_tasks(
+                    runtime, server, {}, session
+                )
+
+        run_command.assert_not_called()
+
+    def test_execute_restore_tasks_runs_when_cancel_not_set(self):
+        runtime = create_runtime()
+        server = FakePluginServer()
+        session = build_restore_session(
+            tasks=[
+                {
+                    "id": 1,
+                    "snapshot": "abc123",
+                    "item_type": "full",
+                    "include_path": "/",
+                    "target_directory": "",
+                }
+            ]
+        )
+
+        with mock.patch.object(
+            restore_workflow, "ensure_default_restic_executable_available"
+        ), mock.patch.object(
+            restore_workflow,
+            "run_restic_command_with_lock_recovery",
+            return_value=mock.Mock(),
+        ) as run_command, mock.patch.object(
+            restore_workflow, "assert_restic_success"
+        ):
+            restore_workflow.execute_restore_tasks(runtime, server, {}, session)
+
+        run_command.assert_called_once()
+
+
 if __name__ == "__main__":
     unittest.main()

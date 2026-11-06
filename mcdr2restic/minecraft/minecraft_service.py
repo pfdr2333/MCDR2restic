@@ -61,9 +61,11 @@ def try_force_save_on(
         raise BackupProblem(i18n_key="error.minecraft.save_on_failed", error=exc) from exc
 
 
-def request_cancel_current_backup(
-    app_runtime: PluginRuntime, reason: str
+def request_cancel_current_process(
+    app_runtime: PluginRuntime, reason: str, cancel_requested_key: str
 ) -> Optional[TerminateResult]:
+    """置位取消事件并终止正在运行的 restic 进程；备份与恢复共用同一事件。"""
+
     app_runtime.backup.cancel.set()
     process = app_runtime.backup.current_process
     result = None
@@ -82,11 +84,27 @@ def request_cancel_current_backup(
         app_runtime.service.server.logger.warning(
             server_tr(
                 app_runtime.service.server,
-                "warn.backup.cancel_requested",
+                cancel_requested_key,
                 reason=reason,
             )
         )
     return result
+
+
+def request_cancel_current_backup(
+    app_runtime: PluginRuntime, reason: str
+) -> Optional[TerminateResult]:
+    return request_cancel_current_process(
+        app_runtime, reason, cancel_requested_key="warn.backup.cancel_requested"
+    )
+
+
+def request_cancel_running_restore(
+    app_runtime: PluginRuntime, reason: str
+) -> Optional[TerminateResult]:
+    return request_cancel_current_process(
+        app_runtime, reason, cancel_requested_key="warn.restore.cancel_requested"
+    )
 
 
 def is_backup_running(app_runtime: PluginRuntime) -> bool:

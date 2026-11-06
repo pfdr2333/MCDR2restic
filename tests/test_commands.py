@@ -1,7 +1,21 @@
 try:
-    from .support import command_handlers, mock, unittest
+    from .support import (
+        command_handlers,
+        create_runtime,
+        FakePluginServer,
+        mock,
+        PermissiveCommandSource,
+        unittest,
+    )
 except ImportError:
-    from support import command_handlers, mock, unittest
+    from support import (
+        command_handlers,
+        create_runtime,
+        FakePluginServer,
+        mock,
+        PermissiveCommandSource,
+        unittest,
+    )
 
 
 class CommandHandlerTests(unittest.TestCase):
@@ -78,3 +92,61 @@ class CommandHandlerTests(unittest.TestCase):
             [mock.call("restic")] * 3,
         )
         self.assertEqual(len(server.logger.warning.call_args_list), 3)
+
+
+class CancelCommandTests(unittest.TestCase):
+    @staticmethod
+    def make_commands():
+        from mcdr2restic.commands.backup_commands import BackupCommands
+        from mcdr2restic.commands.command_context import CommandContext
+
+        runtime = create_runtime()
+        context = CommandContext(
+            app_runtime=runtime,
+            backup_runner_factory=lambda: None,
+            maintenance_runner_factory=lambda: None,
+            reload_services=mock.Mock(),
+            wake_scheduler=mock.Mock(),
+            snapshot_invalidator=mock.Mock(),
+        )
+        return BackupCommands(context), runtime
+
+    def test_cancel_terminates_running_backup(self):
+        commands, runtime = self.make_commands()
+        source = PermissiveCommandSource(FakePluginServer())
+        runtime.backup.lock.acquire()
+        try:
+            with mock.patch(
+                "mcdr2restic.commands.backup_commands.request_cancel_current_backup"
+            ) as cancel_backup:
+                commands.command_cancel(source)
+        finally:
+            runtime.backup.lock.release()
+
+        cancel_backup.assert_called_once()
+        self.assertIn("已请求取消当前备份", source.replies[-1])
+
+    def test_cancel_prefers_running_restore(self):
+        commands, _ = self.make_commands()
+        source = PermissiveCommandSource(FakePluginServer())
+        with mock.patch(
+            "mcdr2restic.commands.backup_commands.is_restore_running",
+            return_value=True,
+        ), mock.patch(
+            "mcdr2restic.commands.backup_commands.request_cancel_running_restore"
+        ) as cancel_restore, mock.patch(
+            "mcdr2restic.commands.backup_commands.request_cancel_current_backup"
+        ) as cancel_backup:
+            commands.command_cancel(source)
+
+        cancel_restore.assert_called_once()
+        cancel_backup.assert_not_called()
+        self.assertIn("已请求取消恢复流程", source.replies[-1])
+
+    def test_cancel_without_running_tasks_replies_nothing_running(self):
+        commands, _ = self.make_commands()
+        source = PermissiveCommandSource(FakePluginServer())
+
+        commands.command_cancel(source)
+
+        self.assertIn("没有正在运行", source.replies[-1])

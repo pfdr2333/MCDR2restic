@@ -12,6 +12,7 @@ from mcdreforged.api.all import PluginServerInterface
 from mcdr2restic.core.i18n import normalize_translate, server_tr, tr
 from mcdr2restic.core.language import get_mcdr_language
 from mcdr2restic.core.models import (
+    BackupCanceled,
     BackupProblem,
     BackupTrigger,
     RestorePhase,
@@ -530,6 +531,9 @@ def execute_restore_tasks(
     command_root = command_root_from_config(session.cfg)
     ensure_default_restic_executable_available(server, restic_cfg)
     for task in session.tasks:
+        if app_runtime.backup.cancel.is_set():
+            # 取消按失败流程收尾：停服阶段会自动回滚保护快照并重启服务端
+            raise BackupCanceled(i18n_key="error.restore.cancel_requested")
         assert_restore_task_target_allowed(server, restic_cfg, task)
         result = run_restic_command_with_lock_recovery(
             ResticOperationContext(

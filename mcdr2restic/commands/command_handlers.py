@@ -73,6 +73,7 @@ class CommandHandlers:
             )
             .then(Literal("start").runs(self.backup.command_start))
             .then(Literal("stop").runs(self.backup.command_stop))
+            .then(Literal("cancel").runs(self.backup.command_cancel))
             .then(Literal("backup").runs(self.backup.command_backup))
             .then(Literal("init").runs(self.restic.command_init))
             .then(Literal("maintenance").runs(self.restic.command_maintenance))

@@ -11,6 +11,7 @@ from mcdr2restic.minecraft.minecraft_service import (
     is_backup_running,
     is_mc_ready,
     request_cancel_current_backup,
+    request_cancel_running_restore,
 )
 from mcdr2restic.restore.restore_workflow import is_restore_running
 from mcdr2restic.config.state_store import save_config_unlocked
@@ -49,6 +50,25 @@ class BackupCommands:
             reply_tr(source, server, "info.backup.disabled_cancel_requested")
             return
         reply_tr(source, server, "info.backup.disabled")
+
+    def command_cancel(self, source: CommandSource):
+        if not self.context.check_command_permission(source):
+            return
+        server = self.context.server_from_source(source)
+        # 恢复流程优先：它的 restic 进程同样记录在 backup.current_process 上
+        if is_restore_running(self.context.app_runtime):
+            request_cancel_running_restore(
+                self.context.app_runtime, server_tr(server, "reason.manual_cancel")
+            )
+            reply_tr(source, server, "info.restore.cancel_requested")
+            return
+        if is_backup_running(self.context.app_runtime):
+            request_cancel_current_backup(
+                self.context.app_runtime, server_tr(server, "reason.manual_cancel")
+            )
+            reply_tr(source, server, "info.backup.cancel_requested")
+            return
+        reply_tr(source, server, "info.cancel.nothing_running")
 
     def command_backup(self, source: CommandSource):
         if not self.context.check_command_permission(source):
