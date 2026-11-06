@@ -136,6 +136,34 @@ def get_effective_restic_repository(restic_cfg: Dict[str, Any]) -> str:
     return find_option_value(args, set(RESTIC_REPOSITORY_OPTIONS))
 
 
+def mask_restic_repository(repository: str) -> str:
+    """日志不得泄露 rest:<scheme>://user:pass@host 里的凭据段（P3-4）。
+
+    密码本身可含 @，须以 authority 段（:// 到首个 / 之间）内最后一个 @
+    作为凭据结束锚点，不能用简单正则一次性匹配。
+    """
+
+    text = str(repository or "")
+    scheme_end = text.find("://")
+    if scheme_end == -1:
+        return text
+    authority_start = scheme_end + len("://")
+    slash = text.find("/", authority_start)
+    authority = text[authority_start:] if slash == -1 else text[authority_start:slash]
+    at_index = authority.rfind("@")
+    colon_index = authority.find(":")
+    if at_index == -1 or colon_index == -1 or colon_index >= at_index:
+        return text
+    masked_authority = (
+        authority[: colon_index + 1] + "***" + authority[at_index:]
+    )
+    return (
+        text[:authority_start]
+        + masked_authority
+        + ("" if slash == -1 else text[slash:])
+    )
+
+
 def find_option_value(args: List[str], names: Set[str]) -> str:
     for index, item in enumerate(args):
         for name in names:

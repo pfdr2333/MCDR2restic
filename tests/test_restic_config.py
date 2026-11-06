@@ -9,6 +9,22 @@ from mcdr2restic.restic import restic_config
 
 
 class ResticConfigTests(unittest.TestCase):
+    def test_mask_restic_repository_hides_credentials(self):
+        # P3-4：debug 日志不得泄露 rest:<scheme>://user:pass@host 的凭据段
+        cases = {
+            "rest:https://user:pass@host:8000/": "rest:https://user:***@host:8000/",
+            "https://alice:secret@example.com/repo": "https://alice:***@example.com/repo",
+            # 密码本身可含 @，须以 authority 段内最后一个 @ 为锚
+            "rest:https://user:p@ss@host/x": "rest:https://user:***@host/x",
+            "./restic-repo": "./restic-repo",
+            "rest:https://host:8000/": "rest:https://host:8000/",
+            "sftp:user@host:/backup": "sftp:user@host:/backup",
+            "": "",
+        }
+        for raw, masked in cases.items():
+            with self.subTest(repository=raw):
+                self.assertEqual(restic_config.mask_restic_repository(raw), masked)
+
     def test_password_takes_precedence_over_password_file(self):
         with mock.patch.dict(
             restic_config.os.environ,

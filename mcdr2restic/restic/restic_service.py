@@ -20,6 +20,7 @@ from mcdr2restic.restic.restic_config import (
     assert_backup_sources_do_not_contain_repository,
     build_restic_environment,
     is_local_restic_repository,
+    mask_restic_repository,
     resolve_restic_repository_path,
 )
 from mcdr2restic.restic.restic_constants import (
@@ -242,7 +243,9 @@ def ensure_restic_repository_initialized(ctx: ResticOperationContext) -> bool:
     if not is_local_restic_repository(repository):
         server.logger.debug(
             server_tr(
-                server, "debug.restic.auto_init_skipped_remote", repository=repository
+                server,
+                "debug.restic.auto_init_skipped_remote",
+                repository=mask_restic_repository(repository),
             )
         )
         return False
