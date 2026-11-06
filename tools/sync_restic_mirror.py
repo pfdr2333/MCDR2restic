@@ -167,7 +167,13 @@ def mirror_already_synced(version: str, github_sums_text: str) -> bool:
     except urllib.error.HTTPError as exc:
         if exc.code in (403, 404):
             return False
-        raise
+        # 其他状态（限流/5xx/网络异常）按未同步处理：重传同内容幂等安全，
+        # 正确性最终由端到端哈希回读兜底
+        log("sync check for {} inconclusive (http {}); will re-upload".format(version, exc.code))
+        return False
+    except OSError as exc:
+        log("sync check for {} failed ({}); will re-upload".format(version, exc))
+        return False
 
 
 def upload_object(
@@ -321,8 +327,8 @@ def e2e_verify(version: str, paths: dict):
             expected = hashlib.sha256(local_path.read_bytes()).hexdigest()
             try:
                 remote = http_get_bytes(mirror_url(version, name))
-            except urllib.error.HTTPError as exc:
-                pending.append("{} (http {})".format(name, exc.code))
+            except (urllib.error.HTTPError, urllib.error.URLError, OSError) as exc:
+                pending.append("{} ({})".format(name, exc))
                 continue
             if hashlib.sha256(remote).hexdigest() == expected:
                 log("e2e ok: {}/{}".format(version, name))
@@ -397,9 +403,10 @@ def main(argv: list) -> int:
     for version in versions:
         try:
             sync_version(version, manifest_path, credentials)
-        except SystemExit as exc:
+        except (SystemExit, Exception) as exc:
+            # 单版本失败只记录不中断，其余版本继续同步
             failed.append(version)
-            log("ERROR syncing {}: {}".format(version, exc))
+            log("ERROR syncing {}: {}: {}".format(version, type(exc).__name__, exc))
     if failed:
         log("sync failed for: {}".format(", ".join(failed)))
         return 1
