@@ -54,3 +54,27 @@ class CommandHandlerTests(unittest.TestCase):
             handlers.build_command_tree.call_args_list,
             [mock.call("restic")] * 3,
         )
+
+    def test_register_commands_ignores_non_list_aliases_with_warning(self):
+        # P1-1：字符串 aliases 会被逐字符注册为单字符命令根，必须告警并忽略
+        handlers = command_handlers.CommandHandlers.__new__(
+            command_handlers.CommandHandlers
+        )
+        handlers.context = mock.Mock()
+        handlers.context.get_command_root.return_value = "restic"
+        handlers.build_command_tree = mock.Mock(side_effect=lambda root: root)
+        server = mock.Mock()
+
+        for bad in ("rs2", 7, {"a": 1}):
+            with mock.patch.object(
+                command_handlers,
+                "get_config_snapshot",
+                return_value={"command": {"aliases": bad}},
+            ):
+                handlers.register_commands(server)
+
+        self.assertEqual(
+            handlers.build_command_tree.call_args_list,
+            [mock.call("restic")] * 3,
+        )
+        self.assertEqual(len(server.logger.warning.call_args_list), 3)

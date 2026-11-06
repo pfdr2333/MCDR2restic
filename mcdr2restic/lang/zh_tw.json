@@ -210,6 +210,7 @@
   "info.config.default_created": "已生成預設配置檔案 {path}",
   "warn.config.auto_repaired_block_scalar_indentation": "檢測到配置檔案中的多行文字縮排損壞，已自動修復 {path}",
   "warn.config.deprecated_key_removed": "檢測到已廢棄配置項 {config_key}，已自動遷移或移除",
+  "warn.config.command_aliases_invalid": "command.aliases 配置應為字串列表，當前值型別無效，已忽略該項",
   "info.config.migrated": "已遷移並補全配置檔案 {name}",
   "error.config.read_failed": "讀取配置檔案失敗 {path}：{error}",
   "error.config.yaml_invalid": "配置檔案 YAML 格式損壞：{path}",

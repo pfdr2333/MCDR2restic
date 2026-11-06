@@ -210,6 +210,7 @@
   "mcdr2restic.info.config.default_created": "已生成默认配置文件 {path}",
   "mcdr2restic.warn.config.auto_repaired_block_scalar_indentation": "检测到配置文件中的多行文本缩进损坏，已自动修复 {path}",
   "mcdr2restic.warn.config.deprecated_key_removed": "检测到已废弃配置项 {config_key}，已自动迁移或移除",
+  "mcdr2restic.warn.config.command_aliases_invalid": "command.aliases 配置应为字符串列表，当前值类型无效，已忽略该项",
   "mcdr2restic.info.config.migrated": "已迁移并补全配置文件 {name}",
   "mcdr2restic.error.config.read_failed": "读取配置文件失败 {path}：{error}",
   "mcdr2restic.error.config.yaml_invalid": "配置文件 YAML 格式损坏：{path}",

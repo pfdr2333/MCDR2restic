@@ -16,7 +16,7 @@ from mcdr2restic.commands.backup_commands import BackupCommands
 from mcdr2restic.commands.command_context import CommandContext
 from mcdr2restic.commands.restore_commands import RestoreCommands
 from mcdr2restic.commands.restic_commands import ResticCommands
-from mcdr2restic.core.i18n import server_rtr
+from mcdr2restic.core.i18n import server_rtr, server_tr
 from mcdr2restic.core.utils import get_config_section
 from mcdr2restic.config.state_store import get_config_snapshot
 from mcdr2restic.commands.status_commands import StatusCommands
@@ -35,7 +35,14 @@ class CommandHandlers:
             get_config_snapshot(self.context.app_runtime), "command"
         )
         roots = [self.context.get_command_root()]
-        roots.extend(command_cfg.get("aliases", []))
+        aliases = command_cfg.get("aliases", [])
+        if isinstance(aliases, (list, tuple)):
+            roots.extend(aliases)
+        else:
+            # 字符串会被逐字符注册为单字符命令根，污染命令树且难以排查
+            server.logger.warning(
+                server_tr(server, "warn.config.command_aliases_invalid")
+            )
         seen: Set[str] = set()
         for root_name in roots:
             root_name = str(root_name).strip()
