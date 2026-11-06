@@ -36,6 +36,30 @@ def get_schedule_online_command_lines(
     )
 
 
+def get_minecraft_wait_save_all_completion_lines(
+    language: str, minecraft: Dict[str, Any]
+) -> List[str]:
+    return get_nested_scalar_lines(
+        language,
+        "minecraft",
+        "wait_for_save_all_completion",
+        section_value(
+            language, "minecraft", minecraft, "wait_for_save_all_completion"
+        ),
+    )
+
+
+def get_minecraft_save_all_done_patterns_lines(
+    language: str, minecraft: Dict[str, Any]
+) -> List[str]:
+    lines = get_nested_entry_lines(language, "minecraft", "save_all_done_patterns")
+    return rewrite_nested_sequence(
+        lines,
+        "save_all_done_patterns",
+        section_value(language, "minecraft", minecraft, "save_all_done_patterns"),
+    )
+
+
 def get_language_lines(language: str, configured_language: str) -> List[str]:
     return rewrite_top_level_scalar(
         get_top_level_block_lines(language, "language"),

@@ -16,6 +16,8 @@ from mcdr2restic.config.config_template import (
     find_nested_entry_end,
     find_nested_key_index,
     get_language_lines,
+    get_minecraft_save_all_done_patterns_lines,
+    get_minecraft_wait_save_all_completion_lines,
     get_restic_auto_init_lines,
     get_restic_password_file_lines,
     get_restic_password_lines,
@@ -257,6 +259,7 @@ def apply_config_file_migrations(
 ) -> List[str]:
     lines = ensure_language_line(lines, language, cfg)
     lines = ensure_schedule_migration_lines(lines, language, cfg)
+    lines = ensure_minecraft_migration_lines(lines, language, cfg)
     lines = remove_deprecated_schedule_lines(lines)
     lines = remove_deprecated_restore_lines(lines)
     lines = remove_deprecated_restic_lines(lines)
@@ -295,6 +298,27 @@ def ensure_schedule_migration_lines(
     if not insertions:
         return lines
     return insert_into_top_level_block(lines, "schedule", insertions)
+
+
+def ensure_minecraft_migration_lines(
+    lines: List[str],
+    language: str,
+    cfg: Dict[str, Any],
+) -> List[str]:
+    # v0.6.0 起新增的 save-all 完成确认键，老配置的既有 minecraft 块也要补齐
+    minecraft = get_config_section(cfg, "minecraft")
+    insertions: List[str] = []
+    if not has_nested_key(lines, "minecraft", "wait_for_save_all_completion"):
+        insertions.extend(
+            get_minecraft_wait_save_all_completion_lines(language, minecraft)
+        )
+    if not has_nested_key(lines, "minecraft", "save_all_done_patterns"):
+        insertions.extend(
+            get_minecraft_save_all_done_patterns_lines(language, minecraft)
+        )
+    if not insertions:
+        return lines
+    return insert_into_top_level_block(lines, "minecraft", insertions)
 
 
 # 顶级配置块迁移注册表：新增配置段时必须把键名加入此列表并保持模板顺序，

@@ -181,6 +181,33 @@ class ConfigurationTests(unittest.TestCase):
             yaml.safe_load(migrated)["restic"]["use_path_restic"], False
         )
 
+    def test_apply_config_file_migrations_appends_minecraft_save_all_keys(self):
+        # v0.6.0 后 minecraft 块新增的 save-all 确认键，必须能追加进老配置既有块
+        lines = [
+            "enabled: true\n",
+            "minecraft:\n",
+            '  save_all_command: "save-all flush"\n',
+            "  wait_after_save_off_seconds: 2\n",
+            "  wait_after_save_all_seconds: 10\n",
+        ]
+        cfg = build_default_config("zh_cn")
+
+        migrated = "".join(apply_config_file_migrations(lines, "zh_cn", cfg))
+
+        self.assertIn("wait_for_save_all_completion: true\n", migrated)
+        self.assertEqual(migrated.count("save_all_done_patterns:"), 1)
+        for comment in (
+            "是否通过服务端输出确认 save-all 完成",
+            "判定 save-all 完成的输出关键词",
+        ):
+            self.assertEqual(migrated.count(comment), 1, comment)
+        parsed = yaml.safe_load(migrated)
+        self.assertTrue(parsed["minecraft"]["wait_for_save_all_completion"])
+        self.assertEqual(
+            parsed["minecraft"]["save_all_done_patterns"],
+            cfg["minecraft"]["save_all_done_patterns"],
+        )
+
     def test_config_migration_warns_about_removed_restore_timeout(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             server = FakeServer(temp_dir)
