@@ -1,15 +1,12 @@
 name: Deploy Docs
 
+# 文档仅在推送版本标签后部署，保证线上文档与最新发布对齐；
+# 发布间隔内的文档改动随下一次发版上线，紧急修正可用 workflow_dispatch 手动发布
 on:
   workflow_dispatch:
   push:
-    branches:
-      - main
-    paths:
-      - "docs/**"
-      - "mkdocs.yml"
-      - "requirements-docs.txt"
-      - ".github/workflows/docs.yml"
+    tags:
+      - "v*"
 
 permissions:
   contents: read
