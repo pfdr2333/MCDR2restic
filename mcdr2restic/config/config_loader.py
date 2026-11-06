@@ -27,6 +27,7 @@ from mcdr2restic.config.state_store import (
     get_config_snapshot,
     load_state_file,
     merge_defaults,
+    reset_stale_backup_running_status,
     save_config_unlocked,
     save_text_file_atomically,
 )
@@ -53,6 +54,7 @@ def load_config(
         app_runtime.config_state.state = state
         app_runtime.config_state.language = language
         ensure_runtime(app_runtime.config_state.config, app_runtime.config_state.state)
+        reset_stale_backup_running_status(app_runtime, language)
         save_config_unlocked(app_runtime, server)
     set_active_language(language)
     if source is not None:

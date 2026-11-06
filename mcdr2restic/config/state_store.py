@@ -17,7 +17,8 @@ from mcdr2restic.config.config_paths import get_data_file_path
 from mcdr2restic.defaults.default_config import build_default_config
 from mcdr2restic.defaults.default_constants import STATE_NAME
 from mcdr2restic.defaults.runtime_defaults import build_default_runtime
-from mcdr2restic.core.i18n import server_tr
+from mcdr2restic.core.i18n import server_tr, tr
+from mcdr2restic.core.models import BackupRunStatus
 from mcdr2restic.core.runtime import PluginRuntime
 
 
@@ -101,6 +102,31 @@ def persisted_runtime_state(
     if isinstance(state_runtime, dict):
         return state_runtime
     return None
+
+
+def reset_stale_backup_running_status(
+    app_runtime: PluginRuntime, language: str
+):
+    """进程被杀后 state.yml 残留的 running 状态只在加载时复位一次。
+
+    不能放进 ensure_runtime：它是配置快照的热路径，复位会打断进行中
+    备份的合法 running 状态。
+    """
+
+    thread = app_runtime.backup.thread
+    if thread is not None and thread.is_alive():
+        return
+    runtime_state = app_runtime.config_state.config.get("runtime")
+    if runtime_state is None or runtime_state.get(
+        "last_backup_status"
+    ) != BackupRunStatus.RUNNING.value:
+        return
+    message = tr(language, "warn.backup.running_status_reset")
+    runtime_state["last_backup_status"] = BackupRunStatus.INTERRUPTED.value
+    runtime_state["last_backup_message"] = message
+    server = app_runtime.service.server
+    if server is not None:
+        server.logger.warning(message)
 
 
 def merge_defaults(target: Dict[str, Any], defaults: Dict[str, Any]):

@@ -418,6 +418,7 @@ def localized_backup_status(status: Any, translate_or_language: Any) -> str:
         BackupRunStatus.SUCCESS.value: "backup.status.success",
         BackupRunStatus.FAILED.value: "backup.status.failed",
         BackupRunStatus.CANCELED.value: "backup.status.canceled",
+        BackupRunStatus.INTERRUPTED.value: "backup.status.interrupted",
     }
     key = mapping.get(text)
     return translate(key) if key else text

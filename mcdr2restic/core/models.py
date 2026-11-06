@@ -19,6 +19,8 @@ class BackupRunStatus(TextEnum):
     SUCCESS = "success"
     FAILED = "failed"
     CANCELED = "canceled"
+    # 进程被杀时 state.yml 会残留 running，启动检测到后改写为该状态
+    INTERRUPTED = "interrupted"
 
 
 class BackupTrigger(TextEnum):

@@ -479,6 +479,63 @@ class ConfigurationTests(unittest.TestCase):
             self.assertEqual(final["config_version"], 10)
             self.assertFalse(final["enabled"])
 
+    @mock.patch("mcdr2restic.core.i18n._ACTIVE_LANGUAGE", "")
+    def test_load_config_resets_stale_running_backup_status(self):
+        # P1-3：进程被杀后 state.yml 残留 running，启动加载必须复位为已中断
+        with tempfile.TemporaryDirectory() as temp_dir:
+            server = FakeServer(temp_dir)
+            server.logger = FakeLogger()
+            server.get_mcdr_language = lambda: "en_us"
+            config_path = os.path.join(temp_dir, "config.yml")
+            with open(config_path, "w", encoding="utf8") as file:
+                file.write("enabled: true\nconfig_version: 10\n")
+            state_path = os.path.join(temp_dir, "state.yml")
+            with open(state_path, "w", encoding="utf8") as file:
+                file.write("runtime:\n  last_backup_status: running\n")
+
+            app_runtime = create_runtime()
+            app_runtime.service.server = server
+            load_config(app_runtime, server)
+
+            with app_runtime.config_state.lock:
+                runtime_state = app_runtime.config_state.config["runtime"]
+            self.assertEqual(runtime_state["last_backup_status"], "interrupted")
+            self.assertTrue(runtime_state["last_backup_message"])
+            self.assertEqual(len(server.logger.warning_messages), 1)
+
+    @mock.patch("mcdr2restic.core.i18n._ACTIVE_LANGUAGE", "")
+    def test_load_config_keeps_running_status_with_live_backup_thread(self):
+        # 重载窗口内备份线程仍在跑时不得误改 running 状态
+        with tempfile.TemporaryDirectory() as temp_dir:
+            server = FakeServer(temp_dir)
+            server.logger = FakeLogger()
+            server.get_mcdr_language = lambda: "en_us"
+            config_path = os.path.join(temp_dir, "config.yml")
+            with open(config_path, "w", encoding="utf8") as file:
+                file.write("enabled: true\nconfig_version: 10\n")
+            state_path = os.path.join(temp_dir, "state.yml")
+            with open(state_path, "w", encoding="utf8") as file:
+                file.write("runtime:\n  last_backup_status: running\n")
+
+            release = threading.Event()
+            thread = threading.Thread(
+                target=lambda: release.wait(timeout=5), daemon=True
+            )
+            thread.start()
+            app_runtime = create_runtime()
+            app_runtime.service.server = server
+            app_runtime.backup.thread = thread
+            try:
+                load_config(app_runtime, server)
+
+                with app_runtime.config_state.lock:
+                    runtime_state = app_runtime.config_state.config["runtime"]
+                self.assertEqual(runtime_state["last_backup_status"], "running")
+                self.assertEqual(server.logger.warning_messages, [])
+            finally:
+                release.set()
+                thread.join()
+
     def test_first_config_generation_is_atomic(self):
         server = FakePluginServer()
         with tempfile.TemporaryDirectory() as temp_dir:
