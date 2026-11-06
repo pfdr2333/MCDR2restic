@@ -47,7 +47,6 @@
 ```yaml
 restic:
   executable: "./config/mcdr2restic/restic"
-  auto_download: true
 ```
 
 Windows 下对应的是：
@@ -56,6 +55,8 @@ Windows 下对应的是：
 restic:
   executable: '.\config\mcdr2restic\restic.exe'
 ```
+
+另外，如果你已经把 `restic` 装进了系统 PATH，可以在配置里开启 `use_path_restic: true`，插件会优先使用系统的 `restic`，完全绕过下载。
 
 ## 4. 自动初始化为什么没发生
 
@@ -244,7 +245,7 @@ config.yml.v8.bak
 1. 先确认你当前代理是可用还是反而在捣乱
 2. 如果代理可能有问题，临时关闭后再试一次
 3. 给 MCDR 使用的 Python / pip 配置镜像或代理
-4. 保留 `download_proxy_prefixes`，让插件继续尝试下载代理地址
+4. 自动下载 `restic` 时插件会自动依次尝试官方地址和内置加速前缀，无需额外配置；也可以自己下载 `restic` 放进配置目录，或装进系统 PATH 并开启 `use_path_restic`
 
 ## 17. 只想快速判断现在能不能用，最少要看哪几项
 

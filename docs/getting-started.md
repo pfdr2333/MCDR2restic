@@ -84,7 +84,7 @@
 
 1. 检查 Minecraft 是否已经正常运行
 2. 检查本地仓库是否被放进了备份源目录里
-3. 如果你保持默认 `restic` 路径，且文件不存在，就尝试自动下载
+3. 如果你保持默认 `restic` 路径：优先用系统 PATH 中的 `restic`（开启 `use_path_restic` 时），否则配置目录内没有就自动下载
 4. 如果本地仓库还没初始化，就自动执行 `restic init`
 5. 执行 Minecraft 保存相关命令
 6. 执行 `restic backup`
@@ -134,4 +134,4 @@ restic:
 
 - 先确认代理是否可用，或临时关闭有问题的代理再试
 - 给 MCDR 使用的 Python / pip 配置镜像或代理
-- 保留默认的 `download_proxy_prefixes`，让插件自动尝试下载代理前缀
+- 自动下载 `restic` 会自动尝试官方地址和内置加速前缀；也可以自行安装 `restic`，首次生成配置时插件会探测 PATH 并直接使用它

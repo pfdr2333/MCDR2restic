@@ -237,13 +237,7 @@ restic:
   repository: "./restic-repo"
   password: "请改成你自己的强密码"
   password_file: ""
-  auto_download: true
-  download_version: "v0.19.1"
-  download_proxy_prefixes:
-    - "https://gh.llkk.cc/"
-    - "https://gh-proxy.com/"
-    - "https://hub.gitmirror.com/"
-  download_timeout_seconds: 120
+  use_path_restic: false
   auto_init_local_repository: true
   environment: {}
   maintenance_commands:
@@ -308,20 +302,27 @@ restic:
   password_file: "./config/mcdr2restic/restic-password.txt"
 ```
 
-### `auto_download`
+### `use_path_restic`
 
-只有在你使用默认可执行文件路径族时，自动下载才有意义。它主要用于默认路径下缺少 `restic` 的场景。
+是否优先使用系统 PATH 中安装的 `restic`：
 
-当前适用范围：
+- `true`：优先使用系统 `restic`；未找到时回退到配置目录内的 `restic`
+- `false`：使用配置目录内的 `restic`
 
-- Linux amd64
-- Windows amd64
+仅在 `executable` 为裸名 `restic` 或默认路径族时生效；`executable` 写了明确路径时以路径为准。
 
-自动下载会校验产物完整性：
+首次生成配置时会自动探测系统 PATH 并把开关写成探测结果：装过 `restic` 的机器直接用系统的，没装过的保持关闭、由自动下载兜底。旧配置迁移会补上该键，默认 `false`，不改变既有行为。
 
-- 默认下载插件内置信任的 `restic` 版本（`download_version`），并对照插件内置的官方 SHA256 校验，内置信任版本无需访问 GitHub
-- 改为 `latest` 或其他版本时，会从 `github.com` 获取该版本官方 `SHA256SUMS` 校验；校验失败或无法获取校验文件时不会安装，此时可配置下载代理或改回内置信任版本
-- `download_proxy_prefixes` 仅用于加速二进制下载，不参与校验
+### 自动下载 restic
+
+自动下载不再有配置项，也没有开关，行为完全固定：
+
+- 触发条件：`executable` 为默认路径族，且配置目录内没有 `restic`，且未启用/未命中 `use_path_restic`
+- 版本：固定使用插件内置信任的版本，并对照插件内置的官方 SHA256 校验，无需访问 GitHub API
+- 网络：固定按官方 GitHub 直连和内置加速前缀依次尝试；都失败时下次操作会重新尝试
+- 适用范围：Linux amd64、Windows amd64
+
+不想用自动下载时，把 `restic` 放进配置目录、装进系统 PATH（并开启 `use_path_restic`），或把 `executable` 指向明确路径即可。
 
 ### `auto_init_local_repository`
 
