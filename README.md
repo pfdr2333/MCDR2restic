@@ -12,7 +12,7 @@ MCDReforged 插件：调用 [restic](https://restic.readthedocs.io/en/stable/) �
 - 定时备份：支持 6 位 cron 与固定间隔，可中途打断
 - 无人游玩自动跳过：结合 join/left 事件与 `list` 在线检查
 - 强制备份调度：不受玩家活动感知影响，默认关闭
-- 自动下载 restic（Linux/Windows amd64），并支持代理前缀
+- 自动下载 restic（Linux/Windows amd64），内置下载源含官方地址、自建镜像与加速前缀
 - 快照恢复：整份快照、单文件、文件夹，支持恢复到指定目录
 - 恢复前自动创建保护快照，失败自动回滚
 - 仓库维护：`forget`/`prune` 等命令按计划独立执行
