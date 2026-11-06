@@ -225,7 +225,14 @@ def resolve_backup_source_path(restic_cfg: Dict[str, Any], source: str) -> str:
 
 
 def normalize_filesystem_path(path: str) -> str:
-    return os.path.realpath(os.path.abspath(os.path.normpath(path)))
+    normalized = os.path.abspath(os.path.normpath(path))
+    try:
+        return os.path.realpath(normalized)
+    except OSError:
+        # Windows realpath 非严格模式只容忍白名单内的 winerror，UNC 不可达
+        # （ERROR_BAD_NETPATH 53）会直接抛 FileNotFoundError；解析不了就退回
+        # abspath 结果，不因网络状态中断备份/恢复流程
+        return normalized
 
 
 # Windows 的 verbatim 前缀与 UNC 等价写法不会被 realpath/normpath 归一，

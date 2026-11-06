@@ -25,6 +25,21 @@ class ResticConfigTests(unittest.TestCase):
             with self.subTest(repository=raw):
                 self.assertEqual(restic_config.mask_restic_repository(raw), masked)
 
+    def test_normalize_filesystem_path_falls_back_when_realpath_raises(self):
+        # Windows realpath 非严格模式只容忍白名单 winerror，UNC 不可达
+        # （ERROR_BAD_NETPATH 53）会抛 FileNotFoundError；归一化应退回
+        # abspath 结果，而不是把网络状态异常抛给调用方
+        expected = os.path.abspath(os.path.normpath("D:/tmp/restore-out"))
+        with mock.patch.object(
+            restic_config.os.path,
+            "realpath",
+            side_effect=FileNotFoundError(53, "找不到网络路径。"),
+        ):
+            self.assertEqual(
+                restic_config.normalize_filesystem_path("D:/tmp/restore-out"),
+                expected,
+            )
+
     def test_password_takes_precedence_over_password_file(self):
         with mock.patch.dict(
             restic_config.os.environ,
