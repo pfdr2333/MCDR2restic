@@ -202,22 +202,44 @@ def atomically_replace_config_with_backup(
 ):
     config_path = Path(path)
     temporary_path = config_path.with_name("{}.temp".format(config_path.name))
-    backup_path = config_path.with_name(
-        "{}.v{}.bak".format(config_path.name, source_version)
-    )
-    if backup_path.exists():
-        raise ConfigError("error.config.migration_backup_exists", path=backup_path)
-
     try:
         write_durable_text_file(temporary_path, updated, exclusive=False)
         with config_path.open("r", encoding="utf8", newline="") as file:
             original = file.read()
+        # 同版本残留的备份不视为错误，轮换出新名字保留全部历史备份
+        backup_path = reserve_backup_path(config_path, source_version)
         write_durable_text_file(backup_path, original, exclusive=True)
-        os.replace(temporary_path, config_path)
     except OSError as exc:
+        temporary_path.unlink(missing_ok=True)
         raise ConfigError(
             "error.config.migration_write_failed", path=config_path, error=exc
         ) from exc
+
+    try:
+        os.replace(temporary_path, config_path)
+    except OSError as exc:
+        # 此时配置未被改动，刚写的备份只是原文件副本，清掉避免下次启动被残留物卡住
+        temporary_path.unlink(missing_ok=True)
+        backup_path.unlink(missing_ok=True)
+        raise ConfigError(
+            "error.config.migration_write_failed", path=config_path, error=exc
+        ) from exc
+
+
+def reserve_backup_path(config_path: Path, source_version: int) -> Path:
+    base = config_path.with_name(
+        "{}.v{}.bak".format(config_path.name, source_version)
+    )
+    if not base.exists():
+        return base
+    index = 1
+    while True:
+        candidate = config_path.with_name(
+            "{}.v{}.bak.{}".format(config_path.name, source_version, index)
+        )
+        if not candidate.exists():
+            return candidate
+        index += 1
 
 
 def write_durable_text_file(path: Path, text: str, exclusive: bool):

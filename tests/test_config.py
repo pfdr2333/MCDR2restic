@@ -51,6 +51,9 @@ except ImportError:
     )
 
 from mcdr2restic.config.config_loader import load_config, save_enabled_unlocked
+from mcdr2restic.config.config_migration import (
+    atomically_replace_config_with_backup,
+)
 from mcdr2restic.config.config_paths import ensure_config_file_exists
 from mcdr2restic.defaults.message_defaults import build_default_messages
 
@@ -366,6 +369,51 @@ class ConfigurationTests(unittest.TestCase):
             self.assertEqual(backup, original)
             self.assertEqual(yaml.safe_load(migrated)["config_version"], 10)
             self.assertFalse(os.path.exists(config_path + ".temp"))
+
+    def test_migration_backup_rotates_when_same_version_backup_exists(self):
+        # P0-2：同版本二次迁移不得硬失败，也不得覆盖历史备份
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config_path = os.path.join(temp_dir, "config.yml")
+            with open(config_path, "w", encoding="utf8") as file:
+                file.write("first: true\n")
+
+            atomically_replace_config_with_backup(config_path, "updated: 1\n", 8)
+            atomically_replace_config_with_backup(config_path, "updated: 2\n", 8)
+
+            first_backup = os.path.join(temp_dir, "config.yml.v8.bak")
+            second_backup = os.path.join(temp_dir, "config.yml.v8.bak.1")
+            self.assertTrue(os.path.exists(first_backup))
+            self.assertTrue(os.path.exists(second_backup))
+            with open(first_backup, "r", encoding="utf8") as file:
+                self.assertEqual(file.read(), "first: true\n")
+            with open(second_backup, "r", encoding="utf8") as file:
+                self.assertEqual(file.read(), "updated: 1\n")
+            with open(config_path, "r", encoding="utf8") as file:
+                self.assertEqual(file.read(), "updated: 2\n")
+
+    def test_migration_replace_failure_leaves_no_residue(self):
+        # P0-2：os.replace 被杀软/文件占用打断时不得留下卡死下次启动的 .bak
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config_path = os.path.join(temp_dir, "config.yml")
+            original = "enabled: true\n"
+            with open(config_path, "w", encoding="utf8") as file:
+                file.write(original)
+
+            with mock.patch(
+                "mcdr2restic.config.config_migration.os.replace",
+                side_effect=OSError("locked by antivirus"),
+            ), self.assertRaises(ConfigError) as error:
+                atomically_replace_config_with_backup(
+                    config_path, "updated: 1\n", 8
+                )
+
+            self.assertEqual(
+                error.exception.i18n_key, "error.config.migration_write_failed"
+            )
+            self.assertFalse(os.path.exists(os.path.join(temp_dir, "config.yml.v8.bak")))
+            self.assertFalse(os.path.exists(config_path + ".temp"))
+            with open(config_path, "r", encoding="utf8") as file:
+                self.assertEqual(file.read(), original)
 
     def test_invalid_config_fails_without_automatic_repair(self):
         with tempfile.TemporaryDirectory() as temp_dir:

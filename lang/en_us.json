@@ -217,7 +217,6 @@
   "mcdr2restic.error.config.yaml_invalid": "Configuration file contains invalid YAML: {path}",
   "mcdr2restic.error.config.root_not_mapping": "Configuration file must use a top-level mapping: {path}",
   "mcdr2restic.error.config.version_invalid": "Configuration version is invalid in {path}: {value}",
-  "mcdr2restic.error.config.migration_backup_exists": "Configuration migration backup already exists: {path}",
   "mcdr2restic.error.config.migration_write_failed": "Failed to write migrated configuration {path}: {error}",
   "mcdr2restic.log.plugin.loaded": "MCDR2Restic loaded",
   "mcdr2restic.warn.plugin.previous_shutdown_failed": "An exception occurred while shutting down the previous plugin instance:\n{error}",

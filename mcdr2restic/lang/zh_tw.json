@@ -215,7 +215,6 @@
   "error.config.yaml_invalid": "配置檔案 YAML 格式損壞：{path}",
   "error.config.root_not_mapping": "配置檔案頂層必須是對映：{path}",
   "error.config.version_invalid": "配置檔案中的配置版本無效 {path}：{value}",
-  "error.config.migration_backup_exists": "配置遷移備份檔案已存在：{path}",
   "error.config.migration_write_failed": "寫入遷移後的配置檔案失敗 {path}：{error}",
   "log.plugin.loaded": "MCDR2Restic 已載入",
   "warn.plugin.previous_shutdown_failed": "清理上一外掛例項時發生異常：\n{error}",
