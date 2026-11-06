@@ -497,7 +497,7 @@ custom_webhook:
 说明：
 
 - 插件会向 `url` 发送 JSON POST 请求，请求体就是 `payload` 的结构
-- `payload` 里字符串值支持模板变量：`{message}` 是完整通知正文，`{prefix}`、`{label}`、`{status}`、`{start_time}`、`{end_time}`、`{duration_seconds}`、`{detail}`、`{error}` 也可用；不认识的变量会原样保留
+- `payload` 里字符串值支持模板变量：`{message}` 是完整通知正文（开头已含 `message_prefix` 配置的前缀），`{label}`、`{status}`、`{start_time}`、`{end_time}`、`{duration_seconds}`、`{detail}`、`{error}` 也可用；不认识的变量会原样保留
 - `headers` 可以加认证头，例如 `Authorization: Bearer xxx`
 - 以飞书为例，把 `payload` 改成下面这样即可：
 
