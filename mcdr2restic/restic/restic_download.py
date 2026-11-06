@@ -22,27 +22,29 @@ from mcdreforged.api.all import PluginServerInterface
 
 from mcdr2restic.core.i18n import server_tr
 from mcdr2restic.defaults.default_constants import (
+    DEFAULT_PROXY_PREFIXES,
     DEFAULT_RESTIC_EXECUTABLE_POSIX,
     DEFAULT_RESTIC_EXECUTABLE_WINDOWS,
     PLUGIN_ID,
 )
-from mcdr2restic.defaults.restic_release_defaults import build_restic_fallback_release
+from mcdr2restic.defaults.restic_release_defaults import (
+    build_restic_fallback_release,
+    get_default_restic_version,
+)
 from mcdr2restic.core.models import BackupProblem
 from mcdr2restic.restic.restic_config import resolve_path_against_working_directory
 from mcdr2restic.restic.restic_constants import (
-    RESTIC_CFG_AUTO_DOWNLOAD,
-    RESTIC_CFG_DOWNLOAD_PROXY_PREFIXES,
-    RESTIC_CFG_DOWNLOAD_TIMEOUT_SECONDS,
-    RESTIC_CFG_DOWNLOAD_VERSION,
     RESTIC_CFG_EXECUTABLE,
 )
+
+
+# 自动下载为固化行为：版本取内置信任清单，超时与加速前缀不再开放配置
+RESTIC_DOWNLOAD_TIMEOUT_SECONDS = 120
 
 
 def ensure_default_restic_executable_available(
     server: PluginServerInterface, restic_cfg: Dict[str, Any]
 ):
-    if not bool(restic_cfg.get(RESTIC_CFG_AUTO_DOWNLOAD, True)):
-        return
     executable = str(
         restic_cfg.get(RESTIC_CFG_EXECUTABLE, DEFAULT_RESTIC_EXECUTABLE_POSIX) or ""
     ).strip()
@@ -51,11 +53,11 @@ def ensure_default_restic_executable_available(
     target_path = resolve_restic_executable_path(restic_cfg, executable)
     if os.path.exists(target_path):
         return
-    install_default_restic_for_platform(server, restic_cfg, target_path)
+    install_default_restic_for_platform(server, target_path)
 
 
 def install_default_restic_for_platform(
-    server: PluginServerInterface, restic_cfg: Dict[str, Any], target_path: str
+    server: PluginServerInterface, target_path: str
 ):
     platform_info = get_restic_download_platform()
     if platform_info is None:
@@ -74,9 +76,7 @@ def install_default_restic_for_platform(
             target_path=target_path,
         )
     )
-    download_and_install_restic(
-        server, restic_cfg, asset_keyword, output_name, target_path
-    )
+    download_and_install_restic(server, asset_keyword, output_name, target_path)
 
 
 def is_default_restic_executable_path(executable: str) -> bool:
@@ -140,15 +140,12 @@ def get_restic_download_platform() -> Optional[Tuple[str, str, str]]:
 
 def download_and_install_restic(
     server: PluginServerInterface,
-    restic_cfg: Dict[str, Any],
     asset_keyword: str,
     output_name: str,
     target_path: str,
 ):
-    timeout = max(10, int(restic_cfg.get(RESTIC_CFG_DOWNLOAD_TIMEOUT_SECONDS, 120)))
-    version = str(
-        restic_cfg.get(RESTIC_CFG_DOWNLOAD_VERSION, "latest") or "latest"
-    ).strip()
+    timeout = RESTIC_DOWNLOAD_TIMEOUT_SECONDS
+    version = get_default_restic_version()
     release = fetch_restic_release_metadata(version, timeout)
     asset = select_restic_release_asset(release, asset_keyword)
     asset_url = str(asset.get("browser_download_url", "") or "")
@@ -160,7 +157,6 @@ def download_and_install_restic(
         )
     install_restic_from_urls(
         server,
-        restic_cfg,
         ResticDownloadTarget(
             asset_url=asset_url,
             asset_name=asset_name,
@@ -196,12 +192,9 @@ class ResticDownloadTarget:
 
 def install_restic_from_urls(
     server: PluginServerInterface,
-    restic_cfg: Dict[str, Any],
     target: ResticDownloadTarget,
 ):
-    urls = build_download_urls(
-        target.asset_url, restic_cfg.get(RESTIC_CFG_DOWNLOAD_PROXY_PREFIXES, [])
-    )
+    urls = build_download_urls(target.asset_url, DEFAULT_PROXY_PREFIXES)
     last_error = ""
     os.makedirs(os.path.dirname(target.target_path) or ".", exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="mcdr2restic-") as temp_dir:

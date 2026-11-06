@@ -56,30 +56,6 @@ def get_restic_password_file_lines(language: str, restic: Dict[str, Any]) -> Lis
     return get_restic_scalar_lines(language, restic, "password_file")
 
 
-def get_restic_auto_download_lines(language: str, restic: Dict[str, Any]) -> List[str]:
-    return get_restic_scalar_lines(language, restic, "auto_download")
-
-
-def get_restic_download_version_lines(
-    language: str, restic: Dict[str, Any]
-) -> List[str]:
-    return get_restic_scalar_lines(language, restic, "download_version")
-
-
-def get_restic_download_proxy_lines(language: str, restic: Dict[str, Any]) -> List[str]:
-    values = section_values(language, "restic", restic)
-    lines = get_nested_entry_lines(language, "restic", "download_proxy_prefixes")
-    return rewrite_nested_sequence(
-        lines, "download_proxy_prefixes", values.get("download_proxy_prefixes")
-    )
-
-
-def get_restic_download_timeout_lines(
-    language: str, restic: Dict[str, Any]
-) -> List[str]:
-    return get_restic_scalar_lines(language, restic, "download_timeout_seconds")
-
-
 def get_restic_auto_init_lines(language: str, restic: Dict[str, Any]) -> List[str]:
     return get_restic_scalar_lines(language, restic, "auto_init_local_repository")
 

@@ -81,16 +81,6 @@ config_template: |-
     password: "123456"
     # Password file, used only when password is empty.
     password_file: ""
-    # Download restic automatically when missing (Linux/Windows amd64 only).
-    auto_download: true
-    # Download version: the version trusted by this plugin release by default; latest follows upstream.
-    download_version: "v0.19.1"
-    # Download proxy prefixes: official GitHub first, then these in order.
-    download_proxy_prefixes:
-      - "https://gh.llkk.cc/"
-      - "https://gh-proxy.com/"
-      - "https://hub.gitmirror.com/"
-    download_timeout_seconds: 120
     # Run restic init automatically when a local repository is missing; remote repositories are not initialized.
     auto_init_local_repository: true
     # Extra environment variables for restic; a null value removes an inherited variable.

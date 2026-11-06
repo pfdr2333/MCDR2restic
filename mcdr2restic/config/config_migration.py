@@ -12,12 +12,11 @@ from mcdreforged.api.all import PluginServerInterface
 from mcdr2restic.config.config_paths import get_data_file_path
 from mcdr2restic.core.i18n import server_tr
 from mcdr2restic.config.config_template import (
+    find_comment_run_start,
+    find_nested_entry_end,
+    find_nested_key_index,
     get_language_lines,
-    get_restic_auto_download_lines,
     get_restic_auto_init_lines,
-    get_restic_download_proxy_lines,
-    get_restic_download_timeout_lines,
-    get_restic_download_version_lines,
     get_restic_password_file_lines,
     get_restic_password_lines,
     get_restic_progress_interval_lines,
@@ -141,6 +140,14 @@ DEPRECATED_SCHEDULE_KEYS = (
 
 DEPRECATED_RESTORE_KEYS = ("stop_timeout_seconds",)
 
+# restic 自动下载相关配置已固化为内置默认值，旧键不再生效（2026-11）
+DEPRECATED_RESTIC_KEYS = (
+    "auto_download",
+    "download_version",
+    "download_proxy_prefixes",
+    "download_timeout_seconds",
+)
+
 
 def collect_deprecated_config_keys(cfg: Dict[str, Any]) -> List[str]:
     keys: List[str] = []
@@ -159,6 +166,13 @@ def collect_deprecated_config_keys(cfg: Dict[str, Any]) -> List[str]:
             "restore.{}".format(key)
             for key in DEPRECATED_RESTORE_KEYS
             if key in restore
+        )
+    restic = cfg.get("restic")
+    if isinstance(restic, dict):
+        keys.extend(
+            "restic.{}".format(key)
+            for key in DEPRECATED_RESTIC_KEYS
+            if key in restic
         )
     return keys
 
@@ -222,6 +236,7 @@ def apply_config_file_migrations(
     lines = ensure_schedule_migration_lines(lines, language, cfg)
     lines = remove_deprecated_schedule_lines(lines)
     lines = remove_deprecated_restore_lines(lines)
+    lines = remove_deprecated_restic_lines(lines)
     # runtime 顶级块是内存生成态，文件里的残留块早已无任何效果（P3-7）
     lines = remove_deprecated_runtime_lines(lines)
     lines = ensure_restic_migration_lines(lines, language, cfg)
@@ -315,10 +330,6 @@ def restic_migration_builders() -> List[Tuple[str, ResticLineBuilder]]:
         ("repository", get_restic_repository_lines),
         ("password", get_restic_password_lines),
         ("password_file", get_restic_password_file_lines),
-        ("auto_download", get_restic_auto_download_lines),
-        ("download_version", get_restic_download_version_lines),
-        ("download_proxy_prefixes", get_restic_download_proxy_lines),
-        ("download_timeout_seconds", get_restic_download_timeout_lines),
         ("auto_init_local_repository", get_restic_auto_init_lines),
         ("timeout_seconds", get_restic_timeout_lines),
         ("progress_interval_seconds", get_restic_progress_interval_lines),
@@ -412,6 +423,25 @@ def remove_deprecated_restore_lines(lines: List[str]) -> List[str]:
         match = key_pattern.match(lines[index])
         if match and match.group(1) in DEPRECATED_RESTORE_KEYS:
             remove_indexes.add(index)
+    if not remove_indexes:
+        return lines
+    return [line for index, line in enumerate(lines) if index not in remove_indexes]
+
+
+def remove_deprecated_restic_lines(lines: List[str]) -> List[str]:
+    start, end = find_top_level_block(lines, "restic")
+    if start is None:
+        return lines
+
+    block = lines[start:end]
+    remove_indexes: Set[int] = set()
+    for key in DEPRECATED_RESTIC_KEYS:
+        key_index = find_nested_key_index(block, key)
+        if key_index is None:
+            continue
+        comment_start = find_comment_run_start(block, key_index)
+        entry_end = find_nested_entry_end(block, key_index)
+        remove_indexes.update(range(start + comment_start, start + entry_end))
     if not remove_indexes:
         return lines
     return [line for index, line in enumerate(lines) if index not in remove_indexes]

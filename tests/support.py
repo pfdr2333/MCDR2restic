@@ -150,7 +150,9 @@ from mcdr2restic.notifications.discord_webhook import (
 from mcdr2restic.notifications.notification_dispatcher import NotificationDispatcher
 from mcdr2restic.notifications.onebot_client import OneBotClient
 from mcdr2restic.restic.restic_download import (
+    RESTIC_DOWNLOAD_TIMEOUT_SECONDS,
     ResticDownloadTarget,
+    download_and_install_restic,
     expected_restic_sha256,
     install_restic_archive,
     extract_sha256_from_sums,
@@ -300,6 +302,7 @@ class CommandServer(FakePluginServer):
 
 __all__ = [
     "REPO_ROOT",
+    "RESTIC_DOWNLOAD_TIMEOUT_SECONDS",
     "WHOLE_BLOCK_SECTIONS",
     "BackupProblem",
     "BackupScheduler",
@@ -353,6 +356,7 @@ __all__ = [
     "create_runtime",
     "datetime",
     "detect_error_lines",
+    "download_and_install_restic",
     "execute_column_addition",
     "expected_restic_sha256",
     "extract_sha256_from_sums",

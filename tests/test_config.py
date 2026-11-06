@@ -128,6 +128,30 @@ class ConfigurationTests(unittest.TestCase):
         self.assertNotIn("stop_timeout_seconds", migrated)
         self.assertIn("start_timeout_seconds: 120", migrated)
 
+    def test_apply_config_file_migrations_removes_deprecated_restic_download_keys(self):
+        lines = [
+            "restic:\n",
+            "  executable: restic\n",
+            "  # 找不到 restic 时自动下载。\n",
+            "  auto_download: true\n",
+            "  download_version: \"v0.19.1\"\n",
+            "  download_proxy_prefixes:\n",
+            "    - \"https://gh.llkk.cc/\"\n",
+            "  download_timeout_seconds: 120\n",
+            "  auto_init_local_repository: true\n",
+        ]
+        cfg = build_default_config("en_us")
+
+        migrated = "".join(apply_config_file_migrations(lines, "en_us", cfg))
+
+        self.assertNotIn("auto_download", migrated)
+        self.assertNotIn("download_version", migrated)
+        self.assertNotIn("download_proxy_prefixes", migrated)
+        self.assertNotIn("download_timeout_seconds", migrated)
+        self.assertNotIn("找不到 restic 时自动下载", migrated)
+        self.assertIn("executable: restic\n", migrated)
+        self.assertIn("auto_init_local_repository: true\n", migrated)
+
     def test_config_migration_warns_about_removed_restore_timeout(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             server = FakeServer(temp_dir)
@@ -145,6 +169,26 @@ class ConfigurationTests(unittest.TestCase):
 
         warnings = "\n".join(server.logger.warning_messages)
         self.assertIn("restore.stop_timeout_seconds", warnings)
+
+    def test_config_migration_warns_about_removed_restic_download_keys(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            server = FakeServer(temp_dir)
+            server.logger = FakeLogger()
+            config_path = os.path.join(temp_dir, "config.yml")
+            with open(config_path, "w", encoding="utf8") as file:
+                file.write(
+                    "restic:\n"
+                    "  executable: restic\n"
+                    "  auto_download: true\n"
+                    "  download_timeout_seconds: 120\n"
+                    "config_version: 10\n"
+                )
+
+            migrate_config_file(server, "en_us", build_default_config("en_us"))
+
+        warnings = "\n".join(server.logger.warning_messages)
+        self.assertIn("restic.auto_download", warnings)
+        self.assertIn("restic.download_timeout_seconds", warnings)
 
     def test_apply_config_file_migrations_is_idempotent(self):
         lines = [

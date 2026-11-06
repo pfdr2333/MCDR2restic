@@ -81,16 +81,6 @@ config_template: |-
     password: "123456"
     # 密码文件，仅在 password 为空时使用。
     password_file: ""
-    # 找不到 restic 时自动下载，仅支持 Linux/Windows amd64。
-    auto_download: true
-    # 下载版本：默认使用插件内置信任的版本；latest 表示跟随官方最新版。
-    download_version: "v0.19.1"
-    # 下载代理前缀，先官方 GitHub，再按顺序尝试。
-    download_proxy_prefixes:
-      - "https://gh.llkk.cc/"
-      - "https://gh-proxy.com/"
-      - "https://hub.gitmirror.com/"
-    download_timeout_seconds: 120
     # 本地仓库缺失时自动执行 restic init；远端仓库不初始化。
     auto_init_local_repository: true
     # 执行 restic 时叠加的环境变量，值为 null 表示删除继承的同名变量。

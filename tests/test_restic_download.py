@@ -7,8 +7,9 @@ try:
     from .support import (
         BackupProblem,
         FakePluginServer,
+        RESTIC_DOWNLOAD_TIMEOUT_SECONDS,
         ResticDownloadTarget,
-        build_default_config,
+        download_and_install_restic,
         expected_restic_sha256,
         extract_sha256_from_sums,
         fetch_restic_release_metadata,
@@ -25,8 +26,9 @@ except ImportError:
     from support import (
         BackupProblem,
         FakePluginServer,
+        RESTIC_DOWNLOAD_TIMEOUT_SECONDS,
         ResticDownloadTarget,
-        build_default_config,
+        download_and_install_restic,
         expected_restic_sha256,
         extract_sha256_from_sums,
         fetch_restic_release_metadata,
@@ -117,7 +119,7 @@ class ResticDownloadVerifyTests(unittest.TestCase):
         ), mock.patch(DOWNLOAD_MODULE + ".install_restic_archive", installed):
             write_fake_archive(temp_dir)
             with self.assertRaises(BackupProblem) as error:
-                install_restic_from_urls(server, {}, bad_target)
+                install_restic_from_urls(server, bad_target)
 
         self.assertEqual(
             error.exception.i18n_key, "error.restic.auto_download_failed"
@@ -188,11 +190,18 @@ class ResticDownloadVerifyTests(unittest.TestCase):
 
 
 class DefaultVersionTests(unittest.TestCase):
-    def test_default_download_version_is_trusted_version(self):
-        self.assertEqual(get_default_restic_version(), "v0.19.1")
-        self.assertEqual(
-            build_default_config()["restic"]["download_version"],
-            get_default_restic_version(),
+    def test_download_uses_trusted_version_and_fixed_timeout(self):
+        fetched = mock.Mock(return_value={"assets": []})
+
+        with mock.patch(
+            DOWNLOAD_MODULE + ".fetch_restic_release_metadata", fetched
+        ), self.assertRaises(BackupProblem):
+            download_and_install_restic(
+                FakePluginServer(), "windows_amd64.zip", "restic.exe", "restic.exe"
+            )
+
+        fetched.assert_called_once_with(
+            get_default_restic_version(), RESTIC_DOWNLOAD_TIMEOUT_SECONDS
         )
 
 
