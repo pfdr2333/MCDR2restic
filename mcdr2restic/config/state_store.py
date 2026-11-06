@@ -4,6 +4,7 @@ from __future__ import annotations
 import contextlib
 import copy
 import os
+import random
 import re
 import time
 import uuid
@@ -180,7 +181,7 @@ def save_yaml_file(path: str, data: Dict[str, Any]):
     )
 
 
-def save_text_file_atomically(path: str, text: str, attempts: int = 5):
+def save_text_file_atomically(path: str, text: str, attempts: int = 8):
     """先写唯一命名的临时文件再原子替换：进程中断不会损坏主文件，
     并发写方与修复回写也不会因共享 .tmp 名互相截断（P1-4）。"""
 
@@ -198,11 +199,15 @@ def save_text_file_atomically(path: str, text: str, attempts: int = 5):
             os.replace(temp_path, path)
             return
         except PermissionError as exc:
-            # Windows 并发替换同一目标会瞬时共享冲突，退避重试而非丢弃本次写入
+            # Windows 并发替换同一目标会瞬时共享冲突，退避重试而非丢弃本次写入；
+            # 指数退避加抖动：线性短退避在多写方并发（叠加杀软扫描新建文件的
+            # 抢锁窗口）下会被整体打穿，重试者同步唤醒还会反复碰撞
             last_error = exc
             with contextlib.suppress(OSError):
                 os.remove(temp_path)
-            time.sleep(0.05 * (attempt + 1))
+            time.sleep(
+                min(0.05 * (2**attempt), 1.0) * random.uniform(0.5, 1.5)
+            )
     raise last_error
 
 
