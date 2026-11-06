@@ -319,7 +319,7 @@ restic:
 
 自动下载会校验产物完整性：
 
-- 默认下载插件内置信任的 `restic` 版本（`download_version`），并对照插件内置的官方 SHA256 校验，内置信任版本无需访问 GitHub
+- 默认下载插件内置信任的 `restic` 版本（`download_version`），并对照插件内置的官方 SHA256 校验；版本号与校验值随插件内置，无需访问 GitHub 即可确认完整性，二进制本体仍从 GitHub 发布页或 `download_proxy_prefixes` 镜像下载
 - 改为 `latest` 或其他版本时，会从 `github.com` 获取该版本官方 `SHA256SUMS` 校验；校验失败或无法获取校验文件时不会安装，此时可配置下载代理或改回内置信任版本
 - `download_proxy_prefixes` 仅用于加速二进制下载，不参与校验
 
