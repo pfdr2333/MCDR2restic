@@ -207,7 +207,6 @@ def start_restic_snapshot_process(restic_cfg: Dict[str, Any]) -> subprocess.Pope
         command,
         cwd,
         env,
-        executable,
         lambda exc: BackupProblem(i18n_key="error.snapshot.start_failed", error=exc),
     )
 

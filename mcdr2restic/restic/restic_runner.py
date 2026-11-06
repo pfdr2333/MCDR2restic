@@ -193,14 +193,12 @@ def start_restic_process(
     command: List[str],
     cwd: Optional[str],
     env: Dict[str, str],
-    executable: str,
     phase: str,
 ) -> subprocess.Popen:
     return start_restic_subprocess(
         command,
         cwd,
         env,
-        executable,
         lambda exc: BackupProblem(
             i18n_key="error.restic.start_failed", phase=phase, error=exc
         ),
@@ -211,7 +209,6 @@ def start_restic_subprocess(
     command: List[str],
     cwd: Optional[str],
     env: Dict[str, str],
-    executable: str,
     build_start_failed_error: Callable[[Exception], BackupProblem],
 ) -> subprocess.Popen:
     """共享的 restic 子进程启动包装：可执行文件缺失与启动失败转本地化异常。"""
@@ -219,8 +216,10 @@ def start_restic_subprocess(
     try:
         return subprocess.Popen(command, **build_restic_popen_kwargs(cwd, env))
     except FileNotFoundError as exc:
+        # 报 Popen 实际尝试的路径：裸名会被解析到平台默认路径，
+        # 配置原文对不上会让用户找错位置（P3-5）
         raise BackupProblem(
-            i18n_key="error.restic.executable_not_found", executable=executable
+            i18n_key="error.restic.executable_not_found", executable=command[0]
         ) from exc
     except Exception as exc:
         raise build_start_failed_error(exc) from exc

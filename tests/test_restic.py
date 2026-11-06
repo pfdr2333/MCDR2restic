@@ -352,22 +352,25 @@ class ResticLockRecoveryTests(unittest.TestCase):
 
 class ResticCommandTests(unittest.TestCase):
     def test_start_restic_process_maps_missing_executable(self):
+        # P3-5：报错须显示 Popen 实际尝试的解析路径，而非配置原文裸名
+        resolved = os.path.join("config", "mcdr2restic", "restic.exe")
         with mock.patch(
             "mcdr2restic.restic.restic_runner.subprocess.Popen",
             side_effect=FileNotFoundError,
         ), self.assertRaises(BackupProblem) as error:
             start_restic_process(
-                ["missing-restic"], None, {}, "missing-restic", "backup"
+                [resolved, "backup"], None, {}, "backup"
             )
 
         self.assertEqual(error.exception.i18n_key, "error.restic.executable_not_found")
+        self.assertEqual(error.exception.i18n_params["executable"], resolved)
 
     def test_start_restic_process_maps_start_failure(self):
         with mock.patch(
             "mcdr2restic.restic.restic_runner.subprocess.Popen",
             side_effect=OSError("permission denied"),
         ), self.assertRaises(BackupProblem) as error:
-            start_restic_process(["restic"], None, {}, "restic", "backup")
+            start_restic_process(["restic"], None, {}, "backup")
 
         self.assertEqual(error.exception.i18n_key, "error.restic.start_failed")
 
