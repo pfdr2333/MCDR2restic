@@ -235,7 +235,7 @@ restic:
   executable: "./config/mcdr2restic/restic"   # Windows 可改为 '.\config\mcdr2restic\restic.exe'
   working_directory: ""
   repository: "./restic-repo"
-  password: "请改成你自己的强密码"
+  password: "123456"   # 默认示例密码，正式使用请修改
   password_file: ""
   auto_download: true
   download_version: "v0.19.1"
