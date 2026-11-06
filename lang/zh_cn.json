@@ -164,13 +164,10 @@
   "mcdr2restic.info.restic.auto_download.completed": "restic 自动下载并安装完成：{target_path}",
   "mcdr2restic.warn.restic.auto_download_retry": "restic 下载或安装失败，尝试下一个地址：{error}",
   "mcdr2restic.error.restic.auto_download_failed": "自动下载 restic 失败：{error}",
-  "mcdr2restic.error.restic.release_parse_failed": "解析 restic release 信息失败：{error}",
-  "mcdr2restic.error.restic.release_invalid": "restic release 信息格式异常",
   "mcdr2restic.error.restic.release_asset_not_found": "未找到匹配的 restic release 资产：{asset_keyword}",
   "mcdr2restic.error.restic.download_failed": "下载失败 {url}：{error}",
   "mcdr2restic.error.restic.archive_unsupported": "不支持的 restic 压缩包类型：{asset_keyword}",
   "mcdr2restic.error.restic.bz2_empty": "bz2 解压后内容为空",
-  "mcdr2restic.error.restic.checksum_file_unavailable": "无法从官方源获取 restic {version} 的校验文件，已取消安装未校验的下载",
   "mcdr2restic.error.restic.checksum_mismatch": "restic 下载文件 SHA256 校验失败，已取消安装：{asset_name} 期望 {expected}，实际 {actual}",
   "mcdr2restic.error.restic.zip_executable_not_found": "zip 中未找到可识别的 restic 可执行文件，包含文件：{members}",
   "mcdr2restic.log.update.thread_started": "MCDR2Restic 版本更新检查线程已启动",
@@ -325,5 +322,8 @@
   "mcdr2restic.label.trigger.manual": "手动",
   "mcdr2restic.label.trigger.scheduled": "定时",
   "mcdr2restic.label.trigger.forced": "强制",
-  "mcdr2restic.label.trigger.restore_pre_backup": "恢复前保护快照"
+  "mcdr2restic.label.trigger.restore_pre_backup": "恢复前保护快照",
+  "mcdr2restic.info.restic.download_progress": "正在下载 restic：{downloaded} / {total}（{percent}%，{speed}）",
+  "mcdr2restic.error.restic.release_manifest_missing": "内置 restic 信任清单缺失或格式异常，无法确定要下载的版本",
+  "mcdr2restic.error.restic.checksum_manifest_missing": "内置清单未提供 restic 资产的 SHA256 校验值，已取消安装未校验的下载：{version}"
 }

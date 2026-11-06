@@ -28,10 +28,14 @@ DEFAULT_UPDATE_API_URL: Final[str] = (
     "https://api.github.com/repos/pfdr2333/MCDR2restic/releases/latest"
 )
 
+# 自建 restic 镜像（CF R2）：URL 契约为 {base}/v<版本>/<GitHub release 资产原文件名>
+DEFAULT_RESTIC_MIRROR_BASE: Final[str] = "https://dl.m2r.pfdr.cc"
+
+# 公共 GitHub 加速前缀死亡率高，列表会随时间腐烂：
+# 2026-11 实测仅下列两个可用（gh.llkk.cc / hub.gitmirror.com 已失效），需定期复检更换
 DEFAULT_PROXY_PREFIXES: Final[tuple[str, ...]] = (
-    "https://gh.llkk.cc/",
     "https://gh-proxy.com/",
-    "https://hub.gitmirror.com/",
+    "https://ghproxy.net/",
 )
 
 SNAPSHOT_PAGE_SIZE: Final[int] = 10

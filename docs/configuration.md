@@ -608,9 +608,8 @@ update_check:
   api_url: "https://api.github.com/repos/pfdr2333/MCDR2restic/releases/latest"
   release_page_url: "https://github.com/pfdr2333/MCDR2restic/releases/latest"
   proxy_prefixes:
-    - "https://gh.llkk.cc/"
     - "https://gh-proxy.com/"
-    - "https://hub.gitmirror.com/"
+    - "https://ghproxy.net/"
   timeout_seconds: 10
 ```
 

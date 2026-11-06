@@ -164,13 +164,10 @@
   "info.restic.auto_download.completed": "restic 自動下載並安裝完成：{target_path}",
   "warn.restic.auto_download_retry": "restic 下載或安裝失敗，嘗試下一個地址：{error}",
   "error.restic.auto_download_failed": "自動下載 restic 失敗：{error}",
-  "error.restic.release_parse_failed": "解析 restic release 資訊失敗：{error}",
-  "error.restic.release_invalid": "restic release 資訊格式異常",
   "error.restic.release_asset_not_found": "未找到匹配的 restic release 資產：{asset_keyword}",
   "error.restic.download_failed": "下載失敗 {url}：{error}",
   "error.restic.archive_unsupported": "不支援的 restic 壓縮包型別：{asset_keyword}",
   "error.restic.bz2_empty": "bz2 解壓後內容為空",
-  "error.restic.checksum_file_unavailable": "無法從官方源獲取 restic {version} 的校驗檔案，已取消安裝未校驗的下載",
   "error.restic.checksum_mismatch": "restic 下載檔案 SHA256 校驗失敗，已取消安裝：{asset_name} 期望 {expected}，實際 {actual}",
   "error.restic.zip_executable_not_found": "zip 中未找到可識別的 restic 可執行檔案，包含檔案：{members}",
   "log.update.thread_started": "MCDR2Restic 版本更新檢查執行緒已啟動",
@@ -325,5 +322,8 @@
   "label.trigger.manual": "手動",
   "label.trigger.scheduled": "定時",
   "label.trigger.forced": "強制",
-  "label.trigger.restore_pre_backup": "恢復前保護快照"
+  "label.trigger.restore_pre_backup": "恢復前保護快照",
+  "info.restic.download_progress": "正在下載 restic：{downloaded} / {total}（{percent}%，{speed}）",
+  "error.restic.release_manifest_missing": "內建 restic 信任清單缺失或格式異常，無法確定要下載的版本",
+  "error.restic.checksum_manifest_missing": "內建清單未提供 restic 資產的 SHA256 校驗值，已取消安裝未校驗的下載：{version}"
 }

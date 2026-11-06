@@ -4,7 +4,6 @@ from __future__ import annotations
 import bz2
 import contextlib
 import hashlib
-import json
 import os
 import platform
 import re
@@ -12,11 +11,13 @@ import shutil
 import stat
 import sys
 import tempfile
+import time
 import urllib.error
 import urllib.request
 import zipfile
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Set, Tuple
+from http.client import HTTPException
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 from mcdreforged.api.all import PluginServerInterface
 
@@ -25,12 +26,11 @@ from mcdr2restic.defaults.default_constants import (
     DEFAULT_PROXY_PREFIXES,
     DEFAULT_RESTIC_EXECUTABLE_POSIX,
     DEFAULT_RESTIC_EXECUTABLE_WINDOWS,
+    DEFAULT_RESTIC_MIRROR_BASE,
     PLUGIN_ID,
+    RESTIC_PROGRESS_INTERVAL_SECONDS,
 )
-from mcdr2restic.defaults.restic_release_defaults import (
-    build_restic_fallback_release,
-    get_default_restic_version,
-)
+from mcdr2restic.defaults.restic_release_defaults import build_restic_fallback_release
 from mcdr2restic.core.models import BackupProblem
 from mcdr2restic.restic.restic_config import resolve_path_against_working_directory
 from mcdr2restic.restic.restic_constants import (
@@ -39,8 +39,12 @@ from mcdr2restic.restic.restic_constants import (
 )
 
 
-# 自动下载为固化行为：版本取内置信任清单，超时与加速前缀不再开放配置
+# 自动下载为固化行为：版本与校验值取内置信任清单，超时与加速前缀不再开放配置
 RESTIC_DOWNLOAD_TIMEOUT_SECONDS = 120
+# timeout 只约束单次 socket 操作，连接存活但缓慢滴流时可无限挂死，
+# 因此每次尝试另设整体 deadline
+RESTIC_DOWNLOAD_ATTEMPT_DEADLINE_SECONDS = 300
+DOWNLOAD_CHUNK_BYTES = 256 * 1024
 
 
 def find_system_restic() -> Optional[str]:
@@ -157,9 +161,10 @@ def download_and_install_restic(
     output_name: str,
     target_path: str,
 ):
-    timeout = RESTIC_DOWNLOAD_TIMEOUT_SECONDS
-    version = get_default_restic_version()
-    release = fetch_restic_release_metadata(version, timeout)
+    # 版本与校验值完全由内置信任清单固化，不再请求 GitHub API 元数据
+    release = build_restic_fallback_release()
+    if not release:
+        raise BackupProblem(i18n_key="error.restic.release_manifest_missing")
     asset = select_restic_release_asset(release, asset_keyword)
     asset_url = str(asset.get("browser_download_url", "") or "")
     asset_name = str(asset.get("name", "") or "")
@@ -176,17 +181,11 @@ def download_and_install_restic(
             asset_keyword=asset_keyword,
             output_name=output_name,
             target_path=target_path,
-            timeout=timeout,
-            version=resolve_restic_release_version(release, version),
+            timeout=RESTIC_DOWNLOAD_TIMEOUT_SECONDS,
+            version=str(release.get("tag_name") or ""),
             sha256=str(asset.get("sha256") or ""),
         ),
     )
-
-
-def resolve_restic_release_version(release: Dict[str, Any], requested: str) -> str:
-    """优先取 release 实际 tag，供固化校验表命中（latest 回退场景）。"""
-
-    return str(release.get("tag_name") or "").strip() or requested
 
 
 @dataclass(frozen=True)
@@ -221,7 +220,12 @@ def install_restic_from_urls(
                         server, "info.restic.downloading", url=mask_download_url(url)
                     )
                 )
-                download_file(url, archive_path, target.timeout)
+                download_file(
+                    url,
+                    archive_path,
+                    target.timeout,
+                    progress=make_download_progress_reporter(server),
+                )
                 verify_restic_download(target, archive_path)
                 install_restic_archive(
                     archive_path,
@@ -250,37 +254,6 @@ def install_restic_from_urls(
     )
 
 
-def fetch_restic_release_metadata(version: str, timeout: int) -> Dict[str, Any]:
-    # 内置信任版本直接使用清单数据，无需访问 GitHub API
-    trusted = build_restic_fallback_release()
-    if trusted and version.lower() == str(trusted.get("tag_name") or "").lower():
-        return trusted
-    url = restic_release_url(version)
-    try:
-        data = download_bytes(url, timeout)
-    except Exception:
-        if version.lower() == "latest":
-            return trusted
-        raise
-    return parse_restic_release_metadata(data)
-
-
-def restic_release_url(version: str) -> str:
-    if version.lower() == "latest":
-        return "https://api.github.com/repos/restic/restic/releases/latest"
-    return "https://api.github.com/repos/restic/restic/releases/tags/{}".format(version)
-
-
-def parse_restic_release_metadata(data: bytes) -> Dict[str, Any]:
-    try:
-        metadata = json.loads(data.decode("utf-8"))
-    except Exception as exc:
-        raise BackupProblem(i18n_key="error.restic.release_parse_failed", error=exc) from exc
-    if not isinstance(metadata, dict) or not isinstance(metadata.get("assets"), list):
-        raise BackupProblem(i18n_key="error.restic.release_invalid")
-    return metadata
-
-
 SIGNATURE_ASSET_SUFFIXES = (".asc", ".sig")
 
 
@@ -299,8 +272,22 @@ def select_restic_release_asset(
     )
 
 
+def build_self_mirror_url(
+    asset_url: str, mirror_base: str = DEFAULT_RESTIC_MIRROR_BASE
+) -> str:
+    # 自建镜像按 GitHub release 资产原路径映射：{base}/v<版本>/<原文件名>
+    match = re.search(r"/releases/download/([^/]+)/([^/?#]+)", asset_url)
+    if not match:
+        return ""
+    return "{}/{}/{}".format(mirror_base.rstrip("/"), match.group(1), match.group(2))
+
+
 def build_download_urls(asset_url: str, proxy_prefixes: Any) -> List[str]:
+    # 候选顺序：GitHub 直连 → 自建镜像 → 公共加速前缀
     urls = [asset_url]
+    mirror_url = build_self_mirror_url(asset_url)
+    if mirror_url:
+        urls.append(mirror_url)
     if isinstance(proxy_prefixes, str):
         proxy_prefixes = [proxy_prefixes]
     if isinstance(proxy_prefixes, (list, tuple, set)):
@@ -328,24 +315,51 @@ def unique_urls(urls: List[str]) -> List[str]:
     return unique
 
 
-def download_file(url: str, path: str, timeout: int):
-    data = download_bytes(url, timeout)
-    with open(path, "wb") as file:
-        file.write(data)
-
-
-def download_bytes(url: str, timeout: int) -> bytes:
-    request = urllib.request.Request(
+def build_download_request(url: str) -> urllib.request.Request:
+    return urllib.request.Request(
         url,
         headers={
             "User-Agent": "MCDR2Restic/{}".format(PLUGIN_ID),
             "Accept": "application/octet-stream, application/json",
         },
     )
+
+
+def download_file(
+    url: str,
+    path: str,
+    timeout: int,
+    progress: Optional[Callable[[int, int], None]] = None,
+):
+    # 分块流式落盘并施加单次尝试整体 deadline：timeout 只约束单次 socket
+    # 操作，连接存活但缓慢滴流时若无整体截止时间会无限挂死
+    request = build_download_request(url)
+    started = time.monotonic()
     try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
-            return response.read()
-    except urllib.error.URLError as exc:
+        with urllib.request.urlopen(request, timeout=timeout) as response, open(
+            path, "wb"
+        ) as file:
+            total = int(response.headers.get("Content-Length") or 0)
+            downloaded = 0
+            while True:
+                if (
+                    time.monotonic() - started
+                    > RESTIC_DOWNLOAD_ATTEMPT_DEADLINE_SECONDS
+                ):
+                    raise TimeoutError(
+                        "exceeded the {}s per-attempt deadline".format(
+                            RESTIC_DOWNLOAD_ATTEMPT_DEADLINE_SECONDS
+                        )
+                    )
+                chunk = response.read(DOWNLOAD_CHUNK_BYTES)
+                if not chunk:
+                    break
+                file.write(chunk)
+                downloaded += len(chunk)
+                if progress:
+                    progress(downloaded, total)
+    except (urllib.error.URLError, TimeoutError, OSError, HTTPException) as exc:
+        # 读中段的超时/断连不走 URLError 分支，统一包装以保留 URL 上下文
         raise BackupProblem(
             i18n_key="error.restic.download_failed",
             url=mask_download_url(url),
@@ -353,18 +367,68 @@ def download_bytes(url: str, timeout: int) -> bytes:
         ) from exc
 
 
-SHA256SUMS_URL_TEMPLATE = (
-    "https://github.com/restic/restic/releases/download/{version}/SHA256SUMS"
-)
+def download_bytes(url: str, timeout: int) -> bytes:
+    try:
+        with urllib.request.urlopen(
+            build_download_request(url), timeout=timeout
+        ) as response:
+            return response.read()
+    except (urllib.error.URLError, TimeoutError, OSError, HTTPException) as exc:
+        raise BackupProblem(
+            i18n_key="error.restic.download_failed",
+            url=mask_download_url(url),
+            error=exc,
+        ) from exc
+
+
+def format_byte_size(size: int) -> str:
+    value = float(size)
+    for unit in ("B", "KB", "MB", "GB"):
+        if value < 1024 or unit == "GB":
+            return "{:.1f}{}".format(value, unit)
+        value /= 1024
+    return "{:.1f}GB".format(value)
+
+
+def make_download_progress_reporter(
+    server: PluginServerInterface,
+) -> Callable[[int, int], None]:
+    """按固定间隔输出下载进度；最后一包完成时必报一次。"""
+
+    started = time.monotonic()
+    last_reported = 0.0
+
+    def report(downloaded: int, total: int):
+        nonlocal last_reported
+        now = time.monotonic()
+        if 0 < downloaded < total and now - last_reported < (
+            RESTIC_PROGRESS_INTERVAL_SECONDS
+        ):
+            return
+        last_reported = now
+        elapsed = max(now - started, 0.001)
+        server.logger.info(
+            server_tr(
+                server,
+                "info.restic.download_progress",
+                downloaded=format_byte_size(downloaded),
+                total=format_byte_size(total) if total else "?",
+                percent="{}".format(int(downloaded * 100 / total)) if total else "?",
+                speed="{}/s".format(format_byte_size(int(downloaded / elapsed))),
+            )
+        )
+
+    return report
 
 
 def verify_restic_download(target: ResticDownloadTarget, archive_path: str):
     """下载产物必须先通过 SHA256 校验才允许落盘执行，防镜像篡改。"""
 
-    expected = expected_restic_sha256(target)
+    # 校验值随资产固化在内置清单中，不再向网络拉取校验文件
+    expected = target.sha256
     if not expected:
         raise BackupProblem(
-            i18n_key="error.restic.checksum_file_unavailable", version=target.version
+            i18n_key="error.restic.checksum_manifest_missing", version=target.version
         )
     actual = sha256_file(archive_path)
     if actual != expected:
@@ -374,39 +438,6 @@ def verify_restic_download(target: ResticDownloadTarget, archive_path: str):
             expected=expected,
             actual=actual,
         )
-
-
-def expected_restic_sha256(target: ResticDownloadTarget) -> str:
-    if target.sha256:
-        return target.sha256
-    return fetch_official_sha256(target.asset_name, target.version, target.timeout)
-
-
-def fetch_official_sha256(asset_name: str, version: str, timeout: int) -> str:
-    # 校验文件只从 github.com 官方源获取，镜像源不作为信任锚点
-    version_text = str(version or "").strip()
-    if not version_text or version_text.lower() == "latest":
-        return ""
-    url = SHA256SUMS_URL_TEMPLATE.format(version=version_text)
-    try:
-        data = download_bytes(url, timeout)
-    except Exception:
-        return ""
-    return extract_sha256_from_sums(data.decode("utf-8", "replace"), asset_name)
-
-
-def extract_sha256_from_sums(text: str, asset_name: str) -> str:
-    for line in text.splitlines():
-        parts = line.split(None, 1)
-        if len(parts) != 2:
-            continue
-        filename = parts[1].strip().lstrip("*").strip()
-        if filename != asset_name:
-            continue
-        digest = parts[0].strip().lower()
-        if re.fullmatch(r"[0-9a-f]{64}", digest):
-            return digest
-    return ""
 
 
 def sha256_file(path: str) -> str:

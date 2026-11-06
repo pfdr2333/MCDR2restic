@@ -166,13 +166,10 @@
   "info.restic.auto_download.completed": "restic was downloaded and installed automatically: {target_path}",
   "warn.restic.auto_download_retry": "restic download or install failed; trying the next URL: {error}",
   "error.restic.auto_download_failed": "Failed to download restic automatically: {error}",
-  "error.restic.release_parse_failed": "Failed to parse restic release metadata: {error}",
-  "error.restic.release_invalid": "restic release metadata has an invalid format",
   "error.restic.release_asset_not_found": "Matching restic release asset was not found: {asset_keyword}",
   "error.restic.download_failed": "Download failed {url}: {error}",
   "error.restic.archive_unsupported": "Unsupported restic archive type: {asset_keyword}",
   "error.restic.bz2_empty": "bz2 archive decompressed to empty content",
-  "error.restic.checksum_file_unavailable": "Cannot fetch official SHA256SUMS for restic {version} from github.com; unverified download rejected",
   "error.restic.checksum_mismatch": "restic download failed SHA256 verification; installation rejected: {asset_name} expected {expected}, got {actual}",
   "error.restic.zip_executable_not_found": "No recognizable restic executable was found in the zip; archive entries: {members}",
   "log.update.thread_started": "MCDR2Restic update check thread started",
@@ -325,5 +322,8 @@
   "error.restore.target_admin_share_unc": "Restore target directory cannot use an administrative-share UNC path; use a drive-letter path instead: {path}",
   "info.restore.task_completed_to": "Restore task #{task_id} completed: {snapshot} -> {target}",
   "info.restore.direct_completed": "All restore tasks completed",
-  "warn.restore.direct_failed": "Restore task failed: {error}"
+  "warn.restore.direct_failed": "Restore task failed: {error}",
+  "info.restic.download_progress": "Downloading restic: {downloaded} / {total} ({percent}%, {speed})",
+  "error.restic.release_manifest_missing": "Bundled trusted restic manifest is missing or malformed; cannot determine the version to download",
+  "error.restic.checksum_manifest_missing": "Bundled manifest provides no SHA256 checksum for the restic asset; unverified download installation cancelled: {version}"
 }

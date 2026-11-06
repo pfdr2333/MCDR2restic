@@ -166,13 +166,10 @@
   "mcdr2restic.info.restic.auto_download.completed": "restic was downloaded and installed automatically: {target_path}",
   "mcdr2restic.warn.restic.auto_download_retry": "restic download or install failed; trying the next URL: {error}",
   "mcdr2restic.error.restic.auto_download_failed": "Failed to download restic automatically: {error}",
-  "mcdr2restic.error.restic.release_parse_failed": "Failed to parse restic release metadata: {error}",
-  "mcdr2restic.error.restic.release_invalid": "restic release metadata has an invalid format",
   "mcdr2restic.error.restic.release_asset_not_found": "Matching restic release asset was not found: {asset_keyword}",
   "mcdr2restic.error.restic.download_failed": "Download failed {url}: {error}",
   "mcdr2restic.error.restic.archive_unsupported": "Unsupported restic archive type: {asset_keyword}",
   "mcdr2restic.error.restic.bz2_empty": "bz2 archive decompressed to empty content",
-  "mcdr2restic.error.restic.checksum_file_unavailable": "Cannot fetch official SHA256SUMS for restic {version} from github.com; unverified download rejected",
   "mcdr2restic.error.restic.checksum_mismatch": "restic download failed SHA256 verification; installation rejected: {asset_name} expected {expected}, got {actual}",
   "mcdr2restic.error.restic.zip_executable_not_found": "No recognizable restic executable was found in the zip; archive entries: {members}",
   "mcdr2restic.log.update.thread_started": "MCDR2Restic update check thread started",
@@ -325,5 +322,8 @@
   "mcdr2restic.error.restore.target_admin_share_unc": "Restore target directory cannot use an administrative-share UNC path; use a drive-letter path instead: {path}",
   "mcdr2restic.info.restore.task_completed_to": "Restore task #{task_id} completed: {snapshot} -> {target}",
   "mcdr2restic.info.restore.direct_completed": "All restore tasks completed",
-  "mcdr2restic.warn.restore.direct_failed": "Restore task failed: {error}"
+  "mcdr2restic.warn.restore.direct_failed": "Restore task failed: {error}",
+  "mcdr2restic.info.restic.download_progress": "Downloading restic: {downloaded} / {total} ({percent}%, {speed})",
+  "mcdr2restic.error.restic.release_manifest_missing": "Bundled trusted restic manifest is missing or malformed; cannot determine the version to download",
+  "mcdr2restic.error.restic.checksum_manifest_missing": "Bundled manifest provides no SHA256 checksum for the restic asset; unverified download installation cancelled: {version}"
 }
