@@ -329,8 +329,6 @@ def e2e_verify(version: str, paths: dict):
     for attempt in range(1, E2E_ATTEMPTS + 1):
         pending = []
         for name, local_path in paths.items():
-            if name == SUMS_ASSET_NAME:
-                continue
             expected = hashlib.sha256(local_path.read_bytes()).hexdigest()
             try:
                 remote = http_get_bytes(mirror_url(version, name))
@@ -365,9 +363,9 @@ def sync_version(version: str, manifest_path: Path, credentials: dict):
         if synced:
             log("mirror already has {}: skipping upload".format(version))
         else:
+            # SUMS 必须一并上传：它同时是 mirror_already_synced 的幂等标记，
+            # 不上传则跳过检查永远 404，每次同步都会白做一遍下载+上传
             for name in names:
-                if name == SUMS_ASSET_NAME:
-                    continue
                 upload_object(
                     credentials["account_id"],
                     credentials["bucket"],

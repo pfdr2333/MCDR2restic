@@ -1,6 +1,10 @@
+import json
+import os
 import sys
+import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -9,6 +13,7 @@ from tools.sync_restic_mirror import (
     asset_names_for,
     mirror_url,
     parse_sums,
+    sync_version,
 )
 
 
@@ -118,6 +123,58 @@ class AppendWafPathsTests(unittest.TestCase):
 
         with self.assertRaises(SystemExit):
             append_waf_paths(rules, NEW_PATHS)
+
+
+SYNC_CREDENTIALS = {
+    "account_id": "acct",
+    "zone_id": "zone",
+    "waf_token": "waf",
+    "access_key": "key",
+    "secret_key": "secret",
+    "bucket": "bucket",
+    "ruleset_id": "ruleset",
+}
+
+
+class SyncVersionUploadTests(unittest.TestCase):
+    def test_uploads_sums_alongside_platform_assets(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            paths = {}
+            for name in asset_names_for("v0.19.2"):
+                path = Path(temp_dir) / name
+                path.write_bytes(b"payload")
+                paths[name] = path
+
+            uploaded = []
+            with mock.patch(
+                "tools.sync_restic_mirror.download_github_assets", return_value=paths
+            ), mock.patch(
+                "tools.sync_restic_mirror.verify_downloaded_assets"
+            ), mock.patch(
+                "tools.sync_restic_mirror.mirror_already_synced", return_value=False
+            ), mock.patch(
+                "tools.sync_restic_mirror.upload_object",
+                side_effect=lambda *args: uploaded.append(args[5]),
+            ), mock.patch(
+                "tools.sync_restic_mirror.fetch_waf_rules",
+                return_value={"rules": [per_path_rule("/v0.19.1/SHA256SUMS")]},
+            ), mock.patch(
+                "tools.sync_restic_mirror.put_waf_rules"
+            ), mock.patch(
+                "tools.sync_restic_mirror.e2e_verify"
+            ):
+                sync_version(
+                    "v0.19.2", Path(temp_dir) / "manifest.yml", SYNC_CREDENTIALS
+                )
+
+        self.assertEqual(
+            uploaded,
+            [
+                "restic_0.19.2_linux_amd64.bz2",
+                "restic_0.19.2_windows_amd64.zip",
+                "SHA256SUMS",
+            ],
+        )
 
 
 if __name__ == "__main__":
