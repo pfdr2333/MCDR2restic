@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, Optional, cast
 
 from mcdreforged.api.all import CommandSource, PluginServerInterface
 
@@ -34,7 +34,10 @@ class CommandContext:
     snapshot_invalidator: SnapshotInvalidator
 
     def server_from_source(self, source: CommandSource) -> PluginServerInterface:
-        return self.app_runtime.service.server or source.get_server()
+        # source.get_server() 实际返回插件服务端，MCDR 签名宽于实现
+        return self.app_runtime.service.server or cast(
+            PluginServerInterface, source.get_server()
+        )
 
     def check_command_permission(self, source: CommandSource) -> bool:
         level = self.get_command_permission_level()

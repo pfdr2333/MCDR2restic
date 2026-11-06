@@ -74,7 +74,10 @@ def tr(language: str, key: str, **params: Any) -> str:
     return format_translation(template, params)
 
 
-def server_tr(server: PluginServerInterface, key: str, **params: Any) -> str:
+def server_tr(
+    server: PluginServerInterface | None, key: str, **params: Any
+) -> str:
+    # server 为 None 是合法运行时形态（无服务端上下文的日志路径），走兜底翻译
     translate = getattr(server, "tr", None)
     if callable(translate) and not _ACTIVE_LANGUAGE:
         try:
@@ -84,7 +87,9 @@ def server_tr(server: PluginServerInterface, key: str, **params: Any) -> str:
     return tr(active_language(server), key, **params)
 
 
-def server_rtr(server: PluginServerInterface, key: str, **params: Any) -> Any:
+def server_rtr(
+    server: PluginServerInterface | None, key: str, **params: Any
+) -> Any:
     translate = getattr(server, "rtr", None)
     if callable(translate) and not _ACTIVE_LANGUAGE:
         try:

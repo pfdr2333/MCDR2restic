@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
-from typing import Optional
+from typing import Optional, cast
 
 from mcdreforged.api.all import CommandSource, PluginServerInterface
 
@@ -37,6 +37,7 @@ def preferred_language_from_source(source: CommandSource) -> str:
 
 def safe_source_server(source: CommandSource) -> Optional[PluginServerInterface]:
     try:
-        return source.get_server()
+        # 命令源拿到的服务端实例实际都是插件服务端，MCDR 签名宽于实现
+        return cast(PluginServerInterface, source.get_server())
     except Exception:
         return None
