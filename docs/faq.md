@@ -11,7 +11,7 @@
 处理方式：
 
 - 本地仓库：通常可以保持 `auto_init_local_repository: true`
-- 远端仓库或你想手动确认：执行 `!!restic init`
+- 远端仓库或你想手动确认：执行 `!!m2r init`
 
 ## 2. 为什么提示仓库被锁定
 
@@ -28,7 +28,7 @@
 
 1. 先确认是不是还有别的正常任务在运行
 2. 确认没有其他客户端在写这个仓库
-3. 再考虑执行 `!!restic unlock`
+3. 再考虑执行 `!!m2r unlock`
 
 不要把 `unlock` 当成“看到锁就点”的常规操作。
 
@@ -98,7 +98,7 @@ force_schedule:
 
 因为现在的设计就是分开的。
 
-维护由 `maintenance_schedule` 或 `!!restic maintenance` 触发，不是备份流程的一部分。
+维护由 `maintenance_schedule` 或 `!!m2r maintenance` 触发，不是备份流程的一部分。
 
 ## 7. `maintenance_schedule` 留空和写 `"0"` 有什么区别
 
@@ -154,7 +154,7 @@ schedule:
 
 - 想让玩家活动感知更稳，尽量把 RCON 配好
 
-## 10. 为什么 `!!restic stop` 之后备份没有瞬间消失
+## 10. 为什么 `!!m2r stop` 之后备份没有瞬间消失
 
 因为它的语义是“请求取消当前备份”，不是“保证这一瞬间已经完全结束”。
 
@@ -173,13 +173,13 @@ schedule:
 真正执行要靠：
 
 ```text
-!!restic restore apply
+!!m2r restore apply
 ```
 
 如果你只是执行了：
 
 ```text
-!!restic restore 8f2f9c3d file /server/whitelist.json
+!!m2r restore 8f2f9c3d file /server/whitelist.json
 ```
 
 那么这只是排队，不是立刻恢复。
@@ -251,8 +251,8 @@ config.yml.v8.bak
 
 先看这几项就够了：
 
-1. `!!restic status` 能否正常返回
+1. `!!m2r status` 能否正常返回
 2. `restic.executable` 路径是否正确
 3. `restic.repository` 是否写对
 4. `backup_command` 是否指向了正确目录
-5. `!!restic backup` 能否成功跑完一次
+5. `!!m2r backup` 能否成功跑完一次

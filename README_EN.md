@@ -53,7 +53,7 @@ Manual installation: grab `MCDR2Restic.mcdr` from the latest [Release](https://g
 - `./server/world` is backed up by default (all three world directories are added when detected)
 - On Windows the sample uses `.\config\mcdr2restic\restic.exe`-style backslash paths and excludes `session.lock`
 
-Adjust the configuration as needed, then run `!!restic reload`.
+Adjust the configuration as needed, then run `!!m2r reload`.
 
 > Only the world directories are backed up by default. For full restore capability, consider backing up the entire `./server` directory or even the whole MCDR root, protecting server files beyond the save data.
 >
@@ -65,23 +65,23 @@ Adjust the configuration as needed, then run `!!restic reload`.
 
 | Command | Description |
 | --- | --- |
-| `!!restic status [p <page>]` | Show status and the snapshot list |
-| `!!restic backup` | Trigger an immediate backup |
-| `!!restic start` / `stop` | Enable / disable scheduled backups |
-| `!!restic init` | Initialize the repository manually |
-| `!!restic unlock` | Unlock the repository |
-| `!!restic maintenance` | Run repository maintenance manually |
-| `!!restic restore <snapshot>` | Queue a full-snapshot restore |
-| `!!restic restore <snapshot> file <path>` | Queue a single-file restore |
-| `!!restic restore <snapshot> folder <path>` | Queue a folder restore |
-| `!!restic restore <snapshot> to <dir>` | Queue a full-snapshot restore into a chosen directory (no server stop) |
-| `!!restic restore <snapshot> to <dir> file <path>` | Queue a single-file restore into a chosen directory |
-| `!!restic restore <snapshot> to <dir> folder <path>` | Queue a folder restore into a chosen directory |
-| `!!restic restore list` | Show queued restore tasks |
-| `!!restic restore apply` | Apply the restore task queue |
-| `!!restic restore apply --skip-safety` | Apply the restore task queue without a safety snapshot |
-| `!!restic unrestore <ID>\|all` | Delete one / all restore tasks |
-| `!!restic reload` | Reload configuration |
+| `!!m2r status [p <page>]` | Show status and the snapshot list |
+| `!!m2r backup` | Trigger an immediate backup |
+| `!!m2r start` / `stop` | Enable / disable scheduled backups |
+| `!!m2r init` | Initialize the repository manually |
+| `!!m2r unlock` | Unlock the repository |
+| `!!m2r maintenance` | Run repository maintenance manually |
+| `!!m2r restore <snapshot>` | Queue a full-snapshot restore |
+| `!!m2r restore <snapshot> file <path>` | Queue a single-file restore |
+| `!!m2r restore <snapshot> folder <path>` | Queue a folder restore |
+| `!!m2r restore <snapshot> to <dir>` | Queue a full-snapshot restore into a chosen directory (no server stop) |
+| `!!m2r restore <snapshot> to <dir> file <path>` | Queue a single-file restore into a chosen directory |
+| `!!m2r restore <snapshot> to <dir> folder <path>` | Queue a folder restore into a chosen directory |
+| `!!m2r restore list` | Show queued restore tasks |
+| `!!m2r restore apply` | Apply the restore task queue |
+| `!!m2r restore apply --skip-safety` | Apply the restore task queue without a safety snapshot |
+| `!!m2r unrestore <ID>\|all` | Delete one / all restore tasks |
+| `!!m2r reload` | Reload configuration |
 
 The default command permission level is `3` and can be changed in the configuration.
 

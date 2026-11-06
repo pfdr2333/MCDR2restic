@@ -10,11 +10,11 @@
 常用命令：
 
 ```text
-!!restic status
-!!restic status p 2
+!!m2r status
+!!m2r status p 2
 ```
 
-直接输入 `!!restic` 也可以。
+直接输入 `!!m2r` 也可以。
 
 ## 状态页通常包含什么
 
@@ -54,7 +54,7 @@ snapshot_cache:
 例如：
 
 ```text
-!!restic status p 3
+!!m2r status p 3
 ```
 
 表示查看第 3 页快照。
@@ -81,7 +81,7 @@ MCDR2Restic 的恢复流程是“先入队，再执行”。
 ## 1. 整份快照恢复
 
 ```text
-!!restic restore 8f2f9c3d
+!!m2r restore 8f2f9c3d
 ```
 
 作用：
@@ -96,7 +96,7 @@ MCDR2Restic 的恢复流程是“先入队，再执行”。
 ## 2. 单文件恢复
 
 ```text
-!!restic restore 8f2f9c3d file /server/whitelist.json
+!!m2r restore 8f2f9c3d file /server/whitelist.json
 ```
 
 作用：
@@ -106,7 +106,7 @@ MCDR2Restic 的恢复流程是“先入队，再执行”。
 ## 3. 单文件夹恢复
 
 ```text
-!!restic restore 8f2f9c3d folder /server/world/region
+!!m2r restore 8f2f9c3d folder /server/world/region
 ```
 
 作用：
@@ -118,9 +118,9 @@ MCDR2Restic 的恢复流程是“先入队，再执行”。
 在上面三类任务后面加 `to <目录>`，可以把内容恢复到服务器之外的目录：
 
 ```text
-!!restic restore 8f2f9c3d to ./restore-out
-!!restic restore 8f2f9c3d to ./restore-out file /server/whitelist.json
-!!restic restore 8f2f9c3d to ./restore-out folder /server/world/region
+!!m2r restore 8f2f9c3d to ./restore-out
+!!m2r restore 8f2f9c3d to ./restore-out file /server/whitelist.json
+!!m2r restore 8f2f9c3d to ./restore-out folder /server/world/region
 ```
 
 目录写法：
@@ -161,7 +161,7 @@ MCDR2Restic 的恢复流程是“先入队，再执行”。
 ## 查看当前恢复队列
 
 ```text
-!!restic restore list
+!!m2r restore list
 ```
 
 你会看到类似这样的列表：
@@ -171,7 +171,7 @@ MCDR2Restic 恢复任务列表
   1. [文件] 8f2f9c3d -> /server/whitelist.json
   2. [文件夹] 8f2f9c3d -> /server/world/region
   3. [整份快照] 8f2f9c3d -> / (恢复到 D:\mc\restore-out)
-提示：!!restic restore apply 可以执行任务
+提示：!!m2r restore apply 可以执行任务
 ```
 
 ## 删除恢复任务
@@ -179,19 +179,19 @@ MCDR2Restic 恢复任务列表
 删除一个任务：
 
 ```text
-!!restic unrestore 2
+!!m2r unrestore 2
 ```
 
 清空全部任务：
 
 ```text
-!!restic unrestore all
+!!m2r unrestore all
 ```
 
 ## 真正执行恢复：`restore apply`
 
 ```text
-!!restic restore apply
+!!m2r restore apply
 ```
 
 这条命令才是真正开始恢复。
@@ -212,7 +212,7 @@ MCDR2Restic 恢复任务列表
 ### 跳过保护快照
 
 ```text
-!!restic restore apply --skip-safety
+!!m2r restore apply --skip-safety
 ```
 
 加 `--skip-safety` 参数可以跳过第 4 步的保护快照，直接停止 Minecraft 并执行恢复，适合明确知道自己在做什么、想省掉一次备份时间的场景。
@@ -263,34 +263,34 @@ restore:
 ### 场景：只想恢复白名单文件
 
 ```text
-!!restic status
-!!restic restore 8f2f9c3d file /server/whitelist.json
-!!restic restore list
-!!restic restore apply
+!!m2r status
+!!m2r restore 8f2f9c3d file /server/whitelist.json
+!!m2r restore list
+!!m2r restore apply
 ```
 
 ### 场景：只想恢复一个区块文件夹
 
 ```text
-!!restic restore 8f2f9c3d folder /server/world/region
-!!restic restore list
-!!restic restore apply
+!!m2r restore 8f2f9c3d folder /server/world/region
+!!m2r restore list
+!!m2r restore apply
 ```
 
 ### 场景：整份回滚到某个快照
 
 ```text
-!!restic restore 8f2f9c3d
-!!restic restore list
-!!restic restore apply
+!!m2r restore 8f2f9c3d
+!!m2r restore list
+!!m2r restore apply
 ```
 
 ### 场景：把快照导出到指定目录，不影响服务器
 
 ```text
-!!restic restore 8f2f9c3d to ./restore-out
-!!restic restore list
-!!restic restore apply
+!!m2r restore 8f2f9c3d to ./restore-out
+!!m2r restore list
+!!m2r restore apply
 ```
 
 这个流程不会停止服务器，适合取出存档、异地核对等场景。

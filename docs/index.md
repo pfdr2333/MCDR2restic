@@ -47,4 +47,4 @@ MCDR2Restic 是一个基于 MCDReforged 的 Minecraft 备份插件。它将 [res
 
 ### 恢复队列
 
-通过 `!!restic restore ...` 加入的一组待恢复任务。它们不会立刻执行，需要 `!!restic restore apply` 命令以确认执行。
+通过 `!!m2r restore ...` 加入的一组待恢复任务。它们不会立刻执行，需要 `!!m2r restore apply` 命令以确认执行。

@@ -43,23 +43,23 @@
 改完配置后，在 MCDR 里执行：
 
 ```text
-!!restic reload
+!!m2r reload
 ```
 
-如果你把命令根节点改掉了，就把 `!!restic` 换成你自己的命令根。
+如果你把命令根节点改掉了，就把 `!!m2r` 换成你自己的命令根。
 
 ## 第四步：查看当前状态
 
 执行：
 
 ```text
-!!restic status
+!!m2r status
 ```
 
 或者直接：
 
 ```text
-!!restic
+!!m2r
 ```
 
 你应该至少能看到这些状态信息：
@@ -77,7 +77,7 @@
 执行：
 
 ```text
-!!restic backup
+!!m2r backup
 ```
 
 这条命令会尝试按下面的顺序工作：
@@ -89,7 +89,7 @@
 5. 执行 Minecraft 保存相关命令
 6. 执行 `restic backup`
 
-第一次成功后，再执行一次 `!!restic status`，通常就能看到快照列表。
+第一次成功后，再执行一次 `!!m2r status`，通常就能看到快照列表。
 
 ## 最容易踩的 5 个坑
 
@@ -117,7 +117,7 @@ restic:
 
 ### 4. 以为维护会跟着每次备份一起跑
 
-不会。维护由 `maintenance_schedule` 单独调度，或者你手动执行 `!!restic maintenance`。
+不会。维护由 `maintenance_schedule` 单独调度，或者你手动执行 `!!m2r maintenance`。
 
 ### 5. 以为 `restore` 命令会立刻恢复
 

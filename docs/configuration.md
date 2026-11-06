@@ -49,7 +49,7 @@ enabled: true
 - `true`：允许调度继续工作
 - `false`：关闭后续定时备份
 
-如果你习惯用命令控制，也可以直接执行 `!!restic start` 和 `!!restic stop`。
+如果你习惯用命令控制，也可以直接执行 `!!m2r start` 和 `!!m2r stop`。
 
 ### 命令入口
 

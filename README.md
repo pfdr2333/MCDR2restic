@@ -53,7 +53,7 @@ MCDReforged 插件：调用 [restic](https://restic.readthedocs.io/en/stable/) �
 - 默认备份 `./server/world`（检测到三世界目录时自动全部写入）
 - Windows 下自动使用 `.\config\mcdr2restic\restic.exe` 等反斜杠路径并排除 `session.lock`
 
-按需修改配置后执行 `!!restic reload`。
+按需修改配置后执行 `!!m2r reload`。
 
 > 默认只备份世界目录。如需获得完整的恢复能力，建议把备份范围改为整个 `./server` 目录甚至 MCDR 根目录，保护存档之外的服务器文件状态。
 >
@@ -65,23 +65,23 @@ MCDReforged 插件：调用 [restic](https://restic.readthedocs.io/en/stable/) �
 
 | 命令 | 说明 |
 | --- | --- |
-| `!!restic status [p <页码>]` | 查看状态与快照列表 |
-| `!!restic backup` | 立即备份 |
-| `!!restic start` / `stop` | 启用 / 停用定时备份 |
-| `!!restic init` | 手动初始化仓库 |
-| `!!restic unlock` | 解锁仓库 |
-| `!!restic maintenance` | 手动执行仓库维护 |
-| `!!restic restore <快照>` | 添加整份快照恢复任务 |
-| `!!restic restore <快照> file <路径>` | 添加单文件恢复任务 |
-| `!!restic restore <快照> folder <路径>` | 添加文件夹恢复任务 |
-| `!!restic restore <快照> to <目录>` | 添加整份快照恢复任务到指定目录（不停服） |
-| `!!restic restore <快照> to <目录> file <路径>` | 添加单文件恢复任务到指定目录 |
-| `!!restic restore <快照> to <目录> folder <路径>` | 添加文件夹恢复任务到指定目录 |
-| `!!restic restore list` | 查看恢复任务队列 |
-| `!!restic restore apply` | 执行恢复任务队列 |
-| `!!restic restore apply --skip-safety` | 执行恢复任务队列，跳过保护快照 |
-| `!!restic unrestore <ID>\|all` | 删除某个 / 所有恢复任务 |
-| `!!restic reload` | 重载配置 |
+| `!!m2r status [p <页码>]` | 查看状态与快照列表 |
+| `!!m2r backup` | 立即备份 |
+| `!!m2r start` / `stop` | 启用 / 停用定时备份 |
+| `!!m2r init` | 手动初始化仓库 |
+| `!!m2r unlock` | 解锁仓库 |
+| `!!m2r maintenance` | 手动执行仓库维护 |
+| `!!m2r restore <快照>` | 添加整份快照恢复任务 |
+| `!!m2r restore <快照> file <路径>` | 添加单文件恢复任务 |
+| `!!m2r restore <快照> folder <路径>` | 添加文件夹恢复任务 |
+| `!!m2r restore <快照> to <目录>` | 添加整份快照恢复任务到指定目录（不停服） |
+| `!!m2r restore <快照> to <目录> file <路径>` | 添加单文件恢复任务到指定目录 |
+| `!!m2r restore <快照> to <目录> folder <路径>` | 添加文件夹恢复任务到指定目录 |
+| `!!m2r restore list` | 查看恢复任务队列 |
+| `!!m2r restore apply` | 执行恢复任务队列 |
+| `!!m2r restore apply --skip-safety` | 执行恢复任务队列，跳过保护快照 |
+| `!!m2r unrestore <ID>\|all` | 删除某个 / 所有恢复任务 |
+| `!!m2r reload` | 重载配置 |
 
 默认命令权限等级为 `3`，可在配置中修改。
 
