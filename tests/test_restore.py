@@ -971,11 +971,10 @@ class RestoreCancelTests(unittest.TestCase):
             restore_workflow, "ensure_default_restic_executable_available"
         ), mock.patch.object(
             restore_workflow, "run_restic_command_with_lock_recovery"
-        ) as run_command:
-            with self.assertRaises(BackupCanceled):
-                restore_workflow.execute_restore_tasks(
-                    runtime, server, {}, session
-                )
+        ) as run_command, self.assertRaises(BackupCanceled):
+            restore_workflow.execute_restore_tasks(
+                runtime, server, {}, session
+            )
 
         run_command.assert_not_called()
 

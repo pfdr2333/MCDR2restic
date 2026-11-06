@@ -80,7 +80,6 @@ class NotificationDispatcher:
             status, error = self._send_channel_message(
                 spec,
                 cfg,
-                language,
                 build_text,
                 not_started_detail="notify_test",
                 values=None,
@@ -127,7 +126,6 @@ class NotificationDispatcher:
         self._send_channel_message(
             spec,
             cfg,
-            language,
             lambda channel_cfg: render_message(
                 template_key,
                 values,
@@ -148,7 +146,6 @@ class NotificationDispatcher:
         self,
         spec: ChannelSpec,
         cfg: Dict[str, Any],
-        language: str,
         build_text: Callable[[Dict[str, Any]], str],
         not_started_detail: str,
         values: Optional[Dict[str, Any]],

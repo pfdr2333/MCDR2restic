@@ -40,6 +40,7 @@ except ImportError:
 import inspect
 import threading
 from datetime import date
+from typing import ClassVar
 
 
 
@@ -452,7 +453,7 @@ class ChannelContractTests(unittest.TestCase):
 
 
 class NotifyTestTests(unittest.TestCase):
-    CHANNEL_CFG = {
+    CHANNEL_CFG: ClassVar[dict] = {
         "onebot": {"enabled": True, "admin_qqs": [123]},
         "discord": {"enabled": True},
         "custom_webhook": {"enabled": True},
@@ -519,5 +520,5 @@ class NotifyTestTests(unittest.TestCase):
         statuses = self.status_by_section(results)
 
         self.assertEqual(statuses["custom_webhook"], "failed")
-        failed = [r for r in results if r.section == "custom_webhook"][0]
+        failed = next(r for r in results if r.section == "custom_webhook")
         self.assertEqual(str(failed.error), "boom")

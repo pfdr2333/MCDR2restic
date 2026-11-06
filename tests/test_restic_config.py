@@ -264,11 +264,10 @@ class RepositoryDiskSpaceCheckTests(unittest.TestCase):
         usage = mock.Mock(total=1000, free=50)
         with mock.patch.object(
             restic_config.shutil, "disk_usage", return_value=usage
-        ):
-            with self.assertRaises(BackupProblem) as caught:
-                restic_config.assert_repository_disk_space_available(
-                    self.restic_cfg()
-                )
+        ), self.assertRaises(BackupProblem) as caught:
+            restic_config.assert_repository_disk_space_available(
+                self.restic_cfg()
+            )
 
         self.assertIn("5.0", str(caught.exception))
 
@@ -316,11 +315,10 @@ class RepositoryDiskSpaceCheckTests(unittest.TestCase):
         usage = mock.Mock(total=1000, free=30)  # 3% 低于默认阈值 10%
         with mock.patch.object(
             restic_config.shutil, "disk_usage", return_value=usage
-        ):
-            with self.assertRaises(BackupProblem):
-                restic_config.assert_repository_disk_space_available(
-                    self.restic_cfg(disk_check_min_free_percent="abc")
-                )
+        ), self.assertRaises(BackupProblem):
+            restic_config.assert_repository_disk_space_available(
+                self.restic_cfg(disk_check_min_free_percent="abc")
+            )
 
     def test_zero_threshold_disables_check(self):
         usage = mock.Mock(total=1000, free=0)
