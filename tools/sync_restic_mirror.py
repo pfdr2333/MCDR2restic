@@ -74,12 +74,19 @@ def github_request(url: str) -> urllib.request.Request:
     return urllib.request.Request(url, headers=headers)
 
 
+DEFAULT_REQUEST_UA = "MCDR2Restic/mcdr2restic"
+
+
 def http_get_text(url: str, headers: dict | None = None) -> str:
     return http_get_bytes(url, headers).decode("utf-8", "replace")
 
 
 def http_get_bytes(url: str, headers: dict | None = None) -> bytes:
-    request = urllib.request.Request(url, headers=headers or {})
+    # 镜像站开着 Cloudflare 浏览器完整性检查，裸 Python-urllib 签名会被 1010 拒绝
+    all_headers = {"User-Agent": DEFAULT_REQUEST_UA}
+    if headers:
+        all_headers.update(headers)
+    request = urllib.request.Request(url, headers=all_headers)
     with urllib.request.urlopen(request, timeout=120) as response:
         return response.read()
 
