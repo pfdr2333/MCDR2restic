@@ -239,6 +239,26 @@ class RestoreTargetDirectoryTests(unittest.TestCase):
             error.exception.i18n_key, "error.restore.target_admin_share_unc"
         )
 
+    @unittest.skipUnless(os.name == "nt", "admin share UNC is Windows-specific")
+    def test_normalize_target_rejects_admin_share_before_filesystem_calls(self):
+        # P1-2：不可达主机的 realpath 会阻塞到 SMB 超时，拒绝必须发生在
+        # 任何文件系统调用之前
+        restic_cfg = {"working_directory": str(REPO_ROOT)}
+
+        with mock.patch.object(
+            restore_paths,
+            "normalize_filesystem_path",
+            side_effect=AssertionError("realpath must not run"),
+        ) as normalize, self.assertRaises(BackupProblem) as error:
+            restore_paths.normalize_restore_target_directory(
+                "\\\\192.168.255.254\\c$\\restore-out", restic_cfg
+            )
+
+        self.assertEqual(
+            error.exception.i18n_key, "error.restore.target_admin_share_unc"
+        )
+        normalize.assert_not_called()
+
     @unittest.skipUnless(os.name == "nt", "verbatim UNC prefix is Windows-specific")
     def test_normalize_target_rejects_verbatim_unc_of_working_directory(self):
         restic_cfg = {"working_directory": str(REPO_ROOT)}

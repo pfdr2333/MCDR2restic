@@ -101,7 +101,11 @@ def normalize_restore_target_directory(
     raw = str(value or "").strip().strip("\"'")
     if not raw:
         raise BackupProblem(i18n_key="error.restore.target_empty")
+    # 管理共享写法拒绝必须先于一切文件系统调用：realpath 对不可达 UNC 会
+    # 阻塞到 SMB 协商超时（P1-2）；展开后的值同样要查，防环境变量拼接绕过
+    assert_admin_share_unc_rejected(raw)
     expanded = os.path.expanduser(os.path.expandvars(raw))
+    assert_admin_share_unc_rejected(expanded)
     workdir = get_restic_working_directory(restic_cfg)
     if os.path.isabs(expanded):
         target = normalize_filesystem_path(expanded)
@@ -137,16 +141,19 @@ def _reject_target_containing_protected(
             )
 
 
+def assert_admin_share_unc_rejected(text: str):
+    if is_admin_share_unc_path(text):
+        raise BackupProblem(
+            i18n_key="error.restore.target_admin_share_unc", path=text
+        )
+
+
 def assert_restore_target_allowed(
     target: str, restic_cfg: Dict[str, Any], data_dir: str = ""
 ):
     normalized_target = normalize_filesystem_path(target)
-    # 管理共享 UNC 与盘符路径指向同一位置，但主机名无法离线穷尽，
-    # 逐主机映射存在枚举盲区，按写法整体拒绝（P0-6）
-    if is_admin_share_unc_path(normalized_target):
-        raise BackupProblem(
-            i18n_key="error.restore.target_admin_share_unc", path=target
-        )
+    # 兜底复查：直接调用本函数的入口拿到的是已归一化路径（P0-6）
+    assert_admin_share_unc_rejected(normalized_target)
     target_path = canonical_path_for_comparison(normalized_target)
     workdir = get_restic_working_directory(restic_cfg)
     if os.path.normcase(target_path) == os.path.normcase(
