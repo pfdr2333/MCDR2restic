@@ -1,3 +1,5 @@
+import threading
+
 try:
     from .support import (
         REPO_ROOT,
@@ -362,6 +364,47 @@ class ResticCommandTests(unittest.TestCase):
         self.assertEqual(run_restic.call_args.args[3], "init")
         self.assertTrue(invalidations)
         self.assertIn("restic init", source.replies[0])
+
+    def test_manual_init_registers_command_thread_for_shutdown_join(self):
+        # P2-2：init/unlock 同步跑在命令线程，必须登记 backup.thread 供卸载 join
+        runtime = create_runtime()
+        runtime.config_state.config = {
+            "command": {"root": "!!backup", "permission_level": 3},
+            "restic": {"timeout_seconds": 0},
+        }
+        server = FakePluginServer()
+        runtime.service.server = server
+        source = PermissiveCommandSource(server)
+        observed = {}
+        commands = ResticCommands(
+            CommandContext(
+                runtime,
+                lambda: None,
+                lambda: None,
+                lambda _server: None,
+                lambda: None,
+                lambda *_args: None,
+            )
+        )
+
+        def fake_run(app_runtime, *_args, **_kwargs):
+            observed["thread"] = app_runtime.backup.thread
+            return ResticCommandResult("init", ["init"], 0, "", "", 0)
+
+        with (
+            mock.patch(
+                "mcdr2restic.commands.restic_commands.ensure_default_restic_executable_available"
+            ),
+            mock.patch(
+                "mcdr2restic.commands.restic_commands.run_restic_command",
+                side_effect=fake_run,
+            ),
+        ):
+            commands.command_init(source)
+
+        self.assertIs(observed["thread"], threading.current_thread())
+        self.assertIsNone(runtime.backup.thread)
+        self.assertFalse(runtime.backup.lock.locked())
 
     def test_manual_maintenance_starts_runner_and_replies(self):
         runtime = create_runtime()

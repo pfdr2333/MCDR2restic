@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+import threading
 from typing import Any, Dict, List
 
 from mcdreforged.api.all import CommandSource
@@ -61,6 +62,8 @@ class ResticCommands:
 
         self.context.app_runtime.backup.label = "manual-{}".format(command)
         self.context.app_runtime.backup.cancel.clear()
+        # 登记命令线程供卸载统一取消/join：restic 挂起时重载不留僵尸子进程（P2-2）
+        self.context.app_runtime.backup.thread = threading.current_thread()
         try:
             ensure_default_restic_executable_available(server, restic_cfg)
             result = run_restic_command(
