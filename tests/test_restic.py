@@ -6,6 +6,7 @@ try:
         BackupProblem,
         CommandContext,
         CommandServer,
+        FakeLogger,
         FakePluginServer,
         PermissiveCommandSource,
         ResticCommandResult,
@@ -39,6 +40,7 @@ except ImportError:
         BackupProblem,
         CommandContext,
         CommandServer,
+        FakeLogger,
         FakePluginServer,
         PermissiveCommandSource,
         ResticCommandResult,
@@ -74,6 +76,47 @@ class ResticResultTests(unittest.TestCase):
             "ok\nerror: failed\nerror: ignored\n", [r"error:"], [r"ignored"]
         )
         self.assertEqual(lines, ["error: failed"])
+
+    def test_success_exit_codes_invalid_entries_fall_back_with_warning(self):
+        # P3-2：非法值不得抛裸异常，回退默认 {0} 并记 warn
+        logger = FakeLogger()
+        result = ResticCommandResult("snapshots", ["snapshots"], 0, "", "", 2)
+
+        for bad in ([0, "abc"], [0, None], 0, [True]):
+            with self.subTest(value=bad):
+                assert_restic_success(
+                    {"success_exit_codes": bad}, result, "!!backup", logger
+                )
+
+        self.assertEqual(len(logger.warning_messages), 4)
+        self.assertTrue(
+            all(
+                "success_exit_codes" in message
+                for message in logger.warning_messages
+            )
+        )
+
+    def test_success_exit_codes_valid_custom_codes_still_honored(self):
+        result = ResticCommandResult("snapshots", ["snapshots"], 3, "", "", 2)
+
+        assert_restic_success({"success_exit_codes": [0, 3]}, result, "!!backup")
+
+    def test_invalid_error_regex_is_skipped_with_warning(self):
+        logger = FakeLogger()
+        lines = detect_error_lines(
+            "ok\nerror: failed\n",
+            ["[unclosed", r"error:"],
+            ["(?"],
+            logger,
+        )
+
+        self.assertEqual(lines, ["error: failed"])
+        self.assertEqual(len(logger.warning_messages), 2)
+        self.assertTrue(
+            all(
+                "error_regex" in message for message in logger.warning_messages
+            )
+        )
 
     def test_return_code_error_guides_repository_initialization(self):
         result = ResticCommandResult(

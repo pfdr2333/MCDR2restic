@@ -73,7 +73,9 @@ class ResticCommands:
                 command,
                 make_restic_deadline(restic_cfg),
             )
-            assert_restic_success(restic_cfg, result, self.context.get_command_root())
+            assert_restic_success(
+                restic_cfg, result, self.context.get_command_root(), server.logger
+            )
         except BackupProblem as exc:
             source.reply(source_error_text(source, server, exc))
             return

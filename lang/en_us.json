@@ -8,6 +8,8 @@
   "mcdr2restic.info.backup.started": "Starting {label} backup",
   "mcdr2restic.info.backup.skipped_on_plugin_stop": "Plugin is stopping; skipped {label} backup",
   "mcdr2restic.info.backup.success": "{label} backup completed in {duration_seconds}s",
+  "mcdr2restic.warn.restic.success_exit_codes_invalid": "restic.success_exit_codes contains an invalid entry {value}; it is ignored and the default is used",
+  "mcdr2restic.warn.restic.error_regex_invalid": "{config_key} contains an invalid regex {pattern}; it is ignored: {error}",
   "mcdr2restic.warn.backup.canceled": "{label} backup canceled: {error}",
   "mcdr2restic.warn.backup.running_status_reset": "Previous backup did not finish cleanly; its status has been reset to interrupted",
   "mcdr2restic.error.backup.failed": "{label} backup failed: {error}",

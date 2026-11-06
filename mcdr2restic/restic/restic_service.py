@@ -114,7 +114,9 @@ def run_backup_maintenance(ctx: ResticOperationContext, newly_initialized: bool)
             command,
             RESTIC_PHASE_MAINTENANCE,
         )
-        assert_restic_success(ctx.restic_cfg, result, ctx.command_root)
+        assert_restic_success(
+            ctx.restic_cfg, result, ctx.command_root, ctx.server.logger
+        )
         invalidate_snapshot_cache_for_operation(
             ctx, "snapshot.cache.reason.maintenance_finished"
         )
@@ -212,7 +214,9 @@ def run_backup_command(ctx: ResticOperationContext) -> str:
         ctx.restic_cfg.get(RESTIC_CFG_BACKUP_COMMAND, []),
         RESTIC_COMMAND_BACKUP,
     )
-    assert_restic_success(ctx.restic_cfg, result, ctx.command_root)
+    assert_restic_success(
+        ctx.restic_cfg, result, ctx.command_root, ctx.server.logger
+    )
     invalidate_snapshot_cache_for_operation(
         ctx, "snapshot.cache.reason.backup_finished"
     )
@@ -264,7 +268,9 @@ def ensure_restic_repository_initialized(ctx: ResticOperationContext) -> bool:
         [RESTIC_COMMAND_INIT],
         RESTIC_COMMAND_INIT,
     )
-    assert_restic_success(restic_cfg, result, ctx.command_root)
+    assert_restic_success(
+        restic_cfg, result, ctx.command_root, server.logger
+    )
     invalidate_snapshot_cache_for_operation(
         ctx, "snapshot.cache.reason.repository_initialized"
     )

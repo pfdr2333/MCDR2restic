@@ -8,6 +8,8 @@
   "mcdr2restic.info.backup.started": "開始{label}備份",
   "mcdr2restic.info.backup.skipped_on_plugin_stop": "外掛正在停止，跳過{label}備份",
   "mcdr2restic.info.backup.success": "{label}備份成功，用時 {duration_seconds} 秒",
+  "mcdr2restic.warn.restic.success_exit_codes_invalid": "restic.success_exit_codes 配置含非法項 {value}，已忽略並回退預設值",
+  "mcdr2restic.warn.restic.error_regex_invalid": "{config_key} 配置含非法正則 {pattern}，已忽略：{error}",
   "mcdr2restic.warn.backup.canceled": "{label}備份已取消：{error}",
   "mcdr2restic.warn.backup.running_status_reset": "檢測到上次備份未能正常收尾，狀態已復位為已中斷",
   "mcdr2restic.error.backup.failed": "{label}備份失敗：{error}",

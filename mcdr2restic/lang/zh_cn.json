@@ -8,6 +8,8 @@
   "info.backup.started": "开始{label}备份",
   "info.backup.skipped_on_plugin_stop": "插件正在停止，跳过{label}备份",
   "info.backup.success": "{label}备份成功，用时 {duration_seconds} 秒",
+  "warn.restic.success_exit_codes_invalid": "restic.success_exit_codes 配置含非法项 {value}，已忽略并回退默认值",
+  "warn.restic.error_regex_invalid": "{config_key} 配置含非法正则 {pattern}，已忽略：{error}",
   "warn.backup.canceled": "{label}备份已取消：{error}",
   "warn.backup.running_status_reset": "检测到上次备份未能正常收尾，状态已复位为已中断",
   "error.backup.failed": "{label}备份失败：{error}",

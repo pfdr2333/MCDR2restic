@@ -75,7 +75,7 @@ def run_restic_command_with_lock_recovery(
         ctx.deadline,
     )
     try:
-        assert_restic_success(ctx.restic_cfg, unlock_result)
+        assert_restic_success(ctx.restic_cfg, unlock_result, logger=ctx.server.logger)
     except BackupProblem as exc:
         log_server_message(
             ctx.server,

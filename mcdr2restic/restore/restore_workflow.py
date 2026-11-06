@@ -538,7 +538,9 @@ def execute_restore_tasks(
             build_restore_command(restic_cfg, task),
             RESTIC_COMMAND_RESTORE,
         )
-        assert_restic_success(restic_cfg, result, command_root)
+        assert_restic_success(
+            restic_cfg, result, command_root, server.logger
+        )
         log_restore_task_completed(server, task)
 
 
@@ -752,7 +754,9 @@ def rollback_to_safety_snapshot(
             build_full_restore_command(restic_cfg, snapshot_id),
             RESTIC_COMMAND_ROLLBACK,
         )
-        assert_restic_success(restic_cfg, result, command_root)
+        assert_restic_success(
+            restic_cfg, result, command_root, server.logger
+        )
         server.logger.info(
             server_tr(
                 server, "info.restore.rollback_completed", snapshot_id=snapshot_id[:8]
