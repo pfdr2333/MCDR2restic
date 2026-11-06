@@ -215,7 +215,7 @@ class SnapshotDatabaseTests(unittest.TestCase):
 
             self.assertEqual(rows[0]["target_directory"], "/tmp/out")
             self.assertIn(
-                "{}. [整份快照] abcdef12 -> / (恢复到 /tmp/out)".format(task_id),
+                "{}. [整份快照] abcdef12 (恢复到 /tmp/out)".format(task_id),
                 output,
             )
 
