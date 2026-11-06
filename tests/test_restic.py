@@ -632,6 +632,73 @@ class ResticProgressTests(unittest.TestCase):
 
         self.assertIn("snapshot abcdef12", format_restic_summary(progress))
 
+    def test_run_restic_command_skips_final_progress_without_json_output(self):
+        # P3-3：init 等非 JSON 阶段结束后不得再报"仍在执行"
+        from mcdr2restic.restic import restic_runner
+
+        runtime = create_runtime()
+        runtime.service.server = FakePluginServer()
+
+        def fake_read(app_runtime, process, progress, interval, deadline):
+            return restic_runner.ResticProcessOutcome("", "", 0, False)
+
+        with (
+            mock.patch(
+                "mcdr2restic.restic.restic_runner.build_restic_process_command",
+                return_value=("restic", None, {}, ["restic", "init"]),
+            ),
+            mock.patch(
+                "mcdr2restic.restic.restic_runner.start_restic_process",
+                return_value=mock.Mock(),
+            ),
+            mock.patch(
+                "mcdr2restic.restic.restic_runner.read_restic_process_output",
+                side_effect=fake_read,
+            ),
+            mock.patch(
+                "mcdr2restic.restic.restic_runner.maybe_emit_restic_progress"
+            ) as emit,
+        ):
+            restic_runner.run_restic_command(
+                runtime, {"timeout_seconds": 0}, ["init"], "init", None
+            )
+
+        emit.assert_not_called()
+
+    def test_run_restic_command_emits_summary_for_json_phases(self):
+        from mcdr2restic.restic import restic_runner
+
+        runtime = create_runtime()
+        runtime.service.server = FakePluginServer()
+
+        def fake_read(app_runtime, process, progress, interval, deadline):
+            progress.summary = {"snapshot_id": "abcdef123456"}
+            return restic_runner.ResticProcessOutcome("", "", 0, False)
+
+        with (
+            mock.patch(
+                "mcdr2restic.restic.restic_runner.build_restic_process_command",
+                return_value=("restic", None, {}, ["restic", "backup"]),
+            ),
+            mock.patch(
+                "mcdr2restic.restic.restic_runner.start_restic_process",
+                return_value=mock.Mock(),
+            ),
+            mock.patch(
+                "mcdr2restic.restic.restic_runner.read_restic_process_output",
+                side_effect=fake_read,
+            ),
+            mock.patch(
+                "mcdr2restic.restic.restic_runner.maybe_emit_restic_progress"
+            ) as emit,
+        ):
+            restic_runner.run_restic_command(
+                runtime, {"timeout_seconds": 0}, ["backup"], "backup", None
+            )
+
+        emit.assert_called_once()
+        self.assertTrue(emit.call_args.kwargs.get("force"))
+
 
 class ResticTerminationTests(unittest.TestCase):
     def test_terminate_result_reports_successful_paths(self):

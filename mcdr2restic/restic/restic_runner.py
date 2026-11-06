@@ -134,9 +134,12 @@ def run_restic_command(
         app_runtime.backup.current_process = None
 
     assert_restic_process_completed(app_runtime, restic_cfg, phase, started, outcome)
-    maybe_emit_restic_progress(
-        app_runtime.service.server, progress, progress_interval, force=True
-    )
+    # 非 JSON 阶段（init/unlock/maintenance）没有 summary/status，
+    # 强推进度只会把已结束的命令说成"仍在执行"（P3-3）
+    if progress.summary or progress.status:
+        maybe_emit_restic_progress(
+            app_runtime.service.server, progress, progress_interval, force=True
+        )
     return build_restic_command_result(phase, args, outcome, started, progress)
 
 
