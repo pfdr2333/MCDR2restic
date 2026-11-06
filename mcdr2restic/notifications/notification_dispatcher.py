@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
-from typing import Any, Callable, Dict, NamedTuple, Optional
+from typing import Any, Callable, Dict, List, NamedTuple, Optional
 
-from mcdr2restic.core.i18n import config_language, server_tr
+from mcdr2restic.core.i18n import config_language, server_tr, tr
 from mcdr2restic.core.language import get_mcdr_language
 from mcdr2restic.core.runtime import PluginRuntime
-from mcdr2restic.core.utils import get_config_section
+from mcdr2restic.core.utils import get_config_section, now_text
 from mcdr2restic.defaults.default_constants import DEFAULT_MESSAGE_PREFIX
 from mcdr2restic.notifications.message_templates import (
     MessageRenderOptions,
@@ -15,6 +15,11 @@ from mcdr2restic.notifications.message_templates import (
 
 
 ConfigProvider = Callable[[], Dict[str, Any]]
+
+CHANNEL_STATUS_DISABLED = "disabled"
+CHANNEL_STATUS_NOT_STARTED = "not_started"
+CHANNEL_STATUS_SENT = "sent"
+CHANNEL_STATUS_FAILED = "failed"
 
 
 class ChannelSpec(NamedTuple):
@@ -25,6 +30,14 @@ class ChannelSpec(NamedTuple):
     not_started_key: str
     send_failed_key: str
     deliver: Callable[[Any, Dict[str, Any], str, Optional[Dict[str, Any]]], None]
+
+
+class ChannelTestResult(NamedTuple):
+    """notify-test 逐渠道回报：配置段、投递状态与同步阶段捕获的异常。"""
+
+    section: str
+    status: str
+    error: Optional[BaseException]
 
 
 class NotificationDispatcher:
@@ -50,6 +63,32 @@ class NotificationDispatcher:
         self._log(log_text, failure)
         for spec in self._channel_specs():
             self._notify_channel(spec, template_key, values, cfg, language)
+
+    def send_test_notification(self, cfg: Dict[str, Any]) -> List[ChannelTestResult]:
+        """向全部渠道提交一条测试消息，逐渠道回报投递状态。"""
+
+        language = self._language()
+
+        def build_text(channel_cfg: Dict[str, Any]) -> str:
+            prefix = str(
+                channel_cfg.get("message_prefix") or DEFAULT_MESSAGE_PREFIX
+            )
+            return prefix + tr(language, "info.notify.test_message", time=now_text())
+
+        results = []
+        for spec in self._channel_specs():
+            status, error = self._send_channel_message(
+                spec,
+                cfg,
+                language,
+                build_text,
+                not_started_detail="notify_test",
+                values=None,
+            )
+            results.append(
+                ChannelTestResult(section=spec.section, status=status, error=error)
+            )
+        return results
 
     def _channel_specs(self):
         return (
@@ -85,29 +124,51 @@ class NotificationDispatcher:
         cfg: Dict[str, Any],
         language: str,
     ):
+        self._send_channel_message(
+            spec,
+            cfg,
+            language,
+            lambda channel_cfg: render_message(
+                template_key,
+                values,
+                cfg,
+                MessageRenderOptions(
+                    prefix=str(
+                        channel_cfg.get("message_prefix") or DEFAULT_MESSAGE_PREFIX
+                    ),
+                    logger=self._logger(),
+                    language=language,
+                ),
+            ),
+            not_started_detail=template_key,
+            values=values,
+        )
+
+    def _send_channel_message(
+        self,
+        spec: ChannelSpec,
+        cfg: Dict[str, Any],
+        language: str,
+        build_text: Callable[[Dict[str, Any]], str],
+        not_started_detail: str,
+        values: Optional[Dict[str, Any]],
+    ):
+        """向单渠道投递；返回 (状态, 同步阶段异常)，失败仍写原有告警日志。"""
+
         channel_cfg = get_config_section(cfg, spec.section)
         if not channel_cfg.get("enabled", False):
-            return
+            return CHANNEL_STATUS_DISABLED, None
         client = getattr(self.app_runtime.service, spec.client_attr)
         if client is None:
-            self._warn_server(spec.not_started_key, template_key=template_key)
-            return
-        text = render_message(
-            template_key,
-            values,
-            cfg,
-            MessageRenderOptions(
-                prefix=str(
-                    channel_cfg.get("message_prefix") or DEFAULT_MESSAGE_PREFIX
-                ),
-                logger=self._logger(),
-                language=language,
-            ),
-        )
+            self._warn_server(spec.not_started_key, template_key=not_started_detail)
+            return CHANNEL_STATUS_NOT_STARTED, None
+        text = build_text(channel_cfg)
         try:
             spec.deliver(client, channel_cfg, text, values)
         except Exception as exc:
             self._warn_server(spec.send_failed_key, error=exc)
+            return CHANNEL_STATUS_FAILED, exc
+        return CHANNEL_STATUS_SENT, None
 
     def _deliver_onebot(
         self,

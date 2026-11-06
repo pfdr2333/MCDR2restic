@@ -14,6 +14,7 @@ from mcdreforged.api.all import (
 
 from mcdr2restic.commands.backup_commands import BackupCommands
 from mcdr2restic.commands.command_context import CommandContext
+from mcdr2restic.commands.notify_commands import NotifyCommands
 from mcdr2restic.commands.restore_commands import RestoreCommands
 from mcdr2restic.commands.restic_commands import ResticCommands
 from mcdr2restic.core.i18n import server_rtr, server_tr
@@ -29,6 +30,7 @@ class CommandHandlers:
         self.backup = BackupCommands(self.context)
         self.restore = RestoreCommands(self.context)
         self.restic = ResticCommands(self.context)
+        self.notify = NotifyCommands(self.context)
 
     def register_commands(self, server: PluginServerInterface):
         command_cfg = get_config_section(
@@ -75,6 +77,7 @@ class CommandHandlers:
             .then(Literal("stop").runs(self.backup.command_stop))
             .then(Literal("cancel").runs(self.backup.command_cancel))
             .then(Literal("backup").runs(self.backup.command_backup))
+            .then(Literal("notify-test").runs(self.notify.command_notify_test))
             .then(Literal("init").runs(self.restic.command_init))
             .then(Literal("maintenance").runs(self.restic.command_maintenance))
             .then(Literal("unlock").runs(self.restic.command_unlock))

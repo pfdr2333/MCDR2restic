@@ -449,3 +449,75 @@ class ChannelContractTests(unittest.TestCase):
         payload = json.loads(requests[0].data)
         self.assertIn("备份开始", payload["content"])
         self.assertIn("allowed_mentions", payload)
+
+
+class NotifyTestTests(unittest.TestCase):
+    CHANNEL_CFG = {
+        "onebot": {"enabled": True, "admin_qqs": [123]},
+        "discord": {"enabled": True},
+        "custom_webhook": {"enabled": True},
+    }
+
+    @staticmethod
+    def make_dispatcher(cfg):
+        app_runtime = create_runtime()
+        dispatcher = NotificationDispatcher(app_runtime, lambda: cfg)
+        app_runtime.service.server = FakePluginServer()
+        return app_runtime, dispatcher
+
+    @staticmethod
+    def status_by_section(results):
+        return {result.section: result.status for result in results}
+
+    def test_reports_sent_for_ready_channels(self):
+        app_runtime, dispatcher = self.make_dispatcher(self.CHANNEL_CFG)
+        app_runtime.service.onebot = mock.Mock()
+        app_runtime.service.discord = mock.Mock()
+        app_runtime.service.custom_webhook = mock.Mock()
+
+        statuses = self.status_by_section(
+            dispatcher.send_test_notification(self.CHANNEL_CFG)
+        )
+
+        self.assertEqual(
+            statuses,
+            {"onebot": "sent", "discord": "sent", "custom_webhook": "sent"},
+        )
+        app_runtime.service.onebot.send_private_msg.assert_called_once()
+
+    def test_reports_disabled_for_unenabled_channel(self):
+        cfg = dict(self.CHANNEL_CFG, discord={"enabled": False})
+        app_runtime, dispatcher = self.make_dispatcher(cfg)
+        app_runtime.service.onebot = mock.Mock()
+        app_runtime.service.discord = mock.Mock()
+        app_runtime.service.custom_webhook = mock.Mock()
+
+        statuses = self.status_by_section(dispatcher.send_test_notification(cfg))
+
+        self.assertEqual(statuses["discord"], "disabled")
+        app_runtime.service.discord.send_message.assert_not_called()
+
+    def test_reports_not_started_when_client_missing(self):
+        app_runtime, dispatcher = self.make_dispatcher(self.CHANNEL_CFG)
+        app_runtime.service.onebot = mock.Mock()
+        # discord/custom_webhook 客户端保持 None
+
+        statuses = self.status_by_section(dispatcher.send_test_notification(self.CHANNEL_CFG))
+
+        self.assertEqual(statuses["discord"], "not_started")
+        self.assertEqual(statuses["custom_webhook"], "not_started")
+
+    def test_reports_failed_when_deliver_raises(self):
+        app_runtime, dispatcher = self.make_dispatcher(self.CHANNEL_CFG)
+        app_runtime.service.onebot = mock.Mock()
+        app_runtime.service.discord = mock.Mock()
+        failing = mock.Mock()
+        failing.send_message.side_effect = RuntimeError("boom")
+        app_runtime.service.custom_webhook = failing
+
+        results = dispatcher.send_test_notification(self.CHANNEL_CFG)
+        statuses = self.status_by_section(results)
+
+        self.assertEqual(statuses["custom_webhook"], "failed")
+        failed = [r for r in results if r.section == "custom_webhook"][0]
+        self.assertEqual(str(failed.error), "boom")

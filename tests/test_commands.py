@@ -150,3 +150,44 @@ class CancelCommandTests(unittest.TestCase):
         commands.command_cancel(source)
 
         self.assertIn("没有正在运行", source.replies[-1])
+
+
+class NotifyTestCommandTests(unittest.TestCase):
+    def test_notify_test_lists_channel_results(self):
+        from mcdr2restic.commands import notify_commands
+        from mcdr2restic.commands.command_context import CommandContext
+        from mcdr2restic.commands.notify_commands import NotifyCommands
+        from mcdr2restic.notifications.notification_dispatcher import (
+            ChannelTestResult,
+        )
+
+        runtime = create_runtime()
+        context = CommandContext(
+            app_runtime=runtime,
+            backup_runner_factory=lambda: None,
+            maintenance_runner_factory=lambda: None,
+            reload_services=mock.Mock(),
+            wake_scheduler=mock.Mock(),
+            snapshot_invalidator=mock.Mock(),
+        )
+        source = PermissiveCommandSource(FakePluginServer())
+        fake_results = [
+            ChannelTestResult(section="onebot", status="sent", error=None),
+            ChannelTestResult(
+                section="discord", status="failed", error=RuntimeError("boom")
+            ),
+        ]
+
+        with mock.patch.object(
+            notify_commands.NotificationDispatcher,
+            "send_test_notification",
+            return_value=fake_results,
+        ):
+            NotifyCommands(context).command_notify_test(source)
+
+        reply = source.replies[-1]
+        self.assertIn("通知渠道测试结果", reply)
+        self.assertIn("OneBot", reply)
+        self.assertIn("已发送", reply)
+        self.assertIn("Discord", reply)
+        self.assertIn("boom", reply)
