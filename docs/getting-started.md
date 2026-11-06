@@ -11,7 +11,7 @@
 默认设置：
 
 - 备份频率为每三小时备份一次，24 小时内备份全保留，之后每天保留一个，共保留 7 天，可调节调度设置改变效果
-- 默认备份存储位置为 `./restic-repo`（相对路径，默认基于 MCDR 工作目录解析）
+- 默认备份存储位置为 `./restic-repo`（相对路径，基于 MCDR 根目录——即 `config.yml` 所在目录——解析；注意不是 MCDR `working_directory` 指向的服务器目录）
 
 ## 第一步：安装插件
 
@@ -27,7 +27,7 @@
 !!MCDR plugin install -U mcdr2restic
 ```
 
-手动安装：在 [GitHub Releases](https://github.com/pfdr2333/MCDR2restic/releases/latest) 中下载最新版本，然后将其放入 MCDR 的 `plugins` 文件夹中，使用 `!!MCDR plugin load mcdr2restic.mcdr` 加载插件。
+手动安装：在 [GitHub Releases](https://github.com/pfdr2333/MCDR2restic/releases/latest) 中下载最新版本的 `.mcdr` 文件（文件名形如 `MCDR2Restic_v0.8.0.mcdr`），放入 MCDR 的 `plugins` 文件夹中，再以实际文件名执行加载，例如 `!!MCDR plugin load MCDR2Restic_v0.8.0.mcdr`。
 
 重载后，如果 `config/mcdr2restic/config.yml` 不存在，插件会自动生成一份示例配置。
 

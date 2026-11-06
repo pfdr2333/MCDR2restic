@@ -256,3 +256,15 @@ config.yml.v8.bak
 3. `restic.repository` 是否写对
 4. `backup_command` 是否指向了正确目录
 5. `!!m2r backup` 能否成功跑完一次
+
+## 18. 把 `permission_level` 设得太高，连 `!!m2r reload` 都用不了怎么办
+
+`command.permission_level` 是执行本插件命令所需的 MCDR 权限等级。如果设得比你自己（或服内所有人）的等级还高，所有 `!!m2r` 命令都会被拒绝，包括用来改回配置的 `!!m2r reload`，看起来就像被"锁死"了。
+
+这种情况插件命令进不去，但 MCDR 自带命令不走插件的权限检查：
+
+1. 执行 `!!MCDR plugin reload mcdr2restic` 重载插件（MCDR 管理命令默认要求权限等级 3，从 MCDR 控制台执行则始终可用）；
+2. 重载只是让插件重新读取配置——先直接编辑 `config/mcdr2restic/config.yml`，把 `command.permission_level` 改回不高于你自身等级的值（默认 `3`），保存后再执行上面的重载；
+3. 也可以彻底重启 MCDR，在控制台里完成上述修改。
+
+预防：`permission_level` 保持不超过你日常使用的账号等级；不确定时维持默认 `3` 并用 MCDR 的 `permission.yml` 给账号授权。

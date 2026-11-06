@@ -264,7 +264,7 @@ restic:
 
 ### `working_directory`
 
-- 留空：继承 MCDR 当前工作目录
+- 留空：继承 MCDR 根目录（`config.yml` 所在目录）
 - 不留空：按你填写的目录作为 `restic` 工作目录
 
 如果你不确定，第一次通常保持空字符串最稳妥。
@@ -272,6 +272,8 @@ restic:
 ### `repository`
 
 仓库路径或仓库地址。
+
+相对路径基于 MCDR 根目录（`config.yml` 所在目录）解析。注意这里不是 MCDR 自身的 `working_directory` 设置（服务器所在目录），两者容易混淆。
 
 本地示例：
 
