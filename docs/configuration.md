@@ -247,7 +247,7 @@ restic:
   auto_init_local_repository: true
   environment: {}
   maintenance_commands:
-    - ["forget", "--keep-daily", "7", "--prune"]
+    - ["forget", "--keep-within", "1d", "--keep-daily", "7", "--prune"]
   backup_command:
     - "backup"
     - "./server/world"
@@ -361,12 +361,14 @@ restic:
 
 这一段就是维护时真正执行的 `restic` 命令列表。
 
-常见示例：
+常见示例（同样是默认值）：
 
 ```yaml
 maintenance_commands:
-  - ["forget", "--keep-daily", "7", "--prune"]
+  - ["forget", "--keep-within", "1d", "--keep-daily", "7", "--prune"]
 ```
+
+含义：24 小时内的备份全部保留，之后每天保留最近的一个，共保留 7 天。`--keep-within` 不能省——缺了它旧快照永远不会过期，`--prune` 也就腾不出空间。
 
 ### `backup_command`
 
@@ -651,7 +653,7 @@ maintenance_schedule:
 
 restic:
   maintenance_commands:
-    - ["forget", "--keep-daily", "7", "--prune"]
+    - ["forget", "--keep-within", "1d", "--keep-daily", "7", "--prune"]
 ```
 
 ## 13. 配置迁移和备份文件
