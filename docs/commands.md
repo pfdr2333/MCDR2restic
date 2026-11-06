@@ -136,7 +136,7 @@
 ```yaml
 restic:
   maintenance_commands:
-    - ["forget", "--keep-daily", "7", "--prune"]
+    - ["forget", "--keep-within", "1d", "--keep-daily", "7", "--prune"]
 ```
 
 这条命令的边界也很重要：
