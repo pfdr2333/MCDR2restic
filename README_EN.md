@@ -12,7 +12,7 @@ An MCDReforged plugin that runs [restic](https://restic.readthedocs.io/en/stable
 - Scheduled backups via 6-field cron or fixed intervals; a running backup can be interrupted
 - Skips scheduled backups when nobody is playing, using join/left events plus a `list` online check
 - Forced backup scheduling that ignores player activity (disabled by default)
-- Automatic restic download (Linux/Windows amd64) with built-in official, self-hosted mirror and proxy sources
+- Automatic restic download (Linux/Windows amd64) with outdated copies upgraded automatically, using built-in official, self-hosted mirror and proxy sources
 - Snapshot restore: full snapshot, single file, or folder — including restore into a chosen directory
 - Automatic pre-restore safety snapshot with rollback on failure
 - Repository maintenance: `forget`/`prune` and friends, scheduled independently
@@ -49,7 +49,7 @@ Updating later is also a one-liner:
 
 Manual installation: grab `MCDR2Restic.mcdr` from the latest [Release](https://github.com/pfdr2333/MCDR2restic/releases), drop it into MCDR's `plugins/` directory, and run `!!MCDR reload all`. On first load a sample configuration tailored to your system is generated at `config/mcdr2restic/config.yml` — the defaults just work:
 
-- restic is downloaded automatically and the local repository initialized
+- restic is downloaded, kept up to date and the local repository initialized automatically
 - `./server/world` is backed up by default (all three world directories are added when detected)
 - On Windows the sample uses `.\config\mcdr2restic\restic.exe`-style backslash paths and excludes `session.lock`
 

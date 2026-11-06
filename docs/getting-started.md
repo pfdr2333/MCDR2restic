@@ -84,7 +84,7 @@
 
 1. 检查 Minecraft 是否已经正常运行
 2. 检查本地仓库是否被放进了备份源目录里
-3. 如果你保持默认 `restic` 路径：优先用系统 PATH 中的 `restic`（开启 `use_path_restic` 时），否则配置目录内没有就自动下载
+3. 如果你保持默认 `restic` 路径：优先用系统 PATH 中的 `restic`（开启 `use_path_restic` 时），否则配置目录内没有就自动下载，已有但低于内置信任版本会自动升级
 4. 如果本地仓库还没初始化，就自动执行 `restic init`
 5. 执行 Minecraft 保存相关命令
 6. 执行 `restic backup`
