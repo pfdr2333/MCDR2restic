@@ -21,6 +21,7 @@ RESTIC_CFG_PROGRESS_INTERVAL = "progress_interval_seconds"
 RESTIC_CFG_REPOSITORY = "repository"
 RESTIC_CFG_SUCCESS_EXIT_CODES = "success_exit_codes"
 RESTIC_CFG_TIMEOUT_SECONDS = "timeout_seconds"
+RESTIC_CFG_USE_PATH_RESTIC = "use_path_restic"
 RESTIC_CFG_WORKING_DIRECTORY = "working_directory"
 
 RESTIC_COMMAND_BACKUP = "backup"

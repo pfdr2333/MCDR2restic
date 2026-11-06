@@ -158,6 +158,45 @@ class ResticResultTests(unittest.TestCase):
             self.assertEqual(download_path, os.path.abspath(default_path))
             self.assertEqual(execution_path, download_path)
 
+    def test_prefer_system_restic_resolves_to_path_hit(self):
+        with mock.patch(
+            "mcdr2restic.restic.restic_runner.find_system_restic",
+            return_value="/usr/bin/restic",
+        ):
+            self.assertEqual(
+                resolve_popen_executable("restic", None, prefer_system=True),
+                "/usr/bin/restic",
+            )
+
+    def test_prefer_system_restic_falls_back_to_config_folder_on_path_miss(self):
+        platform_defaults = {
+            "posix": "./config/mcdr2restic/restic",
+            "nt": ".\\config\\mcdr2restic\\restic.exe",
+        }
+        for platform_name, default_path in platform_defaults.items():
+            with mock.patch("os.name", platform_name), mock.patch(
+                "mcdr2restic.restic.restic_runner.find_system_restic",
+                return_value=None,
+            ):
+                resolved = resolve_popen_executable(
+                    "restic", None, prefer_system=True
+                )
+
+            self.assertEqual(resolved, os.path.abspath(default_path))
+
+    def test_explicit_executable_path_ignores_system_restic_preference(self):
+        with mock.patch(
+            "mcdr2restic.restic.restic_runner.find_system_restic",
+            return_value="/usr/bin/restic",
+        ):
+            resolved = resolve_popen_executable(
+                "./custom-restic", str(REPO_ROOT), prefer_system=True
+            )
+
+        self.assertEqual(
+            resolved, os.path.abspath(os.path.join(str(REPO_ROOT), "custom-restic"))
+        )
+
 
 class ResticLockRecoveryTests(unittest.TestCase):
     LOCK_ERROR_OUTPUT = (

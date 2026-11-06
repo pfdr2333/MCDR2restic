@@ -145,6 +145,7 @@ def build_default_restic_config() -> ConfigDict:
         "repository": "./restic-repo",
         "password": "123456",
         "password_file": "",
+        "use_path_restic": False,
         "auto_init_local_repository": True,
         "environment": {},
         "maintenance_commands": build_default_maintenance_commands(),

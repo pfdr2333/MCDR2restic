@@ -10,6 +10,7 @@ try:
         RESTIC_DOWNLOAD_TIMEOUT_SECONDS,
         ResticDownloadTarget,
         download_and_install_restic,
+        ensure_default_restic_executable_available,
         expected_restic_sha256,
         extract_sha256_from_sums,
         fetch_restic_release_metadata,
@@ -29,6 +30,7 @@ except ImportError:
         RESTIC_DOWNLOAD_TIMEOUT_SECONDS,
         ResticDownloadTarget,
         download_and_install_restic,
+        ensure_default_restic_executable_available,
         expected_restic_sha256,
         extract_sha256_from_sums,
         fetch_restic_release_metadata,
@@ -203,6 +205,38 @@ class DefaultVersionTests(unittest.TestCase):
         fetched.assert_called_once_with(
             get_default_restic_version(), RESTIC_DOWNLOAD_TIMEOUT_SECONDS
         )
+
+
+class EnsureDefaultResticAvailableTests(unittest.TestCase):
+    def test_skips_install_when_system_restic_preferred_and_found(self):
+        server = FakePluginServer()
+        cfg = {"executable": "restic", "use_path_restic": True}
+
+        with mock.patch(
+            DOWNLOAD_MODULE + ".os.path.exists", return_value=False
+        ), mock.patch(
+            DOWNLOAD_MODULE + ".find_system_restic", return_value="/usr/bin/restic"
+        ), mock.patch(
+            DOWNLOAD_MODULE + ".install_default_restic_for_platform"
+        ) as install:
+            ensure_default_restic_executable_available(server, cfg)
+
+        install.assert_not_called()
+
+    def test_installs_when_system_restic_preferred_but_missing(self):
+        server = FakePluginServer()
+        cfg = {"executable": "restic", "use_path_restic": True}
+
+        with mock.patch(
+            DOWNLOAD_MODULE + ".os.path.exists", return_value=False
+        ), mock.patch(
+            DOWNLOAD_MODULE + ".find_system_restic", return_value=None
+        ), mock.patch(
+            DOWNLOAD_MODULE + ".install_default_restic_for_platform"
+        ) as install:
+            ensure_default_restic_executable_available(server, cfg)
+
+        install.assert_called_once()
 
 
 class SelectReleaseAssetTests(unittest.TestCase):

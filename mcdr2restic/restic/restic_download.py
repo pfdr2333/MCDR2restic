@@ -35,11 +35,22 @@ from mcdr2restic.core.models import BackupProblem
 from mcdr2restic.restic.restic_config import resolve_path_against_working_directory
 from mcdr2restic.restic.restic_constants import (
     RESTIC_CFG_EXECUTABLE,
+    RESTIC_CFG_USE_PATH_RESTIC,
 )
 
 
 # 自动下载为固化行为：版本取内置信任清单，超时与加速前缀不再开放配置
 RESTIC_DOWNLOAD_TIMEOUT_SECONDS = 120
+
+
+def find_system_restic() -> Optional[str]:
+    """探测系统 PATH 中的 restic（Windows 按 PATHEXT 自动匹配 restic.exe）。"""
+
+    return shutil.which("restic")
+
+
+def system_restic_preferred(restic_cfg: Dict[str, Any]) -> bool:
+    return bool(restic_cfg.get(RESTIC_CFG_USE_PATH_RESTIC, False))
 
 
 def ensure_default_restic_executable_available(
@@ -52,6 +63,8 @@ def ensure_default_restic_executable_available(
         return
     target_path = resolve_restic_executable_path(restic_cfg, executable)
     if os.path.exists(target_path):
+        return
+    if system_restic_preferred(restic_cfg) and find_system_restic():
         return
     install_default_restic_for_platform(server, target_path)
 

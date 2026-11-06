@@ -36,9 +36,11 @@ from mcdr2restic.restic.restic_constants import (
     RESTIC_OPTION_JSON,
 )
 from mcdr2restic.restic.restic_download import (
+    find_system_restic,
     is_bare_restic_name,
     is_config_folder_default_restic_path,
     resolve_default_restic_install_path,
+    system_restic_preferred,
 )
 
 from mcdr2restic.restic.restic_progress import (
@@ -88,11 +90,17 @@ class ResticStreamSession:
     output_queue: "queue.Queue[Tuple[str, Optional[str]]]"
 
 
-def resolve_popen_executable(executable: str, cwd: Optional[str]) -> str:
+def resolve_popen_executable(
+    executable: str, cwd: Optional[str], prefer_system: bool = False
+) -> str:
     text = str(executable or "").strip()
     if not text or os.path.isabs(text):
         return text
     if is_config_folder_default_restic_path(text) or is_bare_restic_name(text):
+        if prefer_system:
+            found = find_system_restic()
+            if found:
+                return found
         return resolve_default_restic_install_path(text)
     if not cwd:
         return text
@@ -162,7 +170,12 @@ def build_restic_process_command(
     executable = str(restic_cfg.get(RESTIC_CFG_EXECUTABLE, "restic"))
     cwd = restic_cfg.get(RESTIC_CFG_WORKING_DIRECTORY) or None
     env = build_restic_environment(restic_cfg)
-    command = [resolve_popen_executable(executable, cwd), *args]
+    command = [
+        resolve_popen_executable(
+            executable, cwd, prefer_system=system_restic_preferred(restic_cfg)
+        ),
+        *args,
+    ]
     return executable, cwd, env, command
 
 

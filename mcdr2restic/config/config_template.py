@@ -56,6 +56,12 @@ def get_restic_password_file_lines(language: str, restic: Dict[str, Any]) -> Lis
     return get_restic_scalar_lines(language, restic, "password_file")
 
 
+def get_restic_use_path_restic_lines(
+    language: str, restic: Dict[str, Any]
+) -> List[str]:
+    return get_restic_scalar_lines(language, restic, "use_path_restic")
+
+
 def get_restic_auto_init_lines(language: str, restic: Dict[str, Any]) -> List[str]:
     return get_restic_scalar_lines(language, restic, "auto_init_local_repository")
 

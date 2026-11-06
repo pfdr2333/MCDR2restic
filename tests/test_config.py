@@ -150,6 +150,7 @@ class ConfigurationTests(unittest.TestCase):
         self.assertNotIn("download_timeout_seconds", migrated)
         self.assertNotIn("找不到 restic 时自动下载", migrated)
         self.assertIn("executable: restic\n", migrated)
+        self.assertIn("use_path_restic: false\n", migrated)
         self.assertIn("auto_init_local_repository: true\n", migrated)
 
     def test_config_migration_warns_about_removed_restore_timeout(self):
@@ -439,6 +440,38 @@ class ConfigurationTests(unittest.TestCase):
 
             with open(os.path.join(temp_dir, "config.yml"), "r", encoding="utf8") as file:
                 self.assertIn("config_version:", file.read())
+
+    def test_first_config_generation_probes_system_restic(self):
+        server = FakePluginServer()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            server.get_data_folder = lambda: temp_dir
+
+            with mock.patch(
+                "mcdr2restic.config.config_paths.find_system_restic",
+                return_value="/usr/bin/restic",
+            ):
+                ensure_config_file_exists(server, "en_us")
+
+            with open(os.path.join(temp_dir, "config.yml"), "r", encoding="utf8") as file:
+                cfg = yaml.safe_load(file.read())
+
+        self.assertTrue(cfg["restic"]["use_path_restic"])
+
+    def test_first_config_generation_without_system_restic_keeps_switch_off(self):
+        server = FakePluginServer()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            server.get_data_folder = lambda: temp_dir
+
+            with mock.patch(
+                "mcdr2restic.config.config_paths.find_system_restic",
+                return_value=None,
+            ):
+                ensure_config_file_exists(server, "en_us")
+
+            with open(os.path.join(temp_dir, "config.yml"), "r", encoding="utf8") as file:
+                cfg = yaml.safe_load(file.read())
+
+        self.assertFalse(cfg["restic"]["use_path_restic"])
 
     def test_interrupted_first_config_generation_leaves_no_partial_file(self):
         # 首次生成 config.yml 中断时不得留下半截 YAML，否则下次启动报 yaml_invalid（P1-8）

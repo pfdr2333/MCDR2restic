@@ -156,6 +156,7 @@
   "mcdr2restic.warn.restic.lock_recovery_unlock_failed": "restic {phase} failed to unlock the stale local lock: {error}",
   "mcdr2restic.warn.restic.auto_download.unsupported": "Automatic restic download is not supported on this system or architecture; place the executable manually: {target_path}",
   "mcdr2restic.info.restic.auto_download.start": "Downloading restic ({system_name} amd64): {target_path}",
+  "mcdr2restic.info.restic.system_restic_detected": "Detected restic in the system PATH: {path}",
   "mcdr2restic.error.restic.release_missing_download_url": "restic release asset is missing a download URL: {asset_name}",
   "mcdr2restic.info.restic.downloading": "Downloading restic: {url}",
   "mcdr2restic.info.restic.auto_download.completed": "restic was downloaded and installed automatically: {target_path}",

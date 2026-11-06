@@ -154,6 +154,7 @@
   "mcdr2restic.warn.restic.lock_recovery_unlock_failed": "restic {phase} 解鎖失效鎖失敗：{error}",
   "mcdr2restic.warn.restic.auto_download.unsupported": "當前系統或架構不支援自動下載 restic，請手動放置可執行檔案：{target_path}",
   "mcdr2restic.info.restic.auto_download.start": "正在自動下載 restic（{system_name} amd64）：{target_path}",
+  "mcdr2restic.info.restic.system_restic_detected": "檢測到系統 PATH 中的 restic：{path}",
   "mcdr2restic.error.restic.release_missing_download_url": "restic release 資產缺少下載地址：{asset_name}",
   "mcdr2restic.info.restic.downloading": "正在下載 restic：{url}",
   "mcdr2restic.info.restic.auto_download.completed": "restic 自動下載並安裝完成：{target_path}",

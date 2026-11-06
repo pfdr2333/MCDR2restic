@@ -81,6 +81,9 @@ config_template: |-
     password: "123456"
     # Password file, used only when password is empty.
     password_file: ""
+    # Prefer the restic binary installed in the system PATH; probed and filled in automatically on first config generation.
+    # Falls back to the copy in the config folder (auto-downloaded when missing) if no system restic is detected.
+    use_path_restic: false
     # Run restic init automatically when a local repository is missing; remote repositories are not initialized.
     auto_init_local_repository: true
     # Extra environment variables for restic; a null value removes an inherited variable.

@@ -81,6 +81,9 @@ config_template: |-
     password: "123456"
     # 密碼檔案，僅在 password 為空時使用。
     password_file: ""
+    # 優先使用系統 PATH 中安裝的 restic；首次生成配置時會自動探測並寫入結果。
+    # 未探測到系統 restic 時回退到配置目錄內的 restic，缺失時自動下載。
+    use_path_restic: false
     # 本地倉庫缺失時自動執行 restic init；遠端倉庫不初始化。
     auto_init_local_repository: true
     # 執行 restic 時疊加的環境變數，值為 null 表示刪除繼承的同名變數。
