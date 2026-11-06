@@ -120,7 +120,7 @@ def run_restic_command(
     executable, cwd, env, command = build_restic_process_command(restic_cfg, args)
     ensure_restic_deadline_available(deadline, phase)
     started = time.monotonic()
-    process = start_restic_process(command, cwd, env, executable, phase)
+    process = start_restic_process(command, cwd, env, phase)
     progress = build_restic_progress_state(
         phase, get_mcdr_language(app_runtime.service.server), started
     )
