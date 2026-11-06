@@ -51,7 +51,7 @@ MCDReforged 插件：调用 [restic](https://restic.readthedocs.io/en/stable/) �
 
 - 自动下载 restic、自动初始化本地仓库
 - 默认备份 `./server/world`（检测到三世界目录时自动全部写入）
-- Windows 下自动使用 `.\restic.exe` 等反斜杠路径并排除 `session.lock`
+- Windows 下自动使用 `.\config\mcdr2restic\restic.exe` 等反斜杠路径并排除 `session.lock`
 
 按需修改配置后执行 `!!restic reload`。
 

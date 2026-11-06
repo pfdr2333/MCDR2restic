@@ -51,7 +51,7 @@ Manual installation: grab `MCDR2Restic.mcdr` from the latest [Release](https://g
 
 - restic is downloaded automatically and the local repository initialized
 - `./server/world` is backed up by default (all three world directories are added when detected)
-- On Windows the sample uses `.\restic.exe`-style backslash paths and excludes `session.lock`
+- On Windows the sample uses `.\config\mcdr2restic\restic.exe`-style backslash paths and excludes `session.lock`
 
 Adjust the configuration as needed, then run `!!restic reload`.
 
