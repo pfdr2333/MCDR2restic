@@ -99,7 +99,9 @@ def resolve_versions(manifest_path: Path) -> list:
     pinned = VERSION_PATTERN.search(manifest_text)
     if pinned:
         versions.append(pinned.group(1))
-    release = json.loads(http_get_text(GITHUB_RELEASE_API, headers={"User-Agent": "MCDR2Restic-mirror-sync"}))
+    # 认证走 github_request：Actions 共享出口 IP 的匿名限额 60/h 极易撞满
+    with urllib.request.urlopen(github_request(GITHUB_RELEASE_API), timeout=120) as response:
+        release = json.loads(response.read().decode("utf-8"))
     latest = str(release.get("tag_name") or "").strip()
     if latest and latest not in versions:
         versions.append(latest)

@@ -13,6 +13,7 @@ from tools.sync_restic_mirror import (
     asset_names_for,
     mirror_url,
     parse_sums,
+    resolve_versions,
     sync_version,
 )
 
@@ -175,6 +176,49 @@ class SyncVersionUploadTests(unittest.TestCase):
                 "SHA256SUMS",
             ],
         )
+
+
+class ResolveVersionsTests(unittest.TestCase):
+    def test_github_api_request_carries_token_header(self):
+        response = mock.Mock()
+        response.read.return_value = json.dumps({"tag_name": "v0.19.2"}).encode("utf-8")
+        context = mock.MagicMock()
+        context.__enter__.return_value = response
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            manifest_path = Path(temp_dir) / "restic_release.yml"
+            manifest_path.write_text("version: v0.19.1\n", encoding="utf-8")
+            with mock.patch.dict(
+                os.environ, {"GITHUB_TOKEN": "token-123"}
+            ), mock.patch(
+                "tools.sync_restic_mirror.urllib.request.urlopen",
+                return_value=context,
+            ) as urlopen:
+                versions = resolve_versions(manifest_path)
+
+        self.assertEqual(versions, ["v0.19.1", "v0.19.2"])
+        request = urlopen.call_args[0][0]
+        self.assertEqual(request.get_header("Authorization"), "Bearer token-123")
+
+    def test_github_api_request_without_token_has_no_auth_header(self):
+        response = mock.Mock()
+        response.read.return_value = json.dumps({"tag_name": "v0.19.2"}).encode("utf-8")
+        context = mock.MagicMock()
+        context.__enter__.return_value = response
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            manifest_path = Path(temp_dir) / "restic_release.yml"
+            manifest_path.write_text("version: v0.19.1\n", encoding="utf-8")
+            with mock.patch.dict(
+                os.environ, {"GITHUB_TOKEN": ""}
+            ), mock.patch(
+                "tools.sync_restic_mirror.urllib.request.urlopen",
+                return_value=context,
+            ) as urlopen:
+                resolve_versions(manifest_path)
+
+        request = urlopen.call_args[0][0]
+        self.assertIsNone(request.get_header("Authorization"))
 
 
 if __name__ == "__main__":
