@@ -21,6 +21,11 @@ jobs:
         with:
           python-version: "3.10"
 
+      - name: Pin latest restic release into the bundle manifest
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python tools/pin_latest_restic.py
+
       - name: Build MCDR archive
         run: python tools/pack_plugin.py --output-dir dist
 
