@@ -18,6 +18,7 @@ from mcdr2restic.minecraft.minecraft_service import (
 from mcdr2restic.core.models import BackupProblem
 from mcdr2restic.restic.restic_config import (
     assert_backup_sources_do_not_contain_repository,
+    assert_repository_disk_space_available,
     build_restic_environment,
     is_local_restic_repository,
     mask_restic_repository,
@@ -94,6 +95,8 @@ def prepare_backup_repository(ctx: ResticOperationContext) -> bool:
         raise BackupProblem(i18n_key="error.backup.minecraft_not_ready")
     assert_backup_sources_do_not_contain_repository(ctx.restic_cfg)
     ensure_default_restic_executable_available(ctx.server, ctx.restic_cfg)
+    # 磁盘预检放在仓库初始化之前：首次备份时也生效，且不必先写任何数据
+    assert_repository_disk_space_available(ctx.restic_cfg)
     return ensure_restic_repository_initialized(ctx)
 
 

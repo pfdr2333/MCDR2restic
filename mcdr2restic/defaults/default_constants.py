@@ -49,6 +49,9 @@ DEFAULT_SAVE_ALL_DONE_PATTERNS: Final[tuple[str, ...]] = (
     "Saved the world",
 )
 
+# 备份前磁盘预检默认阈值：本地仓库所在盘剩余空间低于该百分比时拒绝备份
+DEFAULT_DISK_CHECK_MIN_FREE_PERCENT: Final[float] = 10.0
+
 DEFAULT_RESTIC_EXECUTABLE_POSIX: Final[str] = "./config/mcdr2restic/restic"
 
 DEFAULT_RESTIC_EXECUTABLE_WINDOWS: Final[str] = ".\\config\\mcdr2restic\\restic.exe"

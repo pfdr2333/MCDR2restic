@@ -23,6 +23,7 @@
   "mcdr2restic.warn.backup.already_running": "A backup is already running; skipped {label} trigger",
   "mcdr2restic.error.backup.restore_running": "A restore workflow is running; backup refused",
   "mcdr2restic.error.backup.minecraft_not_ready": "Minecraft is not ready; backup refused",
+  "mcdr2restic.error.backup.disk_space_low": "Not enough free space on the local repository disk ({path} has {free_percent}% left, below the {min_free_percent}% threshold); backup refused",
   "mcdr2restic.error.backup.already_running": "A backup is already running; duplicate start refused",
   "mcdr2restic.error.backup.save_on_failed": "Failed to run save-on during backup finalization: {error}",
   "mcdr2restic.error.backup.save_on_detail": "save-on recovery failed: {error}",

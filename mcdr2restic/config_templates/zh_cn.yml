@@ -72,10 +72,14 @@ config_template: |-
   restic:
     # 所有 restic 命令都以 executable 开头执行，默认是配置目录下的 restic。
     executable: __MCDR2RESTIC_EXECUTABLE__
-    # restic 进程工作目录，留空表示继承 MCDR 当前目录。
+    # restic 进程工作目录，留空表示继承 MCDR 根目录（config.yml 所在目录）。
     working_directory: ""
-    # restic 存储库，默认是 MCDR 工作目录下的本地仓库。
+    # restic 存储库，默认是 MCDR 根目录下的本地仓库。相对路径基于 MCDR 根目录解析，不是服务器（server）目录。
     repository: __MCDR2RESTIC_REPOSITORY__
+    # 备份前检查本地仓库所在磁盘的剩余空间，低于阈值时拒绝本次备份并按备份失败处理；远端仓库不检查。
+    disk_check_enabled: true
+    # 拒绝备份的剩余空间阈值（百分比，0-100）。
+    disk_check_min_free_percent: 10.0
     # 存储库密码，留空时使用 password_file。示例密码仅用于上手测试，正式使用请改强密码。
     password: "123456"
     # 密码文件，仅在 password 为空时使用。

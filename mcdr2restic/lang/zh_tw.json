@@ -19,6 +19,7 @@
   "warn.backup.already_running": "當前已有備份在執行，跳過{label}觸發",
   "error.backup.restore_running": "當前正在執行恢復流程，拒絕啟動備份",
   "error.backup.minecraft_not_ready": "Minecraft 服務端尚未確認正常執行，拒絕備份",
+  "error.backup.disk_space_low": "本地倉庫所在磁碟剩餘空間不足（{path} 僅剩 {free_percent}%，低於閾值 {min_free_percent}%），已拒絕本次備份",
   "error.backup.already_running": "當前已有備份在執行，拒絕重複啟動",
   "error.backup.save_on_failed": "備份結束階段執行 save-on 失敗：{error}",
   "error.backup.save_on_detail": "save-on 恢復失敗：{error}",

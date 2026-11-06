@@ -23,6 +23,7 @@
   "warn.backup.already_running": "A backup is already running; skipped {label} trigger",
   "error.backup.restore_running": "A restore workflow is running; backup refused",
   "error.backup.minecraft_not_ready": "Minecraft is not ready; backup refused",
+  "error.backup.disk_space_low": "Not enough free space on the local repository disk ({path} has {free_percent}% left, below the {min_free_percent}% threshold); backup refused",
   "error.backup.already_running": "A backup is already running; duplicate start refused",
   "error.backup.save_on_failed": "Failed to run save-on during backup finalization: {error}",
   "error.backup.save_on_detail": "save-on recovery failed: {error}",

@@ -287,6 +287,14 @@ repository: "./restic-repo"
 repository: "s3:s3.example.com/my-minecraft-backup"
 ```
 
+### `disk_check_enabled`
+
+备份前检查本地仓库所在磁盘的剩余空间，低于 `disk_check_min_free_percent` 时拒绝本次备份，按备份失败处理（记录状态、发送通知）。远端仓库（s3、sftp 等）不做此检查。
+
+### `disk_check_min_free_percent`
+
+剩余空间阈值，百分比（0-100），默认 `10`。设为 `0` 表示不设阈值；整体开关用 `disk_check_enabled`。
+
 ### `password` 和 `password_file`
 
 优先级是：

@@ -72,10 +72,14 @@ config_template: |-
   restic:
     # Every restic command runs with executable prepended; the default is the restic binary in the config folder.
     executable: __MCDR2RESTIC_EXECUTABLE__
-    # Working directory for the restic process; empty inherits MCDR's current directory.
+    # Working directory for the restic process; empty inherits the MCDR root directory (where config.yml lives).
     working_directory: ""
-    # restic repository; a local repository under MCDR's working directory by default.
+    # restic repository; a local repository under the MCDR root directory by default. Relative paths resolve against the MCDR root, not the server directory.
     repository: __MCDR2RESTIC_REPOSITORY__
+    # Check the free space of the disk hosting the local repository before each backup; refuse the backup when it falls below the threshold. Remote repositories are not checked.
+    disk_check_enabled: true
+    # Free-space threshold (percent, 0-100) below which backups are refused.
+    disk_check_min_free_percent: 10.0
     # Repository password; password_file is used when empty. The sample password is for first-run testing only — change it for production.
     password: "123456"
     # Password file, used only when password is empty.

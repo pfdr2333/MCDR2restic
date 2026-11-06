@@ -1,9 +1,9 @@
 import os
 
 try:
-    from .support import BackupProblem, mock, unittest
+    from .support import BackupProblem, mock, tempfile, unittest
 except ImportError:
-    from support import BackupProblem, mock, unittest
+    from support import BackupProblem, mock, tempfile, unittest
 
 from mcdr2restic.restic import restic_config
 
@@ -246,3 +246,97 @@ class AdminShareDetectionTests(unittest.TestCase):
         self.assertFalse(is_admin_share(r"/srv/backup"))
         self.assertFalse(is_admin_share(""))
         self.assertFalse(is_admin_share(None))
+
+
+class RepositoryDiskSpaceCheckTests(unittest.TestCase):
+    @staticmethod
+    def restic_cfg(**overrides):
+        cfg = {
+            "repository": "./restic-repo",
+            "working_directory": "",
+            "disk_check_enabled": True,
+            "disk_check_min_free_percent": 10.0,
+        }
+        cfg.update(overrides)
+        return cfg
+
+    def test_raises_below_threshold(self):
+        usage = mock.Mock(total=1000, free=50)
+        with mock.patch.object(
+            restic_config.shutil, "disk_usage", return_value=usage
+        ):
+            with self.assertRaises(BackupProblem) as caught:
+                restic_config.assert_repository_disk_space_available(
+                    self.restic_cfg()
+                )
+
+        self.assertIn("5.0", str(caught.exception))
+
+    def test_passes_above_threshold(self):
+        usage = mock.Mock(total=1000, free=150)
+        with mock.patch.object(
+            restic_config.shutil, "disk_usage", return_value=usage
+        ):
+            restic_config.assert_repository_disk_space_available(self.restic_cfg())
+
+    def test_skipped_when_disabled(self):
+        usage = mock.Mock(total=1000, free=0)
+        with mock.patch.object(
+            restic_config.shutil, "disk_usage", return_value=usage
+        ) as disk_usage:
+            restic_config.assert_repository_disk_space_available(
+                self.restic_cfg(disk_check_enabled=False)
+            )
+
+        disk_usage.assert_not_called()
+
+    def test_skipped_for_remote_repository(self):
+        usage = mock.Mock(total=1000, free=0)
+        with mock.patch.object(
+            restic_config.shutil, "disk_usage", return_value=usage
+        ) as disk_usage:
+            restic_config.assert_repository_disk_space_available(
+                self.restic_cfg(repository="s3:s3.example.com/my-backup")
+            )
+
+        disk_usage.assert_not_called()
+
+    def test_skipped_for_empty_repository(self):
+        usage = mock.Mock(total=1000, free=0)
+        with mock.patch.object(
+            restic_config.shutil, "disk_usage", return_value=usage
+        ) as disk_usage:
+            restic_config.assert_repository_disk_space_available(
+                self.restic_cfg(repository="")
+            )
+
+        disk_usage.assert_not_called()
+
+    def test_invalid_threshold_falls_back_to_default(self):
+        usage = mock.Mock(total=1000, free=30)  # 3% 低于默认阈值 10%
+        with mock.patch.object(
+            restic_config.shutil, "disk_usage", return_value=usage
+        ):
+            with self.assertRaises(BackupProblem):
+                restic_config.assert_repository_disk_space_available(
+                    self.restic_cfg(disk_check_min_free_percent="abc")
+                )
+
+    def test_zero_threshold_disables_check(self):
+        usage = mock.Mock(total=1000, free=0)
+        with mock.patch.object(
+            restic_config.shutil, "disk_usage", return_value=usage
+        ) as disk_usage:
+            restic_config.assert_repository_disk_space_available(
+                self.restic_cfg(disk_check_min_free_percent=0)
+            )
+
+        disk_usage.assert_not_called()
+
+    def test_nearest_existing_directory_walks_up_to_repo_ancestor(self):
+        with tempfile.TemporaryDirectory() as base:
+            missing = os.path.join(base, "repo", "data")
+
+            self.assertEqual(
+                restic_config.nearest_existing_directory(missing), base
+            )

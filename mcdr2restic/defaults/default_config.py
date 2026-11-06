@@ -8,6 +8,7 @@ from typing import Any, Dict, List, TypeAlias
 from mcdr2restic.core.i18n import normalize_language_name
 from mcdr2restic.defaults.default_constants import (
     CONFIG_VERSION,
+    DEFAULT_DISK_CHECK_MIN_FREE_PERCENT,
     DEFAULT_MAINTENANCE_CRON,
     DEFAULT_MESSAGE_PREFIX,
     DEFAULT_RESTIC_EXECUTABLE_POSIX,
@@ -143,6 +144,8 @@ def build_default_restic_config() -> ConfigDict:
         "executable": DEFAULT_RESTIC_EXECUTABLE_POSIX,
         "working_directory": "",
         "repository": "./restic-repo",
+        "disk_check_enabled": True,
+        "disk_check_min_free_percent": DEFAULT_DISK_CHECK_MIN_FREE_PERCENT,
         "password": "123456",
         "password_file": "",
         "use_path_restic": False,

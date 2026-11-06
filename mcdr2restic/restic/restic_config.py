@@ -1,16 +1,23 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+import math
 import os
 import re
 import shlex
+import shutil
 import socket
 from typing import Any, Dict, List, Sequence, Set
 
 from mcdr2restic.core.models import BackupProblem
+from mcdr2restic.defaults.default_constants import (
+    DEFAULT_DISK_CHECK_MIN_FREE_PERCENT,
+)
 from mcdr2restic.restic.restic_constants import (
     RESTIC_BACKUP_VALUE_OPTIONS,
     RESTIC_CFG_BACKUP_COMMAND,
+    RESTIC_CFG_DISK_CHECK_ENABLED,
+    RESTIC_CFG_DISK_CHECK_MIN_FREE_PERCENT,
     RESTIC_CFG_ENVIRONMENT,
     RESTIC_CFG_PASSWORD,
     RESTIC_CFG_PASSWORD_FILE,
@@ -94,6 +101,60 @@ def resolve_path_against_working_directory(
 
 def resolve_restic_repository_path(restic_cfg: Dict[str, Any], repository: str) -> str:
     return resolve_path_against_working_directory(repository, restic_cfg)
+
+
+def normalize_disk_check_percent(value: Any) -> float:
+    """阈值收拢到 [0, 100]；缺失或非法时回退默认值，不让坏配置卡死备份。"""
+
+    try:
+        percent = float(value)
+    except (TypeError, ValueError):
+        percent = DEFAULT_DISK_CHECK_MIN_FREE_PERCENT
+    if math.isnan(percent) or math.isinf(percent):
+        percent = DEFAULT_DISK_CHECK_MIN_FREE_PERCENT
+    return min(100.0, max(0.0, percent))
+
+
+def nearest_existing_directory(path: str) -> str:
+    """仓库目录可能尚不存在（首次备份），向上找已存在的祖先做磁盘探测。"""
+
+    current = os.path.abspath(path)
+    while not os.path.isdir(current):
+        parent = os.path.dirname(current)
+        if parent == current:
+            return current
+        current = parent
+    return current
+
+
+def assert_repository_disk_space_available(restic_cfg: Dict[str, Any]):
+    """本地仓库所在盘剩余空间低于阈值时拒绝备份；远端仓库无法探测，直接跳过。"""
+
+    if not bool(restic_cfg.get(RESTIC_CFG_DISK_CHECK_ENABLED, True)):
+        return
+    repository = str(restic_cfg.get(RESTIC_CFG_REPOSITORY) or "").strip()
+    if not repository or not is_local_restic_repository(repository):
+        return
+    min_free_percent = normalize_disk_check_percent(
+        restic_cfg.get(RESTIC_CFG_DISK_CHECK_MIN_FREE_PERCENT)
+    )
+    if min_free_percent <= 0:
+        return
+    check_root = nearest_existing_directory(
+        resolve_restic_repository_path(restic_cfg, repository)
+    )
+    usage = shutil.disk_usage(check_root)
+    if not usage.total:
+        return
+    free_percent = usage.free * 100.0 / usage.total
+    if free_percent >= min_free_percent:
+        return
+    raise BackupProblem(
+        i18n_key="error.backup.disk_space_low",
+        path=check_root,
+        free_percent="{:.1f}".format(free_percent),
+        min_free_percent="{:g}".format(min_free_percent),
+    )
 
 
 def assert_backup_sources_do_not_contain_repository(restic_cfg: Dict[str, Any]):
