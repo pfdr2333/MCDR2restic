@@ -17,6 +17,7 @@
 ├─ restore
 │  ├─ list
 │  ├─ apply
+│  │  └─ --skip-safety
 │  └─ <快照ID>
 │     ├─ file <路径>
 │     ├─ folder <路径>
