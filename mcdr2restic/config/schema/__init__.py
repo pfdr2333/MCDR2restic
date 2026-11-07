@@ -30,8 +30,13 @@ DEFAULT_LANGUAGE_CONFIG_VALUE = "zh_cn"
 
 # 顶级标量键（不属于任何配置块），顺序即模板顺序
 TOP_LEVEL_FIELDS: Tuple[Field, ...] = (
-    Field("enabled", True),
-    Field("language", DEFAULT_LANGUAGE_CONFIG_VALUE),
+    Field("enabled", True, comment_key="template.comment.enabled"),
+    Field(
+        "language",
+        DEFAULT_LANGUAGE_CONFIG_VALUE,
+        comment_key="template.comment.language",
+        value_marker="__MCDR2RESTIC_LANGUAGE__",
+    ),
 )
 
 # 顶级配置块，顺序即模板与迁移插入顺序

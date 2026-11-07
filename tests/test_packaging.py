@@ -59,14 +59,12 @@ class PackagingTests(unittest.TestCase):
             with zipfile.ZipFile(archive_path, "r") as archive:
                 names = archive.namelist()
 
-        self.assertEqual(
-            archive_path.name, "MCDR2Restic_v{}.mcdr".format(load_plugin_version())
-        )
+        self.assertEqual(archive_path.name, "MCDR2Restic_v{}.mcdr".format(load_plugin_version()))
         self.assertIn("mcdr2restic/__init__.py", names)
         self.assertIn("lang/zh_cn.json", names)
         self.assertIn("lang/zh_tw.json", names)
-        self.assertIn("mcdr2restic/config_templates/zh_cn.yml", names)
-        self.assertIn("mcdr2restic/config_templates/zh_tw.yml", names)
+        self.assertIn("mcdr2restic/config_texts/zh_cn.json", names)
+        self.assertIn("mcdr2restic/config_texts/zh_tw.json", names)
         # restic 下载信任锚点（P0-3），缺失会直接破坏校验链路
         self.assertIn("mcdr2restic/defaults/restic_release.yml", names)
         self.assertIn("mcdreforged.plugin.json", names)

@@ -1,76 +1,56 @@
 # -*- coding: utf-8 -*-
+"""配置模板文本资源。
+
+模板注释与片段文本统一存放在 ``mcdr2restic.config_texts`` 包（JSON，
+键形如 ``template.comment.*``、``template.snippet.*``、
+``template.message.*``），zh_tw 由同步工具生成。本模块负责按语言
+解析文本并展开 ``__MCDR2RESTIC_PLATFORM_*__`` 平台分支标记。
+"""
+
 from __future__ import annotations
 
+import json
 import os
 import re
 from functools import lru_cache
 from importlib import resources
-from typing import Any, Dict
+from typing import Dict
 
-import yaml
-
-from mcdr2restic.core.i18n import FALLBACK_LANGUAGE, fold_language_aliases
-
-
-CONFIG_TEMPLATE_PACKAGE = "mcdr2restic.config_templates"
-CONFIG_TEMPLATE_SUFFIX = ".yml"
-CONFIG_TEMPLATE_KEY = "config_template"
-TEXTS_KEY = "texts"
-PLATFORM_MARKER_PATTERN = re.compile(
-    r"^__MCDR2RESTIC_PLATFORM_(WINDOWS|POSIX)__\s*$"
+from mcdr2restic.core.i18n import (
+    FALLBACK_LANGUAGE,
+    available_language_codes,
+    normalize_language,
 )
 
 
-@lru_cache(maxsize=None)
-def available_config_template_languages() -> frozenset[str]:
-    try:
-        entries = resources.files(CONFIG_TEMPLATE_PACKAGE).iterdir()
-    except Exception:
-        return frozenset({FALLBACK_LANGUAGE})
-    languages = [
-        entry.name[: -len(CONFIG_TEMPLATE_SUFFIX)]
-        for entry in entries
-        if entry.name.endswith(CONFIG_TEMPLATE_SUFFIX)
-    ]
-    return frozenset(languages) or frozenset({FALLBACK_LANGUAGE})
+TEMPLATE_TEXTS_PACKAGE = "mcdr2restic.config_texts"
+PLATFORM_MARKER_PATTERN = re.compile(r"^__MCDR2RESTIC_PLATFORM_(WINDOWS|POSIX)__\s*$")
 
 
 @lru_cache(maxsize=None)
-def load_config_template_resource(language: str) -> Dict[str, Any]:
-    resource_name = "{}{}".format(
-        resolve_config_template_language(language), CONFIG_TEMPLATE_SUFFIX
-    )
+def load_template_texts(language: str) -> Dict[str, str]:
+    resource_name = "{}.json".format(normalize_language(language))
     try:
-        with resources.open_text(
-            CONFIG_TEMPLATE_PACKAGE, resource_name, encoding="utf8"
-        ) as file:
-            data = yaml.safe_load(file) or {}
+        with resources.open_text(TEMPLATE_TEXTS_PACKAGE, resource_name, encoding="utf8") as file:
+            data = json.load(file)
     except Exception:
         return {}
-    return data if isinstance(data, dict) else {}
+    if not isinstance(data, dict):
+        return {}
+    return {str(key): str(value) for key, value in data.items() if isinstance(key, str) and isinstance(value, str)}
 
 
-def resolve_config_template_language(language: str) -> str:
-    return fold_language_aliases(language, config_template_resource_exists)
-
-
-def config_template_resource_exists(language: str) -> bool:
-    return str(language or "").strip() in available_config_template_languages()
-
-
-def load_base_config_template(language: str) -> str:
-    value = load_config_template_resource(language).get(CONFIG_TEMPLATE_KEY, "")
-    return str(value or "")
+def available_config_template_languages() -> frozenset[str]:
+    return available_language_codes()
 
 
 def config_template_text(language: str, key: str) -> str:
-    texts = load_config_template_resource(language).get(TEXTS_KEY, {})
-    if isinstance(texts, dict) and key in texts:
-        return render_platform_markers(str(texts[key]))
-
-    fallback = load_config_template_resource(FALLBACK_LANGUAGE).get(TEXTS_KEY, {})
-    if isinstance(fallback, dict):
-        return render_platform_markers(str(fallback.get(key, key)))
+    texts = load_template_texts(language)
+    if key in texts:
+        return render_platform_markers(texts[key])
+    fallback = load_template_texts(FALLBACK_LANGUAGE)
+    if key in fallback:
+        return render_platform_markers(fallback[key])
     return key
 
 
@@ -79,9 +59,7 @@ def render_platform_markers(text: str) -> str:
     if not blocks:
         return text
     target = "WINDOWS" if os.name == "nt" else "POSIX"
-    selected = (
-        blocks.get(target) or blocks.get("POSIX") or next(iter(blocks.values()), "")
-    )
+    selected = blocks.get(target) or blocks.get("POSIX") or next(iter(blocks.values()), "")
     return trim_empty_edge_lines(selected)
 
 

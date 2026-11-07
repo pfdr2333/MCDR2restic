@@ -8,14 +8,9 @@ from typing import List, Optional
 
 import yaml
 
-from mcdr2restic.defaults.config_template_resources import (
-    config_template_text,
-    load_base_config_template,
-)
-from mcdr2restic.defaults.default_constants import (
-    CONFIG_VERSION,
-    DEFAULT_MAINTENANCE_CRON,
-)
+from mcdr2restic.config.template_render import render_config_template_text
+from mcdr2restic.defaults.config_template_resources import config_template_text
+from mcdr2restic.defaults.default_constants import CONFIG_VERSION
 from mcdr2restic.defaults.message_defaults import build_default_messages
 
 
@@ -36,19 +31,14 @@ LANGUAGE_MARKER = "__MCDR2RESTIC_LANGUAGE__"
 UNRESOLVED_MARKER_PATTERN = re.compile(r"__MCDR2RESTIC_[A-Z0-9_]+__")
 
 
-def get_default_config_template(
-    language: str, base_directory: Optional[str] = None
-) -> str:
-    template = load_base_config_template(language)
+def get_default_config_template(language: str, base_directory: Optional[str] = None) -> str:
+    # 模板主体由 schema 渲染生成，本函数只做平台相关替换、收尾与校验
+    template = render_config_template_text(language)
     template = render_platform_placeholders(template, language)
-    template = replace_required_marker(
-        template, LANGUAGE_MARKER, yaml_language_scalar(language)
-    )
+    template = replace_required_marker(template, LANGUAGE_MARKER, yaml_language_scalar(language))
     template = render_default_message_placeholders(template, language)
     template = render_default_backup_sources(template, base_directory or os.getcwd())
-    template = rewrite_maintenance_command_comments(template)
     template = add_windows_session_lock_exclude(template, language)
-    template = insert_maintenance_schedule_block(template, language)
     template = render_config_version(template)
     template = ensure_trailing_newline(template)
     validate_rendered_config_template(template)
@@ -68,18 +58,10 @@ def render_platform_placeholders(template: str, language: str) -> str:
         MINECRAFT_SAVE_ALL_COMMENT_MARKER: config_template_text(
             language, "template.snippet.minecraft_save_all_comment"
         ),
-        DEFAULT_BACKUP_COMMENT_MARKER: config_template_text(
-            language, "template.snippet.default_backup_comment"
-        ),
-        RESTIC_EXECUTABLE_MARKER: config_template_text(
-            language, "template.snippet.restic_executable"
-        ),
-        RESTIC_REPOSITORY_MARKER: config_template_text(
-            language, "template.snippet.restic_repository"
-        ),
-        CONFIG_VERSION_MARKER_COMMENT: config_template_text(
-            language, "template.snippet.config_version_marker_comment"
-        ),
+        DEFAULT_BACKUP_COMMENT_MARKER: config_template_text(language, "template.snippet.default_backup_comment"),
+        RESTIC_EXECUTABLE_MARKER: config_template_text(language, "template.snippet.restic_executable"),
+        RESTIC_REPOSITORY_MARKER: config_template_text(language, "template.snippet.restic_repository"),
+        CONFIG_VERSION_MARKER_COMMENT: config_template_text(language, "template.snippet.config_version_marker_comment"),
     }
     for marker, value in replacements.items():
         template = replace_required_marker(template, marker, value)
@@ -105,25 +87,18 @@ def render_default_backup_sources(template: str, base_directory: str) -> str:
         "    - {}\n".format(yaml_path_scalar(display_backup_source_path(path)))
         for path in get_default_backup_source_paths(base_directory)
     ]
-    return replace_required_marker(
-        template, DEFAULT_BACKUP_SOURCE_MARKER, "".join(lines)
-    )
+    return replace_required_marker(template, DEFAULT_BACKUP_SOURCE_MARKER, "".join(lines))
 
 
 def get_default_backup_source_paths(base_directory: str) -> List[str]:
     paths = [DEFAULT_BACKUP_WORLD_PATHS[0]]
-    if all(
-        is_generation_path_directory(base_directory, path)
-        for path in DEFAULT_BACKUP_WORLD_PATHS
-    ):
+    if all(is_generation_path_directory(base_directory, path) for path in DEFAULT_BACKUP_WORLD_PATHS):
         paths.extend(DEFAULT_BACKUP_WORLD_PATHS[1:])
     return paths
 
 
 def is_generation_path_directory(base_directory: str, relative_path: str) -> bool:
-    return os.path.isdir(
-        resolve_generation_relative_path(base_directory, relative_path)
-    )
+    return os.path.isdir(resolve_generation_relative_path(base_directory, relative_path))
 
 
 def resolve_generation_relative_path(base_directory: str, relative_path: str) -> str:
@@ -158,53 +133,9 @@ def add_windows_session_lock_exclude(template: str, language: str) -> str:
     marker = '    - "--tag"\n'
     if marker not in template:
         return template
-    comment = config_template_text(
-        language, "template.snippet.session_lock_exclude_comment"
-    )
+    comment = config_template_text(language, "template.snippet.session_lock_exclude_comment")
     block = '{}\n    - "--exclude"\n    - "session.lock"\n'.format(comment)
     return template.replace(marker, block + marker, 1)
-
-
-def rewrite_maintenance_command_comments(template: str) -> str:
-    replacements = {
-        "# 备份前的仓库维护命令。每一项都会自动在前面加 executable，例如 restic forget ...": (
-            "# 仓库维护命令，由 maintenance_schedule 单独调度执行。"
-            "每一项都会自动在前面加 executable，例如 restic forget ..."
-        ),
-        "# Repository maintenance commands executed before backup.": (
-            "# Repository maintenance commands run from maintenance_schedule, independently of backups."
-        ),
-    }
-    for old, new in replacements.items():
-        template = template.replace(old, new)
-    return template
-
-
-def insert_maintenance_schedule_block(template: str, language: str) -> str:
-    if "\nmaintenance_schedule:\n" in template:
-        return template
-    marker = "\n\nupdate_check:\n"
-    if marker not in template:
-        return template
-    return template.replace(marker, maintenance_schedule_block(language) + marker, 1)
-
-
-def maintenance_schedule_block(language: str) -> str:
-    if str(language).lower().startswith("zh"):
-        return (
-            "\n\nmaintenance_schedule:\n"
-            "  # 仓库维护调度，默认每天 03:00 执行一次。\n"
-            "  # interval_seconds > 0 时用固定间隔；为 0 且 cron_expression = \"0\" 时关闭。\n"
-            "  interval_seconds: 0\n"
-            '  cron_expression: "{}"'.format(DEFAULT_MAINTENANCE_CRON)
-        )
-    return (
-        "\n\nmaintenance_schedule:\n"
-        "  # Repository maintenance schedule, daily at 03:00 by default.\n"
-        "  # interval_seconds > 0 uses a fixed interval; 0 with cron_expression = \"0\" disables it.\n"
-        "  interval_seconds: 0\n"
-        '  cron_expression: "{}"'.format(DEFAULT_MAINTENANCE_CRON)
-    )
 
 
 def render_config_version(template: str) -> str:
@@ -239,18 +170,12 @@ def message_marker(key: str) -> str:
 def validate_rendered_config_template(template: str):
     unresolved_markers = sorted(set(UNRESOLVED_MARKER_PATTERN.findall(template)))
     if unresolved_markers:
-        raise ValueError(
-            "Unresolved config template markers: {}".format(
-                ", ".join(unresolved_markers)
-            )
-        )
+        raise ValueError("Unresolved config template markers: {}".format(", ".join(unresolved_markers)))
 
     try:
         loaded = yaml.safe_load(template) or {}
     except yaml.YAMLError as exc:
-        raise ValueError(
-            "Rendered default config template is invalid YAML: {}".format(exc)
-        ) from exc
+        raise ValueError("Rendered default config template is invalid YAML: {}".format(exc)) from exc
 
     if not isinstance(loaded, dict):
         raise ValueError("Rendered default config template must be a YAML mapping")

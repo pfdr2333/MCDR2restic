@@ -8,6 +8,7 @@ except ImportError:
     from support import unittest
 
 from mcdr2restic.config.schema import SECTIONS, derive_base_default_config
+from mcdr2restic.config.template_render import render_config_template_text
 from mcdr2restic.defaults.default_config import build_default_config
 
 GOLDEN_DIR = os.path.join(os.path.dirname(__file__), "data")
@@ -17,6 +18,22 @@ def load_golden(language: str):
     path = os.path.join(GOLDEN_DIR, "default_config_golden_{}.json".format(language))
     with open(path, "r", encoding="utf-8") as file:
         return json.load(file)
+
+
+def load_template_golden(language: str) -> str:
+    path = os.path.join(GOLDEN_DIR, "config_template_golden_{}.txt".format(language))
+    with open(path, "r", encoding="utf-8", newline="") as file:
+        return file.read()
+
+
+class RenderConfigTemplateTest(unittest.TestCase):
+    """schema 渲染的模板必须与重构前固化的模板 blob 逐字节一致。"""
+
+    def test_rendered_template_matches_golden(self):
+        for language in ("zh_cn", "en_us"):
+            with self.subTest(language=language):
+                rendered = render_config_template_text(language)
+                self.assertEqual(rendered, load_template_golden(language))
 
 
 class DeriveDefaultConfigTest(unittest.TestCase):

@@ -1,0 +1,221 @@
+# MCDR2Restic configuration
+# state.yml is the runtime state file. Do not modify it.
+
+# Master switch.
+enabled: true
+
+# Plugin language. The generated default uses the language passed by MCDR.
+# Use an existing language file name, such as zh_cn, zh_tw, or en_us; unknown values fall back to en_us.
+language: __MCDR2RESTIC_LANGUAGE__
+
+command:
+  # MCDR command root
+  root: "!!restic"
+  # Aliases
+  aliases:
+    - "!!m2r"
+  # MCDR permission level
+  permission_level: 3
+
+schedule:
+  # interval_seconds > 0 uses a fixed interval; 0 uses the 6-field cron below.
+  interval_seconds: 0
+  # 6-field cron: second minute hour day month weekday. Default: every 3 hours.
+  cron_expression: "0 0 0,3,6,9,12,15,18,21 * * *"
+  # Whether to back up only in periods with player activity: combines join/left events with the online count at trigger time; skips quiet periods.
+  require_player_activity_in_wait_period: true
+  # Minecraft command used to query online players, executed via RCON; without RCON only join/left events are used.
+  online_check_command: "list"
+
+force_schedule:
+  # Forced backup schedule, ignoring player activity, disabled by default.
+  # interval_seconds > 0 uses a fixed interval; 0 with cron_expression = "0" disables it.
+  interval_seconds: 0
+  cron_expression: "0"
+
+maintenance_schedule:
+  # Repository maintenance schedule, daily at 03:00 by default.
+  # interval_seconds > 0 uses a fixed interval; 0 with cron_expression = "0" disables it.
+  interval_seconds: 0
+  cron_expression: "0 0 3 * * *"
+
+update_check:
+  # Version update checks. When enabled, the plugin checks once on load and once every day at 00:00.
+  enabled: true
+  check_on_startup: true
+  daily_time: "00:00"
+  # GitHub latest release API. When the network is slow or blocked, proxy_prefixes are tried in order.
+  api_url: "https://api.github.com/repos/pfdr2333/MCDR2restic/releases/latest"
+  release_page_url: "https://github.com/pfdr2333/MCDR2restic/releases/latest"
+  proxy_prefixes:
+    - "https://gh-proxy.com/"
+    - "https://ghproxy.net/"
+  timeout_seconds: 10
+
+minecraft:
+__MCDR2RESTIC_MINECRAFT_SAVE_ALL_COMMENT__
+  save_off_command: "save-off"
+  save_all_command: "save-all flush"
+  save_on_command: "save-on"
+  wait_after_save_off_seconds: 2
+  # Maximum time (seconds) to wait for save-all completion before backing up; finishes early once the completion hint is detected.
+  wait_after_save_all_seconds: 10
+  # Whether to confirm save-all completion from server output; when disabled, always waits the full time above.
+  wait_for_save_all_completion: true
+  # Output keywords that mark save-all completion; adjust to match your server's log.
+  save_all_done_patterns:
+    - "Saved the game"
+    - "Saved the world"
+  wait_after_save_on_seconds: 1
+
+restic:
+  # Every restic command runs with executable prepended; the default is the restic binary in the config folder.
+  executable: __MCDR2RESTIC_EXECUTABLE__
+  # Working directory for the restic process; empty inherits the MCDR root directory (where config.yml lives).
+  working_directory: ""
+  # restic repository; a local repository under the MCDR root directory by default. Relative paths resolve against the MCDR root, not the server directory.
+  repository: __MCDR2RESTIC_REPOSITORY__
+  # Check the free space of the disk hosting the local repository before each backup; refuse the backup when it falls below the threshold. Remote repositories are not checked.
+  disk_check_enabled: true
+  # Free-space threshold (percent, 0-100) below which backups are refused.
+  disk_check_min_free_percent: 10.0
+  # Repository password; password_file is used when empty. The sample password is for first-run testing only — change it for production.
+  password: "123456"
+  # Password file, used only when password is empty.
+  password_file: ""
+  # Prefer the restic binary installed in the system PATH; probed and filled in automatically on first config generation.
+  # Falls back to the copy in the config folder (auto-downloaded when missing) if no system restic is detected.
+  use_path_restic: false
+  # Run restic init automatically when a local repository is missing; remote repositories are not initialized.
+  auto_init_local_repository: true
+  # Extra environment variables for restic; a null value removes an inherited variable.
+  # repository/password/password_file are exported as RESTIC_* variables automatically.
+  environment: {}
+  # Repository maintenance commands, scheduled by maintenance_schedule, executable prepended.
+  maintenance_commands:
+    - [
+        "forget",
+        "--keep-within", "1d",
+        "--keep-daily", "7",
+        "--prune"
+      ]
+  # Backup command, executable prepended. Only worlds are backed up by default; consider the whole ./server directory or the MCDR root to protect files beyond the save data.
+__MCDR2RESTIC_DEFAULT_BACKUP_COMMENT__
+  backup_command:
+    - "backup"
+    __MCDR2RESTIC_DEFAULT_BACKUP_SOURCES__
+    - "--tag"
+    - "minecraft"
+    - "--host"
+    - "mcdr2Restic"
+  # Total timeout for restic command workflows, 0 means unlimited.
+  timeout_seconds: 0
+  # Progress echo interval for backup/restore --json, in seconds.
+  progress_interval_seconds: 5
+  # Exit codes treated as success.
+  success_exit_codes:
+    - 0
+  # Output matching these rules is treated as failure.
+  error_regexes:
+    - '(?i)^fatal:'
+    - '(?i)^error(?:s)?\b(?!:\s*0\b)'
+    - '(?i)\b(permission denied|input/output error|read error|unreadable|failed to|unable to)\b'
+    - '(?i)\bno such file or directory\b'
+  ignore_error_regexes:
+    - '(?i)errors?:\s*0\b'
+    - '(?i)no errors? (?:were )?found'
+  max_output_chars_in_notification: 1800
+
+onebot:
+  # OneBot v11 notifications. Fill admin_qqs, then set enabled to true.
+  enabled: false
+  # WebSocket address
+  ws_url: "ws://127.0.0.1:8777"
+  # Connection auth token
+  access_token: ""
+  # true puts the token in the Authorization header; false puts it in the URL parameter (commonly used by NapCat).
+  use_header_auth: false
+  # QQ accounts to receive notifications
+  admin_qqs:
+    - 123456789
+  # Message prefix
+  message_prefix: "[MCDR2Restic]"
+  # Connect/send timeouts and reconnect interval (seconds)
+  connect_timeout_seconds: 10
+  send_timeout_seconds: 10
+  reconnect_interval_seconds: 5
+
+discord:
+  # Discord webhook notifications. Fill webhook_url, then set enabled to true.
+  enabled: false
+  # Discord channel webhook URL
+  webhook_url: ""
+  # Webhook display name and avatar; leave empty for the Discord defaults.
+  username: "MCDR2Restic"
+  avatar_url: ""
+  # Notification message prefix
+  message_prefix: "[MCDR2Restic]"
+  # Optional mentions; empty by default to avoid accidental pings.
+  mention_user_ids: []
+  mention_role_ids: []
+  mention_everyone: false
+  send_timeout_seconds: 10
+
+custom_webhook:
+  # Generic custom webhook. Fill url, then set enabled to true.
+  enabled: false
+  # URL that receives the POST request.
+  url: ""
+  # Notification message prefix.
+  message_prefix: "[MCDR2Restic]"
+  # Request timeout in seconds.
+  send_timeout_seconds: 10
+  # Extra request headers, e.g. Authorization.
+  headers: {}
+  # JSON body template. {message} in leaf values becomes the notification text; variables such as {label} and {status} are also available.
+  payload:
+    content: "{message}"
+
+notification:
+  # Backup notification policy, applied to OneBot, Discord and the custom webhook.
+  notify_on_start: true # Notify when a backup starts.
+  notify_on_success: true # Notify when a backup succeeds.
+  notify_on_failure: true # Notify when a backup fails.
+  notify_on_skip: false # Notify when a backup is skipped.
+
+snapshot_cache:
+  # Snapshot list cache for the status command.
+  enabled: true
+  # Snapshots per page
+  page_size: 10
+  # Timeout for restic snapshots when refreshing the cache (seconds)
+  query_timeout_seconds: 30
+  # Cache database file name, under the plugin config directory
+  database: "snapshots.sqlite3"
+
+restore:
+  # Tag applied to the safety snapshot created before restoring.
+  pre_restore_backup_tag: "mcdr2restic-pre-restore"
+  # Timeouts for stopping/starting Minecraft during the restore workflow (seconds).
+  start_timeout_seconds: 120
+
+messages:
+  # Administrator notification message templates. You may freely customize the text.
+  # Available variables:
+  # {prefix} {label} {start_time} {end_time} {duration_seconds} {status} {message} {detail} {error}
+  # To output literal braces, use {{ or }}.
+  backup_start: |-
+    __MCDR2RESTIC_MESSAGE_backup_start__
+  backup_success: |-
+    __MCDR2RESTIC_MESSAGE_backup_success__
+  backup_failure: |-
+    __MCDR2RESTIC_MESSAGE_backup_failure__
+  backup_skip_no_player: |-
+    __MCDR2RESTIC_MESSAGE_backup_skip_no_player__
+  backup_not_ready: |-
+    __MCDR2RESTIC_MESSAGE_backup_not_ready__
+  schedule_config_error: |-
+    __MCDR2RESTIC_MESSAGE_schedule_config_error__
+
+__MCDR2RESTIC_CONFIG_VERSION_MARKER_COMMENT__
+config_version: 10

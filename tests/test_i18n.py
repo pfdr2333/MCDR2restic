@@ -103,49 +103,34 @@ class I18nTests(unittest.TestCase):
                 encoding="utf8",
             ) as file:
                 package_lang = json.load(file)
-            with open(
-                REPO_ROOT / "lang" / "{}.json".format(name), "r", encoding="utf8"
-            ) as file:
+            with open(REPO_ROOT / "lang" / "{}.json".format(name), "r", encoding="utf8") as file:
                 root_lang = json.load(file)
 
-            expected = {
-                "mcdr2restic.{}".format(key): value
-                for key, value in package_lang.items()
-            }
+            expected = {"mcdr2restic.{}".format(key): value for key, value in package_lang.items()}
             self.assertEqual(root_lang, expected)
 
     def test_default_message_templates_come_from_config_template_resources(self):
-        self.assertIn(
-            "Backup started", get_default_message_template("backup_start", "en_us")
-        )
+        self.assertIn("Backup started", get_default_message_template("backup_start", "en_us"))
         self.assertIn("备份开始", get_default_message_template("backup_start", "zh_cn"))
         self.assertIn("備份", get_default_message_template("backup_start", "zh_tw"))
 
     def test_config_template_text_missing_language_key_falls_back_to_english(self):
         def fake_loader(language):
             return {
-                "xx": {"texts": {"template.message.backup_start": "custom start"}},
+                "xx": {"template.message.backup_start": "custom start"},
                 "en_us": {
-                    "texts": {
-                        "template.message.backup_start": "English start",
-                        "template.message.backup_success": "English success",
-                    }
+                    "template.message.backup_start": "English start",
+                    "template.message.backup_success": "English success",
                 },
             }.get(language, {})
 
-        with mock.patch.object(
-            config_template_resources, "load_config_template_resource", fake_loader
-        ):
+        with mock.patch.object(config_template_resources, "load_template_texts", fake_loader):
             self.assertEqual(
-                config_template_resources.config_template_text(
-                    "xx", "template.message.backup_start"
-                ),
+                config_template_resources.config_template_text("xx", "template.message.backup_start"),
                 "custom start",
             )
             self.assertEqual(
-                config_template_resources.config_template_text(
-                    "xx", "template.message.backup_success"
-                ),
+                config_template_resources.config_template_text("xx", "template.message.backup_success"),
                 "English success",
             )
 
@@ -158,24 +143,21 @@ class I18nTests(unittest.TestCase):
             ) as file:
                 package_lang = json.load(file)
             with open(
-                REPO_ROOT / "mcdr2restic" / "config_templates" / "{}.yml".format(name),
+                REPO_ROOT / "mcdr2restic" / "config_texts" / "{}.json".format(name),
                 "r",
                 encoding="utf8",
             ) as file:
-                template = file.read()
+                config_texts = json.load(file)
 
-            self.assertNotIn("template.default_config", package_lang)
+            # 运行时语言资源保持纯净，模板文本只存在于 config_texts
             self.assertFalse(
-                any(key.startswith("template.message.") for key in package_lang)
+                any(key.startswith("template.") for key in package_lang),
+                "lang/{}.json must not contain template.* keys".format(name),
             )
-            self.assertFalse(
-                any(key.startswith("template.snippet.") for key in package_lang)
-            )
-            self.assertIn("config_template:", template)
-            self.assertIn("texts:", template)
-            self.assertIn("template.message.backup_start", template)
-            self.assertIn("__MCDR2RESTIC_PLATFORM_", template)
-            self.assertIn("__MCDR2RESTIC_DEFAULT_BACKUP_SOURCES__", template)
+            self.assertIn("template.message.backup_start", config_texts)
+            self.assertIn("template.comment.restic.password", config_texts)
+            # 平台分支片段（executable/repository 示例等）仍以平台标记形式存放
+            self.assertIn("__MCDR2RESTIC_PLATFORM_", str(config_texts.values()))
 
     def test_default_config_template_renders_placeholders(self):
         for language in ("zh_cn", "zh_tw", "en_us", "fr_fr"):
@@ -191,13 +173,7 @@ class I18nTests(unittest.TestCase):
             self.assertIsInstance(loaded, dict)
 
     def test_load_yaml_mapping_repairs_inconsistent_block_scalar_indentation(self):
-        broken_config = (
-            "messages:\n"
-            "  backup_start: |-\n"
-            "        first line\n"
-            "    second line\n"
-            "config_version: 9\n"
-        )
+        broken_config = "messages:\n  backup_start: |-\n        first line\n    second line\nconfig_version: 9\n"
         with tempfile.TemporaryDirectory() as temp_dir:
             config_path = os.path.join(temp_dir, "config.yml")
             with open(config_path, "w", encoding="utf8") as file:
@@ -208,7 +184,5 @@ class I18nTests(unittest.TestCase):
                 repair_inconsistent_block_scalar_indentation,
             )
 
-        self.assertEqual(
-            load_result.mapping["messages"]["backup_start"], "first line\nsecond line"
-        )
+        self.assertEqual(load_result.mapping["messages"]["backup_start"], "first line\nsecond line")
         self.assertIsNotNone(load_result.repaired_text)
