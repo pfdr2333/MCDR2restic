@@ -79,6 +79,9 @@ schedule:
   cron_expression: "0 0 0,3,6,9,12,15,18,21 * * *"
   require_player_activity_in_wait_period: true
   online_check_command: "list"
+  backup_player_gate_enabled: false
+  backup_player_gate_max_online: 5
+  backup_player_gate_overlimit_seconds: 600
 ```
 
 规则是：
@@ -123,6 +126,46 @@ schedule:
 
 - 正常调度的 `cron_expression` 不建议留空
 - 它不是维护调度，留空不会自动变成默认时间
+
+### 备份玩家人数门控（远程库强烈建议开启）
+
+备份全程要保持 `save-off`（世界冻结）才能保证快照一致。本地库备份通常几秒到几分钟就结束；
+但**远程备份库（sftp / rest / s3 / rclone 等）上传慢，`save-off` 会一直保持到备份结束**——
+服务器在这段时间不落盘，高峰期大量玩家在线时，未保存的区块数据会把 JVM 内存挤爆，直接崩服。
+
+人数门控就是针对这个场景的保险丝，默认关闭，在两个位置拦截：
+
+- **触发前**：定时备份到点时在线人数达到 `backup_player_gate_max_online`，备份推迟，
+  每 60 秒重查一次，人数降回阈值内自动开始（不限等待时长，插件停止时放弃）。
+  每次推迟都会写入日志并按 `notify_on_skip` 通知管理员，注明当前人数与阈值。
+- **运行中**：备份执行期间人数持续超过阈值达 `backup_player_gate_overlimit_seconds`
+  （默认 600 秒，即 10 分钟），中断备份并立即恢复 `save-on`。
+  restic 按内容寻址存储，中断的备份没有副作用，残余数据由 forget/prune 周期回收。
+
+```yaml
+schedule:
+  backup_player_gate_enabled: true
+  backup_player_gate_max_online: 5
+  backup_player_gate_overlimit_seconds: 600
+```
+
+说明：
+
+- `backup_player_gate_max_online`：门控阈值（人）。等于或超过该人数就推迟/计时中断
+- `backup_player_gate_overlimit_seconds`：运行中容忍时长（秒）。人数只是短暂超过
+  （比如有人上线几分钟又走了）不会触发中断，持续超过才中断
+- 手动命令 `!!restic backup` 与强制调度 `force_schedule` 不受门控：
+  前者是管理员在场时的显式操作，后者承担"无论如何都要有备份"的数据兜底职责
+- 人数优先通过 RCON 实时查询（`online_check_command`），RCON 不可用时回退加入/退出
+  事件维护的计数；采样失败一律放行，不会因为 RCON 故障卡住备份或误中断
+- 全新安装默认关闭；从旧版本升级时，配置迁移会按备份库类型自动填充——远程库默认开启，
+  本地库保持关闭
+
+### 什么时候该开
+
+- 备份库是远程库（sftp / rest / s3 / b2 / rclone 等），或本地磁盘慢、世界很大：
+  **建议开启**，阈值按服务器规模取 3～10
+- 备份库在本机 SSD 且世界不大：可以不开，避免高峰期备份被推迟
 
 ## 3. 强制备份调度
 
@@ -286,6 +329,10 @@ repository: "./restic-repo"
 ```yaml
 repository: "s3:s3.example.com/my-minecraft-backup"
 ```
+
+::: warning
+仓库在远端（sftp / rest / s3 / b2 / rclone 等）时，备份上传慢，`save-off` 会一直保持到备份结束，高峰期容易把服务器内存挤爆。**强烈建议开启备份玩家人数门控**（`schedule.backup_player_gate_enabled`，详见正常定时备份一节）；从旧版本升级的配置会按仓库类型自动默认开启。
+:::
 
 ### `disk_check_enabled`
 

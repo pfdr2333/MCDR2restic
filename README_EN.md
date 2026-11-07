@@ -11,6 +11,7 @@ An MCDReforged plugin that runs [restic](https://restic.readthedocs.io/en/stable
 
 - Scheduled backups via 6-field cron or fixed intervals; a running backup can be interrupted
 - Skips scheduled backups when nobody is playing, using join/left events plus a `list` online check
+- Player-count gate: with a slow remote repository, backups are automatically postponed or interrupted at peak hours so a long `save-off` window cannot exhaust server memory
 - Forced backup scheduling that ignores player activity (disabled by default)
 - Automatic restic download (Linux/Windows amd64) with outdated copies upgraded automatically, using built-in official, self-hosted mirror and proxy sources
 - Snapshot restore: full snapshot, single file, or folder — including restore into a chosen directory
