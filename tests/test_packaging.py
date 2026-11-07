@@ -65,6 +65,10 @@ class PackagingTests(unittest.TestCase):
         self.assertIn("lang/zh_tw.json", names)
         self.assertIn("mcdr2restic/config_texts/zh_cn.json", names)
         self.assertIn("mcdr2restic/config_texts/zh_tw.json", names)
+        # zipimport 不支持命名空间包：经 importlib.resources 读取的包目录必须带 __init__.py，
+        # 否则在 .mcdr（zip）里静默加载失败，宽松目录下的单测发现不了
+        self.assertIn("mcdr2restic/lang/__init__.py", names)
+        self.assertIn("mcdr2restic/config_texts/__init__.py", names)
         # restic 下载信任锚点（P0-3），缺失会直接破坏校验链路
         self.assertIn("mcdr2restic/defaults/restic_release.yml", names)
         self.assertIn("mcdreforged.plugin.json", names)
