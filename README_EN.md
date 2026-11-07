@@ -74,6 +74,7 @@ The default root is `!!restic` with `!!m2r` as an alias (fully equivalent); shor
 | `!!m2r init` | Initialize the repository manually |
 | `!!m2r unlock` | Unlock the repository |
 | `!!m2r maintenance` | Run repository maintenance manually |
+| `!!m2r exec <restic args...> [\| filter stages]` | Pass any restic command through with the repository environment injected (advanced) |
 | `!!m2r restore <snapshot>` | Queue a full-snapshot restore |
 | `!!m2r restore <snapshot> file <path>` | Queue a single-file restore |
 | `!!m2r restore <snapshot> folder <path>` | Queue a folder restore |

@@ -74,6 +74,7 @@ MCDReforged 插件：调用 [restic](https://restic.readthedocs.io/en/stable/) �
 | `!!m2r init` | 手动初始化仓库 |
 | `!!m2r unlock` | 解锁仓库 |
 | `!!m2r maintenance` | 手动执行仓库维护 |
+| `!!m2r exec <restic 参数...> [\| 过滤阶段]` | 透传执行任意 restic 命令并注入仓库环境（高级用法） |
 | `!!m2r restore <快照>` | 添加整份快照恢复任务 |
 | `!!m2r restore <快照> file <路径>` | 添加单文件恢复任务 |
 | `!!m2r restore <快照> folder <路径>` | 添加文件夹恢复任务 |
