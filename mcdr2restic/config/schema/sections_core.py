@@ -48,6 +48,21 @@ SCHEDULE = Section(
             "list",
             comment_key="template.comment.schedule.online_check_command",
         ),
+        Field(
+            "backup_player_gate_enabled",
+            False,
+            comment_key="template.comment.schedule.backup_player_gate_enabled",
+        ),
+        Field(
+            "backup_player_gate_max_online",
+            5,
+            comment_key="template.comment.schedule.backup_player_gate_max_online",
+        ),
+        Field(
+            "backup_player_gate_overlimit_seconds",
+            600,
+            comment_key="template.comment.schedule.backup_player_gate_overlimit_seconds",
+        ),
     ),
 )
 

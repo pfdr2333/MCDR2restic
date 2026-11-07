@@ -26,6 +26,16 @@ schedule:
   require_player_activity_in_wait_period: true
   # Minecraft command used to query online players, executed via RCON; without RCON only join/left events are used.
   online_check_command: "list"
+  # Backup player gate: when online players exceed backup_player_gate_max_online, the backup is postponed until the count drops below the threshold;
+  # while a backup is running, players staying above the threshold for backup_player_gate_overlimit_seconds interrupt the backup and restore world autosave.
+  # Recommended for remote repositories (sftp/rest/s3/rclone etc.): slow uploads keep save-off active until the backup finishes, which can exhaust server memory at peak;
+  # local repositories are usually fast and do not need it. Disabled by default for fresh installs; migrated configs with a remote repository default to enabled.
+  backup_player_gate_enabled: false
+  # Maximum online players allowed by the gate (default 5): at or above this count, backups are postponed before starting, and the overlimit timer runs while a backup is in progress.
+  backup_player_gate_max_online: 5
+  # How long (seconds, default 600) online players may stay above the threshold during a running backup before it is interrupted and autosave restored;
+  # the pre-start postponement is not limited by this duration and waits until players drop below the threshold. Interruption is safe with restic's content-addressed storage; leftover data is reclaimed by forget/prune.
+  backup_player_gate_overlimit_seconds: 600
 
 force_schedule:
   # Forced backup schedule, ignoring player activity, disabled by default.
