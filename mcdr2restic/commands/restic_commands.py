@@ -16,8 +16,10 @@ from mcdr2restic.restore.restore_workflow import is_restore_running
 from mcdr2restic.restic.restic_constants import (
     RESTIC_COMMAND_INIT,
     RESTIC_COMMAND_UNLOCK,
+    RESTIC_OPTION_REMOVE_ALL,
 )
 from mcdr2restic.restic.restic_download import ensure_default_restic_executable_available
+from mcdr2restic.restic.restic_guidance import restic_management_command
 from mcdr2restic.restic.restic_result import assert_restic_success
 from mcdr2restic.restic.restic_runner import run_restic_command
 from mcdr2restic.restic.restic_service import make_restic_deadline
@@ -56,7 +58,23 @@ class ResticCommands:
     def command_unlock(self, source: CommandSource):
         self.command_manage_repository(source, RESTIC_COMMAND_UNLOCK)
 
-    def command_manage_repository(self, source: CommandSource, command: str):
+    def command_unlock_remove_all(self, source: CommandSource):
+        # --remove-all 连"锁进程 PID 已被复用而看似仍存活"的残留锁一并移除，
+        # 是普通 unlock 清不掉锁时的唯一手段
+        self.command_manage_repository(
+            source,
+            RESTIC_COMMAND_UNLOCK,
+            extra_args=[RESTIC_OPTION_REMOVE_ALL],
+            force_unlock=True,
+        )
+
+    def command_manage_repository(
+        self,
+        source: CommandSource,
+        command: str,
+        extra_args: Optional[List[str]] = None,
+        force_unlock: bool = False,
+    ):
         if not self.context.check_command_permission(source):
             return
         server = self.context.server_from_source(source)
@@ -74,7 +92,7 @@ class ResticCommands:
             result = run_restic_command(
                 self.context.app_runtime,
                 restic_cfg,
-                self.restic_command_args(command),
+                self.restic_command_args(command) + list(extra_args or []),
                 command,
                 make_restic_deadline(restic_cfg),
             )
@@ -83,11 +101,22 @@ class ResticCommands:
             )
         except BackupProblem as exc:
             source.reply(source_error_text(source, server, exc))
+            if command == RESTIC_COMMAND_UNLOCK and not force_unlock:
+                # 普通 unlock 对存活 PID 占用的锁无效，失败即引导强制清锁
+                source.reply(
+                    server_tr(
+                        server,
+                        "warn.restic.unlock.force_hint",
+                        force_unlock_command=self.force_unlock_command_text(),
+                    )
+                )
             return
         finally:
             self.context.app_runtime.release_backup_slot()
 
-        self.handle_manual_restic_success(source, server, restic_cfg, command)
+        self.handle_manual_restic_success(
+            source, server, restic_cfg, command, force_unlock
+        )
 
     def reject_manual_restic_command(self, source: CommandSource) -> bool:
         server = self.context.server_from_source(source)
@@ -200,6 +229,7 @@ class ResticCommands:
         server: Any,
         restic_cfg: Dict[str, Any],
         command: str,
+        force_unlock: bool = False,
     ):
         if command == RESTIC_COMMAND_INIT:
             self.context.snapshot_invalidator(
@@ -209,4 +239,19 @@ class ResticCommands:
             )
             reply_tr(source, server, "info.restic.init.completed")
             return
-        reply_tr(source, server, "info.restic.unlock.completed")
+        if force_unlock:
+            reply_tr(source, server, "info.restic.unlock.force_completed")
+            return
+        # 普通 unlock 可能因锁进程 PID 被复用而清不掉，成功回复同样给出强制清锁路径
+        reply_tr(
+            source,
+            server,
+            "info.restic.unlock.completed",
+            force_unlock_command=self.force_unlock_command_text(),
+        )
+
+    def force_unlock_command_text(self) -> str:
+        return restic_management_command(
+            self.context.get_command_root(),
+            "{} {}".format(RESTIC_COMMAND_UNLOCK, RESTIC_OPTION_REMOVE_ALL),
+        )

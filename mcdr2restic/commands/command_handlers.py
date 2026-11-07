@@ -21,6 +21,7 @@ from mcdr2restic.core.i18n import server_rtr, server_tr
 from mcdr2restic.core.utils import get_config_section
 from mcdr2restic.config.state_store import get_config_snapshot
 from mcdr2restic.commands.status_commands import StatusCommands
+from mcdr2restic.restic.restic_constants import RESTIC_OPTION_REMOVE_ALL
 
 
 class CommandHandlers:
@@ -80,7 +81,15 @@ class CommandHandlers:
             .then(Literal("notify-test").runs(self.notify.command_notify_test))
             .then(Literal("init").runs(self.restic.command_init))
             .then(Literal("maintenance").runs(self.restic.command_maintenance))
-            .then(Literal("unlock").runs(self.restic.command_unlock))
+            .then(
+                Literal("unlock")
+                .runs(self.restic.command_unlock)
+                .then(
+                    Literal(RESTIC_OPTION_REMOVE_ALL).runs(
+                        self.restic.command_unlock_remove_all
+                    )
+                )
+            )
             .then(
                 Literal("exec")
                 .runs(self.restic.command_exec_usage)
