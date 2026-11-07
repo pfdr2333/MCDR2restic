@@ -27,7 +27,7 @@
 !!MCDR plugin install -U mcdr2restic
 ```
 
-手动安装：在 [GitHub Releases](https://github.com/pfdr2333/MCDR2restic/releases/latest) 中下载最新版本的 `.mcdr` 文件（文件名形如 `MCDR2Restic_v0.9.0.mcdr`），放入 MCDR 的 `plugins` 文件夹中，再以实际文件名执行加载，例如 `!!MCDR plugin load MCDR2Restic_v0.9.0.mcdr`。
+手动安装：在 [GitHub Releases](https://github.com/pfdr2333/MCDR2restic/releases/latest) 中下载最新版本的 `.mcdr` 文件（文件名形如 `MCDR2Restic_v0.10.0.mcdr`），放入 MCDR 的 `plugins` 文件夹中，再以实际文件名执行加载，例如 `!!MCDR plugin load MCDR2Restic_v0.10.0.mcdr`。
 
 重载后，如果 `config/mcdr2restic/config.yml` 不存在，插件会自动生成一份示例配置。
 
