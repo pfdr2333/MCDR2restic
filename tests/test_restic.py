@@ -452,6 +452,93 @@ class ResticCommandTests(unittest.TestCase):
         self.assertIsNone(runtime.backup.thread)
         self.assertFalse(runtime.backup.lock.locked())
 
+
+class ManualUnlockCommandTests(unittest.TestCase):
+    def _make_commands(self):
+        runtime = create_runtime()
+        runtime.config_state.config = {
+            "command": {"root": "!!backup", "permission_level": 3},
+            "restic": {"timeout_seconds": 0},
+        }
+        server = FakePluginServer()
+        runtime.service.server = server
+        source = PermissiveCommandSource(server)
+        commands = ResticCommands(
+            CommandContext(
+                runtime,
+                lambda: None,
+                lambda: None,
+                lambda _server: None,
+                lambda: None,
+                lambda *_args: None,
+            )
+        )
+        return commands, source
+
+    def test_manual_unlock_failure_guides_force_remove_all(self):
+        # 普通 unlock 清不掉"锁进程 PID 已被复用"的残留锁，失败回复必须给出 --remove-all 引导
+        commands, source = self._make_commands()
+        failing = ResticCommandResult(
+            "unlock", ["unlock"], 1, "", "Fatal: repository is already locked", 1
+        )
+
+        with (
+            mock.patch(
+                "mcdr2restic.commands.restic_commands.ensure_default_restic_executable_available"
+            ),
+            mock.patch(
+                "mcdr2restic.commands.restic_commands.run_restic_command",
+                return_value=failing,
+            ) as run_restic,
+        ):
+            commands.command_unlock(source)
+
+        self.assertEqual(run_restic.call_args.args[2], ["unlock"])
+        self.assertTrue(
+            any("unlock --remove-all" in reply for reply in source.replies)
+        )
+
+    def test_manual_unlock_success_reply_mentions_force_remove_all(self):
+        # unlock 退出码为 0 也可能没清掉锁（PID 复用时 restic 静默跳过），成功回复同样给引导
+        commands, source = self._make_commands()
+        success = ResticCommandResult("unlock", ["unlock"], 0, "", "", 0)
+
+        with (
+            mock.patch(
+                "mcdr2restic.commands.restic_commands.ensure_default_restic_executable_available"
+            ),
+            mock.patch(
+                "mcdr2restic.commands.restic_commands.run_restic_command",
+                return_value=success,
+            ) as run_restic,
+        ):
+            commands.command_unlock(source)
+
+        self.assertEqual(run_restic.call_args.args[2], ["unlock"])
+        self.assertIn("unlock --remove-all", source.replies[0])
+
+    def test_manual_unlock_remove_all_passes_flag_to_restic(self):
+        commands, source = self._make_commands()
+        success = ResticCommandResult(
+            "unlock", ["unlock", "--remove-all"], 0, "", "", 0
+        )
+
+        with (
+            mock.patch(
+                "mcdr2restic.commands.restic_commands.ensure_default_restic_executable_available"
+            ),
+            mock.patch(
+                "mcdr2restic.commands.restic_commands.run_restic_command",
+                return_value=success,
+            ) as run_restic,
+        ):
+            commands.command_unlock_remove_all(source)
+
+        self.assertEqual(
+            run_restic.call_args.args[2], ["unlock", "--remove-all"]
+        )
+        self.assertIn("remove-all", source.replies[0])
+
     def test_manual_maintenance_starts_runner_and_replies(self):
         runtime = create_runtime()
         runtime.config_state.config = {"command": {"root": "!!restic", "permission_level": 3}}
