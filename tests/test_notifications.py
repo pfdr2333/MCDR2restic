@@ -452,6 +452,19 @@ class ChannelContractTests(unittest.TestCase):
         self.assertIn("allowed_mentions", payload)
 
 
+class _FakeOneBotClient:
+    """带真实就绪信号的 OneBot 客户端替身，用于验证提交前的就绪探测。"""
+
+    def __init__(self, connected: bool):
+        self.connected_event = threading.Event()
+        if connected:
+            self.connected_event.set()
+        self.sent = []
+
+    def send_private_msg(self, user_id, text):
+        self.sent.append((user_id, text))
+
+
 class NotifyTestTests(unittest.TestCase):
     CHANNEL_CFG: ClassVar[dict] = {
         "onebot": {"enabled": True, "admin_qqs": [123]},
@@ -485,6 +498,32 @@ class NotifyTestTests(unittest.TestCase):
             {"onebot": "sent", "discord": "sent", "custom_webhook": "sent"},
         )
         app_runtime.service.onebot.send_private_msg.assert_called_once()
+
+    def test_reports_not_started_when_onebot_ws_not_connected(self):
+        # OneBot 发送是先起线程再等连接，客户端非空不代表已连上：
+        # notify-test 须同步探测就绪信号，不得恒报"已发送"（P2-1）
+        app_runtime, dispatcher = self.make_dispatcher(self.CHANNEL_CFG)
+        client = _FakeOneBotClient(connected=False)
+        app_runtime.service.onebot = client
+
+        statuses = self.status_by_section(
+            dispatcher.send_test_notification(self.CHANNEL_CFG)
+        )
+
+        self.assertEqual(statuses["onebot"], "not_started")
+        self.assertEqual(client.sent, [])
+
+    def test_reports_sent_when_onebot_ws_connected(self):
+        app_runtime, dispatcher = self.make_dispatcher(self.CHANNEL_CFG)
+        client = _FakeOneBotClient(connected=True)
+        app_runtime.service.onebot = client
+
+        statuses = self.status_by_section(
+            dispatcher.send_test_notification(self.CHANNEL_CFG)
+        )
+
+        self.assertEqual(statuses["onebot"], "sent")
+        self.assertEqual([user_id for user_id, _ in client.sent], [123])
 
     def test_reports_disabled_for_unenabled_channel(self):
         cfg = dict(self.CHANNEL_CFG, discord={"enabled": False})

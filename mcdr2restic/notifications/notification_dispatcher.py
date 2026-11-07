@@ -30,6 +30,16 @@ class ChannelSpec(NamedTuple):
     not_started_key: str
     send_failed_key: str
     deliver: Callable[[Any, Dict[str, Any], str, Optional[Dict[str, Any]]], None]
+    # 客户端上的就绪信号属性名（threading.Event）；未声明视为恒就绪
+    ready_attr: Optional[str] = None
+
+    def is_client_ready(self, client: Any) -> bool:
+        # OneBot 发送是先起线程再等连接，客户端非空不代表能送出：
+        # 提交前同步探测就绪信号，WS 未连接时如实回报"客户端未就绪"（P2-1）
+        if self.ready_attr is None:
+            return True
+        signal = getattr(client, self.ready_attr, None)
+        return True if signal is None else bool(signal.is_set())
 
 
 class ChannelTestResult(NamedTuple):
@@ -98,6 +108,7 @@ class NotificationDispatcher:
                 # 外层兜底拿不到具体 QQ 号，不能用含 {user_id} 的键（P3-4）
                 send_failed_key="warn.notify.onebot_deliver_failed",
                 deliver=self._deliver_onebot,
+                ready_attr="connected_event",
             ),
             ChannelSpec(
                 section="discord",
@@ -156,7 +167,7 @@ class NotificationDispatcher:
         if not channel_cfg.get("enabled", False):
             return CHANNEL_STATUS_DISABLED, None
         client = getattr(self.app_runtime.service, spec.client_attr)
-        if client is None:
+        if client is None or not spec.is_client_ready(client):
             self._warn_server(spec.not_started_key, template_key=not_started_detail)
             return CHANNEL_STATUS_NOT_STARTED, None
         text = build_text(channel_cfg)
