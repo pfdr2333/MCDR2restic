@@ -107,9 +107,9 @@ MCDReforged 插件：调用 [restic](https://restic.readthedocs.io/en/stable/) �
 ## 开发与构建
 
 ```bash
-# 运行测试（覆盖率不低于 55%）
+# 运行测试（覆盖率不低于 65%）
 python -m coverage run --branch --source=mcdr2restic,tools -m unittest discover -s tests -p "test_*.py"
-python -m coverage report --fail-under=55
+python -m coverage report --fail-under=65
 
 # 打包 .mcdr 归档
 python tools/pack_plugin.py --output-dir dist

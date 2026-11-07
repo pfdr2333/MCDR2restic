@@ -107,9 +107,9 @@ Full configuration references, scheduling details, and FAQs live in the [online 
 ## Development & Build
 
 ```bash
-# Run tests (coverage must stay at or above 55%)
+# Run tests (coverage must stay at or above 65%)
 python -m coverage run --branch --source=mcdr2restic,tools -m unittest discover -s tests -p "test_*.py"
-python -m coverage report --fail-under=55
+python -m coverage report --fail-under=65
 
 # Build the .mcdr archive
 python tools/pack_plugin.py --output-dir dist

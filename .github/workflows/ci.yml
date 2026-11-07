@@ -130,7 +130,7 @@ jobs:
         run: python -m coverage run --branch --source=mcdr2restic,tools -m unittest discover -s tests -p "test_*.py"
 
       - name: Report coverage
-        run: python -m coverage report --show-missing --fail-under=55
+        run: python -m coverage report --show-missing --fail-under=65
 
       - name: Check Python syntax
         run: python -m compileall -q mcdr2restic tests tools
