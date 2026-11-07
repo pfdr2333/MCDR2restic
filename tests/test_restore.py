@@ -822,6 +822,47 @@ class RestoreSkipSafetyTests(unittest.TestCase):
         self.assertIsNone(runtime.restore.session)
         self.assertIn("未创建保护快照", server.logger.warning_messages[0])
 
+    def test_rollback_expected_failure_logs_clean_message(self):
+        # 密码错误等预期业务错误只记干净消息，不刷堆栈（P2-2）
+        runtime = create_runtime()
+        server = FakePluginServer()
+        session = build_restore_session(safety_snapshot_id="abcdef12")
+
+        with mock.patch.object(
+            restore_workflow,
+            "run_restic_command_with_lock_recovery",
+            side_effect=BackupProblem(
+                i18n_key="error.backup.disk_space_low",
+                path="repo",
+                free_percent=9,
+                min_free_percent=10,
+            ),
+        ):
+            error = restore_workflow.rollback_to_safety_snapshot(
+                runtime, server, {}, session
+            )
+
+        self.assertIn("剩余空间不足", error)
+        self.assertEqual(len(server.logger.error_messages), 1)
+        self.assertNotIn("Traceback", server.logger.error_messages[0])
+
+    def test_rollback_unexpected_failure_still_logs_traceback(self):
+        runtime = create_runtime()
+        server = FakePluginServer()
+        session = build_restore_session(safety_snapshot_id="abcdef12")
+
+        with mock.patch.object(
+            restore_workflow,
+            "run_restic_command_with_lock_recovery",
+            side_effect=RuntimeError("boom"),
+        ):
+            error = restore_workflow.rollback_to_safety_snapshot(
+                runtime, server, {}, session
+            )
+
+        self.assertEqual(error, "boom")
+        self.assertIn("Traceback", server.logger.error_messages[-1])
+
 
 class RestoreApplyRollbackTests(unittest.TestCase):
     def make_commands(self, runtime):

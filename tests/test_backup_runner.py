@@ -6,7 +6,12 @@ except ImportError:
 import threading
 
 from mcdr2restic.backup.backup_runner import BackupRunner
-from mcdr2restic.core.models import BackupCanceled, BackupRunOutcome, BackupRunStatus
+from mcdr2restic.core.models import (
+    BackupCanceled,
+    BackupProblem,
+    BackupRunOutcome,
+    BackupRunStatus,
+)
 from mcdr2restic.minecraft.minecraft_service import request_cancel_current_backup
 
 
@@ -93,6 +98,41 @@ class BackupRunnerTests(unittest.TestCase):
             failed = runner._execute_backup_run(server, {}, "manual", 0)
         self.assertEqual(failed.status, BackupRunStatus.FAILED)
         self.assertEqual(failed.detail, "failed")
+
+    def test_expected_failure_logs_clean_message_without_traceback(self):
+        # 磁盘不足等预期业务错误只记干净消息，不刷堆栈（P2-2）
+        _, runner = self.make_runner()
+        server = FakePluginServer()
+
+        with mock.patch(
+            "mcdr2restic.backup.backup_runner.run_backup_body",
+            side_effect=BackupProblem(
+                i18n_key="error.backup.disk_space_low",
+                path="repo",
+                free_percent=9,
+                min_free_percent=10,
+            ),
+        ):
+            outcome = runner._execute_backup_run(server, {}, "manual", 0)
+
+        self.assertEqual(outcome.status, BackupRunStatus.FAILED)
+        self.assertEqual(len(server.logger.error_messages), 1)
+        self.assertNotIn("Traceback", server.logger.error_messages[0])
+        self.assertIn("剩余空间不足", server.logger.error_messages[0])
+
+    def test_unexpected_failure_still_logs_traceback(self):
+        # 非预期异常保留完整堆栈便于排查（P2-2）
+        _, runner = self.make_runner()
+        server = FakePluginServer()
+
+        with mock.patch(
+            "mcdr2restic.backup.backup_runner.run_backup_body",
+            side_effect=RuntimeError("boom"),
+        ):
+            outcome = runner._execute_backup_run(server, {}, "manual", 0)
+
+        self.assertEqual(outcome.status, BackupRunStatus.FAILED)
+        self.assertIn("Traceback", server.logger.error_messages[-1])
 
     def test_save_on_failure_changes_success_to_failed(self):
         _, runner = self.make_runner()

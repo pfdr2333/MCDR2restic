@@ -20,6 +20,7 @@ from mcdr2restic.core.models import (
     BackupRunStatus,
     BackupRunOutcome,
     BackupTrigger,
+    EXPECTED_BUSINESS_ERRORS,
     backup_trigger_display_label,
     backup_trigger_label,
 )
@@ -264,7 +265,11 @@ class BackupRunner:
         message = tr(
             self._language(server), "error.backup.failed", label=label, error=exc
         )
-        server.logger.error("{}\n{}".format(message, traceback.format_exc()))
+        if isinstance(exc, EXPECTED_BUSINESS_ERRORS):
+            # 磁盘不足、密码错误等预期错误消息已本地化，堆栈只会淹没中文消息（P2-2）
+            server.logger.error(message)
+        else:
+            server.logger.error("{}\n{}".format(message, traceback.format_exc()))
         return BackupRunOutcome(
             BackupRunStatus.FAILED, message, str(exc), duration_seconds
         )

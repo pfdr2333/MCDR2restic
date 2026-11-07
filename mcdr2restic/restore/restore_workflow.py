@@ -18,6 +18,7 @@ from mcdr2restic.core.models import (
     RestorePhase,
     RestoreSession,
     RestoreStageResult,
+    EXPECTED_BUSINESS_ERRORS,
     normalize_restore_phase,
 )
 from mcdr2restic.core.runtime import PluginRuntime
@@ -780,11 +781,12 @@ def rollback_to_safety_snapshot(
         return ""
     except Exception as exc:
         message = str(exc)
-        server.logger.error(
-            server_tr(server, "error.restore.rollback_failed", error=message)
-            + "\n"
-            + traceback.format_exc()
-        )
+        detail = server_tr(server, "error.restore.rollback_failed", error=message)
+        if isinstance(exc, EXPECTED_BUSINESS_ERRORS):
+            # 密码错误等预期错误消息已本地化，堆栈只会淹没中文消息（P2-2）
+            server.logger.error(detail)
+        else:
+            server.logger.error("{}\n{}".format(detail, traceback.format_exc()))
         return message
 
 

@@ -1,6 +1,7 @@
 try:
     from .support import (
         command_handlers,
+        ConfigError,
         create_runtime,
         FakePluginServer,
         mock,
@@ -10,6 +11,7 @@ try:
 except ImportError:
     from support import (
         command_handlers,
+        ConfigError,
         create_runtime,
         FakePluginServer,
         mock,
@@ -150,6 +152,50 @@ class CancelCommandTests(unittest.TestCase):
         commands.command_cancel(source)
 
         self.assertIn("没有正在运行", source.replies[-1])
+
+
+class ReloadCommandTests(unittest.TestCase):
+    @staticmethod
+    def make_commands():
+        from mcdr2restic.commands.backup_commands import BackupCommands
+        from mcdr2restic.commands.command_context import CommandContext
+
+        runtime = create_runtime()
+        context = CommandContext(
+            app_runtime=runtime,
+            backup_runner_factory=lambda: None,
+            maintenance_runner_factory=lambda: None,
+            reload_services=mock.Mock(),
+            wake_scheduler=mock.Mock(),
+            snapshot_invalidator=mock.Mock(),
+        )
+        return BackupCommands(context), runtime
+
+    def test_reload_reports_config_error_without_raising(self):
+        # 配置损坏等预期错误回复干净消息，不抛给 MCDR 刷 traceback（P2-2）
+        commands, _ = self.make_commands()
+        source = PermissiveCommandSource(FakePluginServer())
+
+        with mock.patch(
+            "mcdr2restic.commands.backup_commands.load_config",
+            side_effect=ConfigError("error.config.yaml_invalid", path="config.yml"),
+        ):
+            commands.command_reload(source)
+
+        self.assertIn("YAML 格式损坏", source.replies[-1])
+        commands.context.reload_services.assert_not_called()
+
+    def test_reload_success_still_reloads_services(self):
+        commands, _ = self.make_commands()
+        source = PermissiveCommandSource(FakePluginServer())
+
+        with mock.patch(
+            "mcdr2restic.commands.backup_commands.load_config"
+        ) as load_config:
+            commands.command_reload(source)
+
+        load_config.assert_called_once()
+        commands.context.reload_services.assert_called_once()
 
 
 class NotifyTestCommandTests(unittest.TestCase):

@@ -5,8 +5,8 @@ from mcdreforged.api.all import CommandSource
 
 from mcdr2restic.commands.command_context import CommandContext
 from mcdr2restic.config.config_loader import load_config, save_enabled_unlocked
-from mcdr2restic.core.i18n import reply_tr, server_tr
-from mcdr2restic.core.models import BackupTrigger
+from mcdr2restic.core.i18n import reply_tr, server_tr, source_error_text
+from mcdr2restic.core.models import BackupTrigger, LocalizedValueError
 from mcdr2restic.minecraft.minecraft_service import (
     is_backup_running,
     is_mc_ready,
@@ -96,5 +96,10 @@ class BackupCommands:
         if not self.context.check_command_permission(source):
             return
         server = self.context.server_from_source(source)
-        load_config(self.context.app_runtime, server, source)
+        try:
+            load_config(self.context.app_runtime, server, source)
+        except LocalizedValueError as exc:
+            # 配置损坏等预期错误直接回干净消息，交给 MCDR 只会刷 traceback（P2-2）
+            source.reply(source_error_text(source, server, exc))
+            return
         self.context.reload_services(server)

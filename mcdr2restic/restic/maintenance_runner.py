@@ -10,6 +10,7 @@ from mcdreforged.api.all import PluginServerInterface
 from mcdr2restic.config.state_store import get_config_snapshot
 from mcdr2restic.core.i18n import config_language, tr
 from mcdr2restic.core.language import get_mcdr_language
+from mcdr2restic.core.models import EXPECTED_BUSINESS_ERRORS
 from mcdr2restic.core.runtime import PluginRuntime
 from mcdr2restic.restic.restic_service import run_maintenance_body
 
@@ -78,12 +79,12 @@ class MaintenanceRunner:
             server.logger.info(tr(language, "info.maintenance.success"))
             return True
         except Exception as exc:
-            server.logger.error(
-                "{}\n{}".format(
-                    tr(language, "error.maintenance.failed", error=exc),
-                    traceback.format_exc(),
-                )
-            )
+            detail = tr(language, "error.maintenance.failed", error=exc)
+            if isinstance(exc, EXPECTED_BUSINESS_ERRORS):
+                # 仓库冲突等预期错误消息已本地化，堆栈只会淹没中文消息（P2-2）
+                server.logger.error(detail)
+            else:
+                server.logger.error("{}\n{}".format(detail, traceback.format_exc()))
             return False
         finally:
             self.app_runtime.release_backup_slot()

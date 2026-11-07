@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple, Type
 
 from mcdr2restic.core.i18n import tr
 
@@ -115,6 +115,14 @@ class CronError(LocalizedValueError):
 
 class ConfigError(LocalizedValueError):
     """Raised when the plugin configuration cannot be loaded or migrated."""
+
+
+# 预期业务错误：消息已本地化、对用户可解释，日志与回复只取干净消息，
+# 不附 traceback；其余异常按未预期故障处理，保留完整堆栈便于排查
+EXPECTED_BUSINESS_ERRORS: Tuple[Type[Exception], ...] = (
+    BackupProblem,
+    LocalizedValueError,
+)
 
 
 @dataclass

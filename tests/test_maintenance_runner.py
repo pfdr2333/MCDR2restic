@@ -5,7 +5,7 @@ except ImportError:
 
 import threading
 
-from mcdr2restic.core.models import BackupCanceled
+from mcdr2restic.core.models import BackupCanceled, BackupProblem
 from mcdr2restic.restic.maintenance_runner import MaintenanceRunner
 
 
@@ -119,6 +119,40 @@ class MaintenanceRunnerTests(unittest.TestCase):
             self.assertFalse(runner._run_with_acquired_lock(server))
 
         self.assertFalse(runtime.backup.lock.locked())
+
+    def test_expected_failure_logs_clean_message_without_traceback(self):
+        # 仓库冲突等预期业务错误只记干净消息，不刷堆栈（P2-2）
+        runtime, runner = self.make_runner()
+        runtime.config_state.config = {"language": "zh_cn"}
+        server = FakePluginServer()
+
+        with mock.patch(
+            "mcdr2restic.restic.maintenance_runner.run_maintenance_body",
+            side_effect=BackupProblem(
+                i18n_key="error.backup.disk_space_low",
+                path="repo",
+                free_percent=9,
+                min_free_percent=10,
+            ),
+        ):
+            self.assertFalse(runner._run_with_acquired_lock(server))
+
+        self.assertEqual(len(server.logger.error_messages), 1)
+        self.assertNotIn("Traceback", server.logger.error_messages[0])
+
+    def test_unexpected_failure_still_logs_traceback(self):
+        # 非预期异常保留完整堆栈便于排查（P2-2）
+        runtime, runner = self.make_runner()
+        runtime.config_state.config = {"language": "zh_cn"}
+        server = FakePluginServer()
+
+        with mock.patch(
+            "mcdr2restic.restic.maintenance_runner.run_maintenance_body",
+            side_effect=RuntimeError("boom"),
+        ):
+            self.assertFalse(runner._run_with_acquired_lock(server))
+
+        self.assertIn("Traceback", server.logger.error_messages[-1])
 
     def test_label_set_before_config_snapshot(self):
         # 等待方轮询 give_up_when 依赖 label，取快照窗口内必须已标记 maintenance（P1-6）
