@@ -88,6 +88,7 @@ class ResticStreamSession:
     progress_interval: float
     deadline: Optional[float]
     output_queue: "queue.Queue[Tuple[str, Optional[str]]]"
+    line_sink: Optional[Callable[[str, str], None]] = None
 
 
 def resolve_popen_executable(
@@ -115,6 +116,7 @@ def run_restic_command(
     configured_args: Any,
     phase: str,
     deadline: Optional[float],
+    line_sink: Optional[Callable[[str, str], None]] = None,
 ) -> ResticCommandResult:
     args = normalize_restic_phase_args(configured_args, phase)
     # executable 已并入 command[0]；launch 路径不再单独取用
@@ -129,7 +131,7 @@ def run_restic_command(
     app_runtime.backup.current_process = process
     try:
         outcome = read_restic_process_output(
-            app_runtime, process, progress, progress_interval, deadline
+            app_runtime, process, progress, progress_interval, deadline, line_sink
         )
     finally:
         app_runtime.backup.current_process = None
@@ -254,6 +256,7 @@ def read_restic_process_output(
     progress: ResticProgressState,
     progress_interval: float,
     deadline: Optional[float],
+    line_sink: Optional[Callable[[str, str], None]] = None,
 ) -> ResticProcessOutcome:
     output_queue: "queue.Queue[Tuple[str, Optional[str]]]" = queue.Queue()
     reader_threads = start_restic_reader_threads(process, output_queue)
@@ -264,6 +267,7 @@ def read_restic_process_output(
         progress_interval=progress_interval,
         deadline=deadline,
         output_queue=output_queue,
+        line_sink=line_sink,
     )
     try:
         buffers, timed_out = consume_restic_output(session, len(reader_threads))
@@ -346,6 +350,8 @@ def consume_restic_output_item(
     append_restic_output_line(
         stream_name, line, buffers.stdout_lines, buffers.stderr_lines
     )
+    if session.line_sink is not None:
+        session.line_sink(stream_name, line)
     handle_restic_stream_line(session.app_runtime.service.server, session.progress, line)
     maybe_emit_restic_progress(
         session.app_runtime.service.server,

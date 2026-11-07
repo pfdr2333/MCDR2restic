@@ -81,6 +81,11 @@ class CommandHandlers:
             .then(Literal("init").runs(self.restic.command_init))
             .then(Literal("maintenance").runs(self.restic.command_maintenance))
             .then(Literal("unlock").runs(self.restic.command_unlock))
+            .then(
+                Literal("exec")
+                .runs(self.restic.command_exec_usage)
+                .then(GreedyText("args").runs(self.restic.command_exec))
+            )
             .then(self.build_restore_command_tree())
             .then(
                 Literal("unrestore")

@@ -2,14 +2,15 @@
 from __future__ import annotations
 
 import threading
-from typing import Any, Dict, List
+from typing import Any, Callable, Dict, List, Optional
 
-from mcdreforged.api.all import CommandSource
+from mcdreforged.api.all import CommandSource, PluginServerInterface
 
 from mcdr2restic.commands.command_context import CommandContext
+from mcdr2restic.commands.exec_pipeline import ExecOutputPipeline, parse_exec_pipeline
 from mcdr2restic.config.state_store import get_config_snapshot
 from mcdr2restic.core.i18n import reply_tr, server_tr, source_error_text
-from mcdr2restic.core.models import BackupProblem
+from mcdr2restic.core.models import BackupProblem, ResticCommandResult
 from mcdr2restic.core.utils import get_config_section
 from mcdr2restic.restore.restore_workflow import is_restore_running
 from mcdr2restic.restic.restic_constants import (
@@ -20,6 +21,10 @@ from mcdr2restic.restic.restic_download import ensure_default_restic_executable_
 from mcdr2restic.restic.restic_result import assert_restic_success
 from mcdr2restic.restic.restic_runner import run_restic_command
 from mcdr2restic.restic.restic_service import make_restic_deadline
+
+# 透传命令的内部 phase 标签：不能与 backup/restore/rollback 重名，
+# 否则会触发 prepare_restic_args_for_phase 的 --json 自动注入
+EXEC_PHASE = "exec"
 
 
 class ResticCommands:
@@ -93,6 +98,93 @@ class ResticCommands:
             return False
         reply_tr(source, server, "error.restic.manual.backup_running")
         return True
+
+    def command_exec_usage(self, source: CommandSource):
+        if not self.context.check_command_permission(source):
+            return
+        server = self.context.server_from_source(source)
+        reply_tr(source, server, "error.exec.usage")
+
+    def command_exec(self, source: CommandSource, context: Dict[str, Any]):
+        if not self.context.check_command_permission(source):
+            return
+        server = self.context.server_from_source(source)
+        try:
+            request = parse_exec_pipeline(str(context.get("args", "")))
+        except BackupProblem as exc:
+            source.reply(source_error_text(source, server, exc))
+            return
+        cfg = get_config_snapshot(self.context.app_runtime)
+        restic_cfg = get_config_section(cfg, "restic")
+        if self.reject_manual_restic_command(source):
+            return
+
+        self.context.app_runtime.backup.label = "exec-{}".format(request.restic_args[0])
+        self.context.app_runtime.backup.cancel.clear()
+        # 登记命令线程供卸载统一取消/join，与手动管理命令同一套生命周期（P2-2）
+        self.context.app_runtime.backup.thread = threading.current_thread()
+        pipeline = ExecOutputPipeline(request.stages)
+        sink = self.build_exec_line_sink(source, server, pipeline)
+        try:
+            ensure_default_restic_executable_available(server, restic_cfg)
+            reply_tr(
+                source, server, "info.exec.started", command=" ".join(request.restic_args)
+            )
+            result = run_restic_command(
+                self.context.app_runtime,
+                restic_cfg,
+                request.restic_args,
+                EXEC_PHASE,
+                None,
+                line_sink=sink,
+            )
+            assert_restic_success(
+                restic_cfg, result, self.context.get_command_root(), server.logger
+            )
+        except BackupProblem as exc:
+            source.reply(source_error_text(source, server, exc))
+            return
+        finally:
+            self.context.app_runtime.release_backup_slot()
+
+        for line in pipeline.flush():
+            source.reply(line)
+        self.reply_exec_summary(source, server, pipeline, result)
+
+    def build_exec_line_sink(
+        self,
+        source: CommandSource,
+        server: PluginServerInterface,
+        pipeline: ExecOutputPipeline,
+    ) -> Callable[[str, str], None]:
+        logger = getattr(server, "logger", None)
+
+        def sink(stream_name: str, line: str) -> None:
+            if logger is not None:
+                logger.info("restic exec [{}] {}".format(stream_name, str(line).rstrip()))
+            for display_line in pipeline.feed(line):
+                source.reply(display_line)
+
+        return sink
+
+    def reply_exec_summary(
+        self,
+        source: CommandSource,
+        server: PluginServerInterface,
+        pipeline: ExecOutputPipeline,
+        result: ResticCommandResult,
+    ):
+        params: Dict[str, Any] = dict(
+            return_code=result.return_code,
+            duration=round(result.duration_seconds, 1),
+            total=pipeline.total_lines,
+            shown=pipeline.shown_lines,
+        )
+        if pipeline.suppressed_lines:
+            params["suppressed"] = pipeline.suppressed_lines
+            reply_tr(source, server, "info.exec.completed_truncated", **params)
+            return
+        reply_tr(source, server, "info.exec.completed", **params)
 
 
     def restic_command_args(self, command: str) -> List[str]:
