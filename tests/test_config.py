@@ -55,6 +55,7 @@ from mcdr2restic.config.config_migration import (
     atomically_replace_config_with_backup,
 )
 from mcdr2restic.config.config_paths import ensure_config_file_exists
+from mcdr2restic.config.state_store import merge_defaults, save_text_file_atomically
 from mcdr2restic.defaults.message_defaults import build_default_messages
 
 
@@ -293,6 +294,53 @@ class ConfigurationTests(unittest.TestCase):
         self.assertEqual(migrated.count("update_check:"), 1)
         self.assertEqual(migrated.count("snapshot_cache:"), 1)
         self.assertEqual(migrated.count("restore:"), 1)
+
+    def test_fresh_generated_config_is_migration_stable(self):
+        # 新装配置首启不得报"已迁移并补全"：生成字节须与迁移结果逐字节
+        # 一致（P3-1，缺尾换行与 CRLF 行重写曾各漏一处）
+        for language in ("zh_cn", "en_us"):
+            with self.subTest(language=language):
+                template = get_default_config_template(language)
+                self.assertTrue(template.endswith("\n"))
+                with tempfile.TemporaryDirectory() as folder:
+                    path = os.path.join(folder, "config.yml")
+                    save_text_file_atomically(path, template)
+                    with open(path, "r", encoding="utf8", newline="") as file:
+                        raw = file.read()
+                self.assertTrue(raw.endswith("\n"))
+                loaded = yaml.safe_load(raw) or {}
+                loaded = {
+                    key: value
+                    for key, value in loaded.items()
+                    if not str(key).endswith("_comment")
+                    and not str(key).startswith("_comment")
+                }
+                merge_defaults(loaded, build_default_config(language))
+                updated = "".join(
+                    apply_config_file_migrations(
+                        raw.splitlines(keepends=True), language, loaded
+                    )
+                )
+                self.assertEqual(updated, raw)
+
+    def test_config_migration_preserves_crlf_line_endings(self):
+        # CRLF 配置中被改写的行与重建的文件尾不得变成 LF 行：
+        # 纯换行符差异会让下次启动再触发一次伪迁移（P3-1）
+        crlf = "\r\n"
+        lines = [
+            "enabled: true" + crlf,
+            "restic:" + crlf,
+            "  timeout_seconds: 3600" + crlf,
+            "config_version: 9" + crlf,
+        ]
+        cfg = build_default_config("en_us")
+        cfg["restic"]["timeout_seconds"] = 60
+
+        migrated = apply_config_file_migrations(lines, "en_us", cfg)
+
+        self.assertIn("  timeout_seconds: 60" + crlf, migrated)
+        self.assertEqual(migrated[-1], "config_version: 10" + crlf)
+        self.assertTrue(migrated[-2].endswith(crlf))
 
     def test_apply_config_file_migrations_inserts_all_registered_top_level_blocks(
         self,

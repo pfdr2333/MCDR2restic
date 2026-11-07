@@ -50,7 +50,16 @@ def get_default_config_template(
     template = add_windows_session_lock_exclude(template, language)
     template = insert_maintenance_schedule_block(template, language)
     template = render_config_version(template)
+    template = ensure_trailing_newline(template)
     validate_rendered_config_template(template)
+    return template
+
+
+def ensure_trailing_newline(template: str) -> str:
+    # 模板块标量 |- 与 render_config_version 的 \s*$ 都会吞掉末尾换行；
+    # 落盘缺尾换行会让首次加载的迁移把新配置判为需补全（P3-1）
+    if not template.endswith("\n"):
+        template += "\n"
     return template
 
 

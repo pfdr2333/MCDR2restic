@@ -409,23 +409,40 @@ def ensure_restic_timeout_value(lines: List[str], cfg: Dict[str, Any]) -> List[s
 
 
 def rewrite_yaml_value_line(line: str, prefix: str, value: Any) -> str:
-    newline = "\n" if line.endswith("\n") else ""
-    return "{}{}{}".format(prefix, yaml_scalar(value), newline)
+    # 沿用该行原有换行符：CRLF 文件被重写成 LF 行会产生仅换行符差异
+    # 的伪迁移（P3-1，首启即报"已迁移并补全"）
+    if line.endswith("\r\n"):
+        ending = "\r\n"
+    elif line.endswith("\n"):
+        ending = "\n"
+    else:
+        ending = ""
+    return "{}{}{}".format(prefix, yaml_scalar(value), ending)
 
 
 def ensure_config_version_tail(lines: List[str], language: str) -> List[str]:
-    marker_comment = config_version_marker_comment(language)
-    version_line = "config_version: {}\n".format(CONFIG_VERSION)
+    # 尾部重建沿用文件既有的换行风格：CRLF 文件被恒写成 LF 尾会产生
+    # 仅换行符差异的伪迁移，新装配置首启即被补全并生成 .bak（P3-1）
+    eol = detect_file_line_ending(lines)
     lines = remove_config_version_lines(lines)
     while lines and not lines[-1].strip():
         lines.pop()
     if lines and not lines[-1].endswith("\n"):
-        lines[-1] = lines[-1] + "\n"
+        lines[-1] = lines[-1] + eol
     if lines and lines[-1].strip():
-        lines.append("\n")
-    lines.append(marker_comment)
-    lines.append(version_line)
+        lines.append(eol)
+    lines.append(config_version_marker_comment(language).replace("\n", eol))
+    lines.append("config_version: {}{}".format(CONFIG_VERSION, eol))
     return lines
+
+
+def detect_file_line_ending(lines: List[str]) -> str:
+    for line in reversed(lines):
+        if line.endswith("\r\n"):
+            return "\r\n"
+        if line.endswith("\n"):
+            return "\n"
+    return "\n"
 
 
 def config_version_marker_comment(language: str) -> str:
