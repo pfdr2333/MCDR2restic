@@ -269,3 +269,9 @@ config.yml.v8.bak
 3. 也可以彻底重启 MCDR，在控制台里完成上述修改。
 
 预防：`permission_level` 保持不超过你日常使用的账号等级；不确定时维持默认 `3` 并用 MCDR 的 `permission.yml` 给账号授权。
+
+## 19. 长命令期间出现 MCDR WatchDog 重建线程的 WARN
+
+`!!m2r exec`、`init`、`unlock`、`maintenance` 这类命令会同步等待 restic 跑完。命令耗时超过 MCDR 的 `watchdog_threshold`（默认 10 秒）时，MCDR 会打印一段线程堆栈并重建对应的工作线程，日志看起来像出了问题。
+
+这是 MCDR 对阻塞线程的默认自愈行为，不影响命令本身执行，可以放心忽略。介意刷屏的话，把 MCDR 配置里的 `watchdog_threshold` 调大即可。

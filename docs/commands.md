@@ -172,8 +172,8 @@ restic:
 把任意 restic 子命令原样透传给 restic 二进制执行，自动注入配置里的仓库、密码等环境变量，用于使用插件没有封装的 restic 高级功能，例如：
 
 ```text
-!!m2r exec check --read-data-subsets /world
-!!m2r exec ls latest /world | head 20
+!!m2r exec check --read-data-subsets /server/world
+!!m2r exec ls latest /server/world | head 20
 !!m2r exec snapshots --json | grep 8f2f9c3d | head 5
 !!m2r exec forget --dry-run --keep-within 7d
 !!m2r exec find *.json
@@ -186,6 +186,7 @@ restic:
 
 注意：
 
+- `ls` / `find` / `check` 里的路径是快照内路径，前缀取决于备份源：默认备份源是 `./server/world`，世界目录在快照里就是 `/server/world`；拿不准先执行 `!!m2r exec ls latest` 看快照根目录里有什么
 - 它与备份、维护、`init`/`unlock` 占用同一个运行槽位，互相排斥；恢复流程执行期间不可用
 - 没有超时限制，长命令可用 `!!m2r cancel` 终止
 - 聊天里实时显示的行数有上限（200 行、单行 300 字符），完整输出始终写入服务端日志
@@ -344,7 +345,7 @@ restic:
 ### 用透传命令查看最新快照里的文件列表
 
 ```text
-!!m2r exec ls latest /world | head 20
+!!m2r exec ls latest /server/world | head 20
 ```
 
 ### 先加入两个恢复任务，再执行
