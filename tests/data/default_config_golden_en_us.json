@@ -1,0 +1,155 @@
+{
+  "command": {
+    "aliases": [
+      "!!m2r"
+    ],
+    "permission_level": 3,
+    "root": "!!restic"
+  },
+  "config_version": 10,
+  "custom_webhook": {
+    "enabled": false,
+    "headers": {},
+    "message_prefix": "[MCDR2Restic]",
+    "payload": {
+      "content": "{message}"
+    },
+    "send_timeout_seconds": 10,
+    "url": ""
+  },
+  "discord": {
+    "avatar_url": "",
+    "enabled": false,
+    "mention_everyone": false,
+    "mention_role_ids": [],
+    "mention_user_ids": [],
+    "message_prefix": "[MCDR2Restic]",
+    "send_timeout_seconds": 10,
+    "username": "MCDR2Restic",
+    "webhook_url": ""
+  },
+  "enabled": true,
+  "force_schedule": {
+    "cron_expression": "0",
+    "interval_seconds": 0
+  },
+  "language": "en_us",
+  "maintenance_schedule": {
+    "cron_expression": "0 0 3 * * *",
+    "interval_seconds": 0
+  },
+  "messages": {
+    "backup_failure": "{prefix} Backup problem\nTrigger: {label}\nStatus: {status}\nDetail: {detail}\nEnd time: {end_time}",
+    "backup_not_ready": "{prefix} Backup skipped\n{message}",
+    "backup_skip_no_player": "{prefix} Backup skipped\nNo players joined or left during this period, and nobody was online at the final check",
+    "backup_start": "{prefix} Backup started\nTrigger: {label}\nTime: {start_time}",
+    "backup_success": "{prefix} Backup completed\nTrigger: {label}\nDuration: {duration_seconds}s\nEnd time: {end_time}",
+    "schedule_config_error": "{prefix} Schedule configuration error\nFailed to calculate the next backup time: {error}"
+  },
+  "minecraft": {
+    "save_all_command": "save-all flush",
+    "save_all_done_patterns": [
+      "Saved the game",
+      "Saved the world"
+    ],
+    "save_off_command": "save-off",
+    "save_on_command": "save-on",
+    "wait_after_save_all_seconds": 10,
+    "wait_after_save_off_seconds": 2,
+    "wait_after_save_on_seconds": 1,
+    "wait_for_save_all_completion": true
+  },
+  "notification": {
+    "notify_on_failure": true,
+    "notify_on_skip": false,
+    "notify_on_start": true,
+    "notify_on_success": true
+  },
+  "onebot": {
+    "access_token": "",
+    "admin_qqs": [
+      123456789
+    ],
+    "connect_timeout_seconds": 10,
+    "enabled": false,
+    "message_prefix": "[MCDR2Restic]",
+    "reconnect_interval_seconds": 5,
+    "send_timeout_seconds": 10,
+    "use_header_auth": false,
+    "ws_url": "ws://127.0.0.1:8777"
+  },
+  "restic": {
+    "auto_init_local_repository": true,
+    "backup_command": [
+      "backup",
+      "./server/world",
+      "--tag",
+      "minecraft",
+      "--host",
+      "mcdr2Restic"
+    ],
+    "disk_check_enabled": true,
+    "disk_check_min_free_percent": 10.0,
+    "environment": {},
+    "error_regexes": [
+      "(?i)^fatal:",
+      "(?i)^error(?:s)?\\b(?!:\\s*0\\b)",
+      "(?i)\\b(permission denied|input/output error|read error|unreadable|failed to|unable to)\\b",
+      "(?i)\\bno such file or directory\\b"
+    ],
+    "executable": "./config/mcdr2restic/restic",
+    "ignore_error_regexes": [
+      "(?i)errors?:\\s*0\\b",
+      "(?i)no errors? (?:were )?found"
+    ],
+    "maintenance_commands": [
+      [
+        "forget",
+        "--keep-within",
+        "1d",
+        "--keep-daily",
+        "7",
+        "--prune"
+      ]
+    ],
+    "max_output_chars_in_notification": 1800,
+    "password": "123456",
+    "password_file": "",
+    "progress_interval_seconds": 5,
+    "repository": "./restic-repo",
+    "success_exit_codes": [
+      0
+    ],
+    "timeout_seconds": 0,
+    "use_path_restic": false,
+    "working_directory": ""
+  },
+  "restore": {
+    "pre_restore_backup_tag": "mcdr2restic-pre-restore",
+    "start_timeout_seconds": 120
+  },
+  "schedule": {
+    "cron_expression": "0 0 0,3,6,9,12,15,18,21 * * *",
+    "interval_seconds": 0,
+    "online_check_command": "list",
+    "require_player_activity_in_wait_period": true
+  },
+  "snapshot_cache": {
+    "database": "snapshots.sqlite3",
+    "enabled": true,
+    "page_size": 10,
+    "query_timeout_seconds": 30
+  },
+  "update_check": {
+    "api_url": "https://api.github.com/repos/pfdr2333/MCDR2restic/releases/latest",
+    "check_on_startup": true,
+    "daily_time": "00:00",
+    "enabled": true,
+    "proxy_prefixes": [
+      "https://gh-proxy.com/",
+      "https://ghproxy.net/"
+    ],
+    "release_page_url": "https://github.com/pfdr2333/MCDR2restic/releases/latest",
+    "timeout_seconds": 10
+  }
+}

@@ -1,26 +1,26 @@
 # -*- coding: utf-8 -*-
-"""Construct immutable-safe default configuration snapshots for the plugin."""
+"""默认配置入口。
+
+具体键值声明已收敛到 ``mcdr2restic.config.schema``（单一事实源），
+本模块只保留历史函数名作为兼容 API，供运行时与测试调用。
+"""
 
 from __future__ import annotations
 
 from typing import Any, Dict, List, TypeAlias
 
-from mcdr2restic.core.i18n import normalize_language_name
-from mcdr2restic.defaults.default_constants import (
-    CONFIG_VERSION,
-    DEFAULT_DISK_CHECK_MIN_FREE_PERCENT,
-    DEFAULT_MAINTENANCE_CRON,
-    DEFAULT_MESSAGE_PREFIX,
-    DEFAULT_RESTIC_EXECUTABLE_POSIX,
-    DEFAULT_PROXY_PREFIXES,
-    DEFAULT_SAVE_ALL_DONE_PATTERNS,
-    DEFAULT_UPDATE_API_URL,
-    PLUGIN_REPOSITORY_URL,
-    RESTIC_PROGRESS_INTERVAL_SECONDS,
-    SNAPSHOT_DB_NAME,
-    SNAPSHOT_PAGE_SIZE,
-    SNAPSHOT_QUERY_TIMEOUT_SECONDS,
+from mcdr2restic.config.schema import (
+    DEFAULT_LANGUAGE_CONFIG_VALUE,
+    derive_base_default_config,
+    section_defaults,
 )
+from mcdr2restic.config.schema.sections_restic import (
+    BACKUP_COMMAND,
+    ERROR_REGEXES,
+    IGNORE_ERROR_REGEXES,
+    MAINTENANCE_COMMANDS,
+)
+from mcdr2restic.core.i18n import normalize_language_name
 from mcdr2restic.defaults.message_defaults import build_default_messages
 
 
@@ -41,240 +41,79 @@ def build_default_config(language: str = "zh_cn") -> ConfigDict:
 def build_base_default_config() -> ConfigDict:
     """Return the baseline default configuration shared by all languages."""
 
-    return {
-        "enabled": True,
-        "language": DEFAULT_LANGUAGE_CONFIG_VALUE,
-        "command": build_default_command_config(),
-        "schedule": build_default_schedule_config(),
-        "force_schedule": build_default_force_schedule_config(),
-        "maintenance_schedule": build_default_maintenance_schedule_config(),
-        "update_check": build_default_update_check_config(),
-        "minecraft": build_default_minecraft_config(),
-        "restic": build_default_restic_config(),
-        "onebot": build_default_onebot_config(),
-        "discord": build_default_discord_config(),
-        "custom_webhook": build_default_custom_webhook_config(),
-        "notification": build_default_notification_config(),
-        "snapshot_cache": build_default_snapshot_cache_config(),
-        "restore": build_default_restore_config(),
-        "messages": build_default_messages("zh_cn"),
-        "config_version": CONFIG_VERSION,
-    }
-
-
-DEFAULT_LANGUAGE_CONFIG_VALUE = "zh_cn"
+    return derive_base_default_config()
 
 
 def default_language_config_value(language: str) -> str:
     return normalize_language_name(language) or DEFAULT_LANGUAGE_CONFIG_VALUE
 
 
-def build_default_command_config() -> ConfigDict:
-    """Return the default command namespace configuration."""
+# ---- 各段默认值的兼容包装：实现一律转回 schema，避免双份维护 ----
 
-    return {
-        "root": "!!restic",
-        "aliases": ["!!m2r"],
-        "permission_level": 3,
-    }
+
+def build_default_command_config() -> ConfigDict:
+    return section_defaults("command")
 
 
 def build_default_schedule_config() -> ConfigDict:
-    """Return the player-aware scheduled backup defaults."""
-
-    return {
-        "interval_seconds": 0,
-        "cron_expression": "0 0 0,3,6,9,12,15,18,21 * * *",
-        "require_player_activity_in_wait_period": True,
-        "online_check_command": "list",
-    }
+    return section_defaults("schedule")
 
 
 def build_default_force_schedule_config() -> ConfigDict:
-    """Return the forced backup schedule defaults."""
-
-    return {
-        "interval_seconds": 0,
-        "cron_expression": "0",
-    }
+    return section_defaults("force_schedule")
 
 
 def build_default_maintenance_schedule_config() -> ConfigDict:
-    """Return the repository maintenance schedule defaults."""
-
-    return {
-        "interval_seconds": 0,
-        "cron_expression": DEFAULT_MAINTENANCE_CRON,
-    }
+    return section_defaults("maintenance_schedule")
 
 
 def build_default_update_check_config() -> ConfigDict:
-    """Return the update-check defaults."""
-
-    return {
-        "enabled": True,
-        "check_on_startup": True,
-        "daily_time": "00:00",
-        "api_url": DEFAULT_UPDATE_API_URL,
-        "release_page_url": PLUGIN_REPOSITORY_URL + "/releases/latest",
-        "proxy_prefixes": list(DEFAULT_PROXY_PREFIXES),
-        "timeout_seconds": 10,
-    }
+    return section_defaults("update_check")
 
 
 def build_default_minecraft_config() -> ConfigDict:
-    """Return Minecraft command and timing defaults."""
-
-    return {
-        "save_off_command": "save-off",
-        "save_all_command": "save-all flush",
-        "save_on_command": "save-on",
-        "wait_after_save_off_seconds": 2,
-        "wait_after_save_all_seconds": 10,
-        "wait_after_save_on_seconds": 1,
-        "wait_for_save_all_completion": True,
-        "save_all_done_patterns": list(DEFAULT_SAVE_ALL_DONE_PATTERNS),
-    }
+    return section_defaults("minecraft")
 
 
 def build_default_restic_config() -> ConfigDict:
-    """Return restic execution, repository, and error-detection defaults."""
-
-    return {
-        "executable": DEFAULT_RESTIC_EXECUTABLE_POSIX,
-        "working_directory": "",
-        "repository": "./restic-repo",
-        "disk_check_enabled": True,
-        "disk_check_min_free_percent": DEFAULT_DISK_CHECK_MIN_FREE_PERCENT,
-        "password": "123456",
-        "password_file": "",
-        "use_path_restic": False,
-        "auto_init_local_repository": True,
-        "environment": {},
-        "maintenance_commands": build_default_maintenance_commands(),
-        "backup_command": build_default_backup_command(),
-        "timeout_seconds": 0,
-        "progress_interval_seconds": RESTIC_PROGRESS_INTERVAL_SECONDS,
-        "success_exit_codes": [0],
-        "error_regexes": build_default_error_regexes(),
-        "ignore_error_regexes": build_default_ignore_error_regexes(),
-        "max_output_chars_in_notification": 1800,
-    }
-
-
-def build_default_maintenance_commands() -> CommandList:
-    """Return the default maintenance command pipeline."""
-
-    # 与三份配置模板保持一致：缺 --keep-within 时旧快照永不过期，--prune 不释放空间
-    return [
-        ["forget", "--keep-within", "1d", "--keep-daily", "7", "--prune"],
-    ]
-
-
-def build_default_backup_command() -> StringList:
-    """Return the default restic backup command arguments."""
-
-    return [
-        "backup",
-        "./server/world",
-        "--tag",
-        "minecraft",
-        "--host",
-        "mcdr2Restic",
-    ]
-
-
-def build_default_error_regexes() -> StringList:
-    """Return patterns that upgrade suspicious output into a failure."""
-
-    return [
-        "(?i)^fatal:",
-        "(?i)^error(?:s)?\\b(?!:\\s*0\\b)",
-        "(?i)\\b(permission denied|input/output error|read error|unreadable|failed to|unable to)\\b",
-        "(?i)\\bno such file or directory\\b",
-    ]
-
-
-def build_default_ignore_error_regexes() -> StringList:
-    """Return patterns that suppress known harmless error-like output."""
-
-    return [
-        "(?i)errors?:\\s*0\\b",
-        "(?i)no errors? (?:were )?found",
-    ]
+    return section_defaults("restic")
 
 
 def build_default_onebot_config() -> ConfigDict:
-    """Return OneBot notification defaults."""
-
-    return {
-        "enabled": False,
-        "ws_url": "ws://127.0.0.1:8777",
-        "access_token": "",
-        "use_header_auth": False,
-        "admin_qqs": [123456789],
-        "message_prefix": DEFAULT_MESSAGE_PREFIX,
-        "connect_timeout_seconds": 10,
-        "send_timeout_seconds": 10,
-        "reconnect_interval_seconds": 5,
-    }
+    return section_defaults("onebot")
 
 
 def build_default_discord_config() -> ConfigDict:
-    """Return Discord webhook notification defaults."""
-
-    return {
-        "enabled": False,
-        "webhook_url": "",
-        "username": "MCDR2Restic",
-        "avatar_url": "",
-        "message_prefix": DEFAULT_MESSAGE_PREFIX,
-        "mention_user_ids": [],
-        "mention_role_ids": [],
-        "mention_everyone": False,
-        "send_timeout_seconds": 10,
-    }
+    return section_defaults("discord")
 
 
 def build_default_custom_webhook_config() -> ConfigDict:
-    """Return generic custom webhook notification defaults."""
-
-    return {
-        "enabled": False,
-        "url": "",
-        "message_prefix": DEFAULT_MESSAGE_PREFIX,
-        "send_timeout_seconds": 10,
-        "headers": {},
-        "payload": {"content": "{message}"},
-    }
-
-
-def build_default_snapshot_cache_config() -> ConfigDict:
-    """Return snapshot cache storage defaults."""
-
-    return {
-        "enabled": True,
-        "page_size": SNAPSHOT_PAGE_SIZE,
-        "query_timeout_seconds": SNAPSHOT_QUERY_TIMEOUT_SECONDS,
-        "database": SNAPSHOT_DB_NAME,
-    }
+    return section_defaults("custom_webhook")
 
 
 def build_default_notification_config() -> ConfigDict:
-    """Return backup lifecycle notification toggles."""
+    return section_defaults("notification")
 
-    return {
-        "notify_on_start": True,
-        "notify_on_success": True,
-        "notify_on_failure": True,
-        "notify_on_skip": False,
-    }
+
+def build_default_snapshot_cache_config() -> ConfigDict:
+    return section_defaults("snapshot_cache")
 
 
 def build_default_restore_config() -> ConfigDict:
-    """Return restore workflow safety and timeout defaults."""
+    return section_defaults("restore")
 
-    return {
-        "pre_restore_backup_tag": "mcdr2restic-pre-restore",
-        "start_timeout_seconds": 120,
-    }
+
+def build_default_maintenance_commands() -> CommandList:
+    return [list(command) for command in MAINTENANCE_COMMANDS]
+
+
+def build_default_backup_command() -> StringList:
+    return list(BACKUP_COMMAND)
+
+
+def build_default_error_regexes() -> StringList:
+    return list(ERROR_REGEXES)
+
+
+def build_default_ignore_error_regexes() -> StringList:
+    return list(IGNORE_ERROR_REGEXES)
