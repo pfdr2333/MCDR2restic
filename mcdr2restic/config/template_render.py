@@ -78,31 +78,61 @@ def field_entry_lines(field: Field, indent: int, language: str) -> List[str]:
 
 
 def value_lines(field: Field, indent: int) -> List[str]:
+    """模板渲染入口：允许占位标记与手工排版值。"""
+
     pad = " " * indent
-    key_line = "{}{}:".format(pad, field.key)
     if field.value_marker:
         return ["{}{}: {}".format(pad, field.key, field.value_marker)]
     if field.raw_value_lines is not None:
-        return [key_line, *field.raw_value_lines]
-    default = field.default
-    if isinstance(default, (list, dict)):
-        return collection_value_lines(field, default, pad, key_line)
-    return ["{}{}: {}".format(pad, field.key, yaml_scalar(default))]
+        return ["{}{}:".format(pad, field.key), *field.raw_value_lines]
+    return generic_value_lines(field, field.default, pad)
 
 
-def collection_value_lines(field: Field, default: Any, pad: str, key_line: str) -> List[str]:
-    if isinstance(default, list):
-        if not default:
+def generic_value_lines(field: Field, value: Any, pad: str) -> List[str]:
+    """通用键值行渲染：迁移补写与模板共用的标量/集合格式。"""
+
+    key_line = "{}{}:".format(pad, field.key)
+    if isinstance(value, (list, dict)):
+        return collection_value_lines(field, value, pad, key_line)
+    return ["{}{}: {}".format(pad, field.key, yaml_scalar(value))]
+
+
+def collection_value_lines(field: Field, value: Any, pad: str, key_line: str) -> List[str]:
+    if isinstance(value, list):
+        if not value:
             return ["{} []".format(key_line)]
-        items = ["{}  - {}".format(pad, sequence_item_text(item, field)) for item in default]
+        items = ["{}  - {}".format(pad, sequence_item_text(item, field)) for item in value]
     else:
-        if not default:
+        if not value:
             return ["{} {{}}".format(key_line)]
-        items = ["{}  {}: {}".format(pad, key, yaml_scalar(value)) for key, value in default.items()]
+        items = ["{}  {}: {}".format(pad, key, yaml_scalar(item)) for key, item in value.items()]
     return [key_line, *items]
 
 
+def migration_field_entry_lines(field: Field, value: Any, language: str, indent: int = 2) -> List[str]:
+    """渲染迁移补写条目：注释来自模板文本，值取运行时合并结果。
+
+    与模板渲染不同：不输出占位标记与手工排版值（迁移插入的必须是
+    可解析的具体值），占位标记类字段按通用标量格式落盘。返回行均带
+    换行符，可直接拼入按行组织的配置文件。
+    """
+
+    pad = " " * indent
+    lines: List[str] = []
+    if field.comment_key and not field.comment_inline:
+        lines.extend(comment_lines(language, field.comment_key, indent))
+    value_part = generic_value_lines(field, value, pad)
+    if field.comment_key and field.comment_inline:
+        comment = config_template_text(language, field.comment_key)
+        value_part[-1] = "{} {}".format(value_part[-1], comment.strip())
+    lines.extend(value_part)
+    return ["{}\n".format(line) if line else "\n" for line in lines]
+
+
 def sequence_item_text(item: Any, field: Field) -> str:
+    if isinstance(item, (list, dict)):
+        # 嵌套集合用 JSON 流式语法（JSON 是合法 YAML flow），如 maintenance_commands
+        return json.dumps(item, ensure_ascii=False)
     if field.quote_single_items:
         return "'{}'".format(str(item).replace("'", "''"))
     return yaml_scalar(item)

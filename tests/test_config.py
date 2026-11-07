@@ -359,15 +359,29 @@ class ConfigurationTests(unittest.TestCase):
         )
 
     def test_config_template_registered_sections_match_default_config(self):
+        # executable/repository/backup_command 的模板值按平台渲染（Windows 生成
+        # Windows 路径并排除 session.lock），与运行时常量有意不同，只断言非空
+        platform_dependent_fields = {
+            ("restic", "executable"),
+            ("restic", "repository"),
+            ("restic", "backup_command"),
+        }
         for language in ("zh_cn", "en_us"):
             template_cfg = yaml.safe_load(get_default_config_template(language))
             default_cfg = build_default_config(language)
             for section in WHOLE_BLOCK_SECTIONS:
-                self.assertEqual(
-                    template_cfg[section],
-                    default_cfg[section],
-                    "template drift for {} in {}".format(section, language),
-                )
+                for key, value in default_cfg[section].items():
+                    if (section, key) in platform_dependent_fields:
+                        self.assertTrue(
+                            template_cfg[section][key],
+                            "empty platform value for {}.{}".format(section, key),
+                        )
+                        continue
+                    self.assertEqual(
+                        template_cfg[section][key],
+                        value,
+                        "template drift for {}.{} in {}".format(section, key, language),
+                    )
 
     def test_config_template_maintenance_commands_match_default_config(self):
         # 模板与默认值漂移会让全新安装与缺键补默认的用户维护策略不一致（P1-3）

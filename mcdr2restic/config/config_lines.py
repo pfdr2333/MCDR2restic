@@ -1,11 +1,17 @@
 # -*- coding: utf-8 -*-
+"""配置文件行级文本工具。
+
+供老配置迁移做"保持注释原位"的行手术：从渲染模板中截取条目、
+改写标量/序列值。键序与注释由 schema 与 config_texts 保证，
+这里只提供与具体键无关的通用操作。
+"""
+
 from __future__ import annotations
 
-import json
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any, List, Optional
 
-from mcdr2restic.defaults.default_config import build_default_config
+from mcdr2restic.config.template_render import yaml_scalar
 from mcdr2restic.defaults.default_config_templates import get_default_config_template
 
 
@@ -14,135 +20,12 @@ NESTED_KEY_TEMPLATE = r"^(\s+){}\s*:"
 DEFAULT_NESTED_INDENT = "  "
 
 
-def get_schedule_activity_lines(language: str, schedule: Dict[str, Any]) -> List[str]:
-    return get_nested_scalar_lines(
-        language,
-        "schedule",
-        "require_player_activity_in_wait_period",
-        section_value(
-            language, "schedule", schedule, "require_player_activity_in_wait_period"
-        ),
-    )
-
-
-def get_schedule_online_command_lines(
-    language: str, schedule: Dict[str, Any]
-) -> List[str]:
-    return get_nested_scalar_lines(
-        language,
-        "schedule",
-        "online_check_command",
-        section_value(language, "schedule", schedule, "online_check_command"),
-    )
-
-
-def get_minecraft_wait_save_all_completion_lines(
-    language: str, minecraft: Dict[str, Any]
-) -> List[str]:
-    return get_nested_scalar_lines(
-        language,
-        "minecraft",
-        "wait_for_save_all_completion",
-        section_value(
-            language, "minecraft", minecraft, "wait_for_save_all_completion"
-        ),
-    )
-
-
-def get_minecraft_save_all_done_patterns_lines(
-    language: str, minecraft: Dict[str, Any]
-) -> List[str]:
-    lines = get_nested_entry_lines(language, "minecraft", "save_all_done_patterns")
-    return rewrite_nested_sequence(
-        lines,
-        "save_all_done_patterns",
-        section_value(language, "minecraft", minecraft, "save_all_done_patterns"),
-    )
-
-
 def get_language_lines(language: str, configured_language: str) -> List[str]:
     return rewrite_top_level_scalar(
         get_top_level_block_lines(language, "language"),
         "language",
         configured_language,
     )
-
-
-def get_restic_repository_lines(language: str, restic: Dict[str, Any]) -> List[str]:
-    return get_restic_scalar_lines(language, restic, "repository")
-
-
-def get_restic_disk_check_enabled_lines(
-    language: str, restic: Dict[str, Any]
-) -> List[str]:
-    return get_restic_scalar_lines(language, restic, "disk_check_enabled")
-
-
-def get_restic_disk_check_min_free_percent_lines(
-    language: str, restic: Dict[str, Any]
-) -> List[str]:
-    return get_restic_scalar_lines(language, restic, "disk_check_min_free_percent")
-
-
-def get_restic_password_lines(language: str, restic: Dict[str, Any]) -> List[str]:
-    return get_restic_scalar_lines(language, restic, "password")
-
-
-def get_restic_password_file_lines(language: str, restic: Dict[str, Any]) -> List[str]:
-    return get_restic_scalar_lines(language, restic, "password_file")
-
-
-def get_restic_use_path_restic_lines(
-    language: str, restic: Dict[str, Any]
-) -> List[str]:
-    return get_restic_scalar_lines(language, restic, "use_path_restic")
-
-
-def get_restic_auto_init_lines(language: str, restic: Dict[str, Any]) -> List[str]:
-    return get_restic_scalar_lines(language, restic, "auto_init_local_repository")
-
-
-def get_restic_timeout_lines(language: str, restic: Dict[str, Any]) -> List[str]:
-    return get_restic_scalar_lines(language, restic, "timeout_seconds")
-
-
-def get_restic_progress_interval_lines(
-    language: str, restic: Dict[str, Any]
-) -> List[str]:
-    return get_restic_scalar_lines(language, restic, "progress_interval_seconds")
-
-
-def get_restic_scalar_lines(
-    language: str, restic: Dict[str, Any], key: str
-) -> List[str]:
-    return get_nested_scalar_lines(
-        language, "restic", key, section_value(language, "restic", restic, key)
-    )
-
-
-def get_nested_scalar_lines(
-    language: str, block_key: str, nested_key: str, value: Any
-) -> List[str]:
-    lines = get_nested_entry_lines(language, block_key, nested_key)
-    return rewrite_nested_scalar(lines, nested_key, value)
-
-
-def section_values(
-    language: str, section_key: str, overrides: Dict[str, Any]
-) -> Dict[str, Any]:
-    defaults = build_default_config(language).get(section_key, {})
-    if not isinstance(defaults, dict):
-        defaults = {}
-    values = dict(defaults)
-    if isinstance(overrides, dict):
-        values.update(overrides)
-    return values
-
-
-def section_value(
-    language: str, section_key: str, overrides: Dict[str, Any], value_key: str
-) -> Any:
-    return section_values(language, section_key, overrides).get(value_key)
 
 
 def get_top_level_block_lines(language: str, block_key: str) -> List[str]:
@@ -273,13 +156,3 @@ def sequence_yaml_lines(indent: str, key: str, values: Any) -> List[str]:
     lines = ["{}{}:\n".format(indent, key)]
     lines.extend("{}  - {}\n".format(indent, yaml_scalar(item)) for item in values)
     return lines
-
-
-def yaml_scalar(value: Any) -> str:
-    if isinstance(value, bool):
-        return "true" if value else "false"
-    if isinstance(value, (int, float)):
-        return str(value)
-    if value is None:
-        return "null"
-    return json.dumps(str(value), ensure_ascii=False)
