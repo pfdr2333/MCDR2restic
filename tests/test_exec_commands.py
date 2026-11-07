@@ -180,7 +180,7 @@ class ExecPipelineFilterTests(unittest.TestCase):
 
 class ExecCommandHandlerTests(unittest.TestCase):
     def test_exec_runs_parsed_args_with_exec_phase_and_no_deadline(self):
-        commands, runtime, server, source = make_exec_commands()
+        commands, runtime, _server, source = make_exec_commands()
         with (
             mock.patch(
                 "mcdr2restic.commands.restic_commands.ensure_default_restic_executable_available"
@@ -200,7 +200,7 @@ class ExecCommandHandlerTests(unittest.TestCase):
         self.assertFalse(runtime.backup.lock.locked())
 
     def test_exec_streams_filtered_lines_via_line_sink(self):
-        commands, runtime, server, source = make_exec_commands()
+        commands, _runtime, server, source = make_exec_commands()
 
         def fake_run(app_runtime, _cfg, args, phase, deadline, line_sink=None):
             self.assertIsNotNone(line_sink)
@@ -226,7 +226,7 @@ class ExecCommandHandlerTests(unittest.TestCase):
         self.assertTrue(any("beta" in item for item in logged))
 
     def test_exec_flushes_tail_lines_after_success(self):
-        commands, runtime, server, source = make_exec_commands()
+        commands, _runtime, _server, source = make_exec_commands()
 
         def fake_run(_app_runtime, _cfg, args, _phase, _deadline, line_sink=None):
             for line in ["a\n", "b\n", "c\n", "d\n"]:
@@ -247,7 +247,7 @@ class ExecCommandHandlerTests(unittest.TestCase):
         self.assertEqual(source.replies[1:-1], ["c", "d"])
 
     def test_exec_registers_thread_and_clears_cancel(self):
-        commands, runtime, server, source = make_exec_commands()
+        commands, runtime, _server, source = make_exec_commands()
         observed = {}
 
         def fake_run(app_runtime, _cfg, args, _phase, _deadline, line_sink=None):
@@ -276,7 +276,7 @@ class ExecCommandHandlerTests(unittest.TestCase):
         self.assertIsNone(runtime.backup.label)
 
     def test_exec_rejects_while_backup_running(self):
-        commands, runtime, server, source = make_exec_commands()
+        commands, runtime, _server, source = make_exec_commands()
         runtime.backup.lock.acquire()
         try:
             with mock.patch(
@@ -291,7 +291,7 @@ class ExecCommandHandlerTests(unittest.TestCase):
         self.assertIn("暂不能执行", source.replies[-1])
 
     def test_exec_rejects_while_restore_running(self):
-        commands, runtime, server, source = make_exec_commands()
+        commands, _runtime, _server, source = make_exec_commands()
         with (
             mock.patch(
                 "mcdr2restic.commands.restic_commands.is_restore_running",
@@ -307,7 +307,7 @@ class ExecCommandHandlerTests(unittest.TestCase):
         self.assertIn("恢复", source.replies[-1])
 
     def test_exec_invalid_stage_replies_error_without_running(self):
-        commands, runtime, server, source = make_exec_commands()
+        commands, runtime, _server, source = make_exec_commands()
         with mock.patch(
             "mcdr2restic.commands.restic_commands.run_restic_command"
         ) as run_restic:
@@ -318,7 +318,7 @@ class ExecCommandHandlerTests(unittest.TestCase):
         self.assertFalse(runtime.backup.lock.locked())
 
     def test_exec_empty_args_replies_usage(self):
-        commands, runtime, server, source = make_exec_commands()
+        commands, _runtime, _server, source = make_exec_commands()
         with mock.patch(
             "mcdr2restic.commands.restic_commands.run_restic_command"
         ) as run_restic:
@@ -328,12 +328,12 @@ class ExecCommandHandlerTests(unittest.TestCase):
         self.assertIn("!!restic exec", source.replies[-1])
 
     def test_exec_usage_handler_replies_usage(self):
-        commands, runtime, server, source = make_exec_commands()
+        commands, _runtime, _server, source = make_exec_commands()
         commands.command_exec_usage(source)
         self.assertIn("!!restic exec", source.replies[-1])
 
     def test_exec_failure_replies_error_and_releases_slot(self):
-        commands, runtime, server, source = make_exec_commands()
+        commands, runtime, _server, source = make_exec_commands()
         failed = ResticCommandResult("exec", ["version"], 1, "", "boom", 1.0)
         with (
             mock.patch(
@@ -351,7 +351,7 @@ class ExecCommandHandlerTests(unittest.TestCase):
         self.assertIsNone(runtime.backup.thread)
 
     def test_exec_canceled_replies_cancel_error_and_releases_slot(self):
-        commands, runtime, server, source = make_exec_commands()
+        commands, runtime, _server, source = make_exec_commands()
         with (
             mock.patch(
                 "mcdr2restic.commands.restic_commands.ensure_default_restic_executable_available"

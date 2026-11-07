@@ -174,12 +174,12 @@ class ResticCommands:
         pipeline: ExecOutputPipeline,
         result: ResticCommandResult,
     ):
-        params: Dict[str, Any] = dict(
-            return_code=result.return_code,
-            duration=round(result.duration_seconds, 1),
-            total=pipeline.total_lines,
-            shown=pipeline.shown_lines,
-        )
+        params: Dict[str, Any] = {
+            "return_code": result.return_code,
+            "duration": round(result.duration_seconds, 1),
+            "total": pipeline.total_lines,
+            "shown": pipeline.shown_lines,
+        }
         if pipeline.suppressed_lines:
             params["suppressed"] = pipeline.suppressed_lines
             reply_tr(source, server, "info.exec.completed_truncated", **params)

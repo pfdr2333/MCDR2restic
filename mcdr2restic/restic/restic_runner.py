@@ -110,7 +110,7 @@ def resolve_popen_executable(
     return text
 
 
-def run_restic_command(
+def run_restic_command(  # noqa: PLR0913 透传命令的流式输出槽位，6 参为合理扩展
     app_runtime: PluginRuntime,
     restic_cfg: Dict[str, Any],
     configured_args: Any,
@@ -250,7 +250,7 @@ def build_restic_popen_kwargs(
     return popen_kwargs
 
 
-def read_restic_process_output(
+def read_restic_process_output(  # noqa: PLR0913 与 run_restic_command 同签名的流式输出槽位
     app_runtime: PluginRuntime,
     process: subprocess.Popen,
     progress: ResticProgressState,
