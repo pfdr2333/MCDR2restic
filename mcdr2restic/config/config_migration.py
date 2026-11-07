@@ -30,12 +30,14 @@ from mcdr2restic.defaults.config_template_resources import (
 from mcdr2restic.defaults.default_constants import CONFIG_NAME, CONFIG_VERSION
 from mcdr2restic.core.models import ConfigError
 from mcdr2restic.core.utils import get_config_section, safe_int
+from mcdr2restic.restic.restic_config import is_local_restic_repository
 
 
 def migrate_legacy_config(cfg: Dict[str, Any]):
     old_version = read_config_version(cfg)
     migrate_schedule_config(cfg)
     migrate_restic_config(cfg, old_version)
+    migrate_backup_player_gate_config(cfg)
     cfg["config_version"] = CONFIG_VERSION
 
 
@@ -69,6 +71,24 @@ def migrate_restic_config(cfg: Dict[str, Any], old_version: int):
     migrate_restic_secret_keys(restic, environment)
     if old_version < 9 and safe_int(restic.get("timeout_seconds", 0), 0) == 3600:
         restic["timeout_seconds"] = 0
+
+
+def migrate_backup_player_gate_config(cfg: Dict[str, Any]):
+    """旧配置升级时按备份库类型填充人数门控默认值。
+
+    远程库上传慢，save-off 会一直保持到备份结束，高峰期易把服务器
+    内存挤爆，默认开启兜底；本地库备份极快，保持关闭避免无谓推迟备份。
+    """
+    schedule = cfg.get("schedule")
+    if not isinstance(schedule, dict):
+        return
+    schedule.setdefault("backup_player_gate_max_online", 5)
+    schedule.setdefault("backup_player_gate_overlimit_seconds", 600)
+    if "backup_player_gate_enabled" in schedule:
+        return
+    restic = cfg.get("restic")
+    repository = str(restic.get("repository") or "") if isinstance(restic, dict) else ""
+    schedule["backup_player_gate_enabled"] = not is_local_restic_repository(repository)
 
 
 def migrate_restic_secret_keys(restic: Dict[str, Any], environment: Dict[str, Any]):

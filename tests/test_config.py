@@ -89,6 +89,65 @@ class ConfigurationTests(unittest.TestCase):
         self.assertEqual(cfg["restic"]["timeout_seconds"], 0)
         self.assertFalse(cfg["schedule"]["require_player_activity_in_wait_period"])
 
+    def test_migrate_legacy_config_enables_player_gate_for_remote_repository(self):
+        cfg = {
+            "config_version": 1,
+            "restic": {"repository": "sftp:user@host:/backup"},
+            "schedule": {},
+        }
+
+        migrate_legacy_config(cfg)
+
+        self.assertTrue(cfg["schedule"]["backup_player_gate_enabled"])
+        self.assertEqual(cfg["schedule"]["backup_player_gate_max_online"], 5)
+        self.assertEqual(cfg["schedule"]["backup_player_gate_overlimit_seconds"], 600)
+
+    def test_migrate_legacy_config_keeps_player_gate_off_for_local_repository(self):
+        cfg = {
+            "config_version": 1,
+            "restic": {"repository": "D:/mcdr/backup"},
+            "schedule": {},
+        }
+
+        migrate_legacy_config(cfg)
+
+        self.assertFalse(cfg["schedule"]["backup_player_gate_enabled"])
+
+    def test_migrate_legacy_config_preserves_existing_player_gate_choice(self):
+        cfg = {
+            "config_version": 1,
+            "restic": {"repository": "sftp:user@host:/backup"},
+            "schedule": {"backup_player_gate_enabled": False},
+        }
+
+        migrate_legacy_config(cfg)
+
+        self.assertFalse(cfg["schedule"]["backup_player_gate_enabled"])
+
+    def test_apply_config_file_migrations_backfills_player_gate_for_remote_repo(self):
+        lines = [
+            "enabled: true\n",
+            "schedule:\n",
+            '  online_check_command: "list"\n',
+            "restic:\n",
+            '  repository: "sftp:user@host:/backup"\n',
+        ]
+        cfg = {
+            "schedule": {"online_check_command": "list"},
+            "restic": {"repository": "sftp:user@host:/backup"},
+        }
+        # 真实加载链路：数据层迁移（按库类型填门控值）先于文件层补行
+        migrate_legacy_config(cfg)
+
+        migrated = "".join(apply_config_file_migrations(lines, "en_us", cfg))
+        migrated_cfg = yaml.safe_load(migrated)
+
+        self.assertTrue(migrated_cfg["schedule"]["backup_player_gate_enabled"])
+        self.assertEqual(migrated_cfg["schedule"]["backup_player_gate_max_online"], 5)
+        self.assertEqual(
+            migrated_cfg["schedule"]["backup_player_gate_overlimit_seconds"], 600
+        )
+
     def test_apply_config_file_migrations_removes_deprecated_schedule_keys(self):
         lines = [
             "enabled: true\n",
