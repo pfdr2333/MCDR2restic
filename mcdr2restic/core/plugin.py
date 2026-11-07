@@ -45,6 +45,7 @@ from mcdr2restic.minecraft.player_activity_service import (
     handle_player_left,
     should_skip_for_no_player_activity,
 )
+from mcdr2restic.minecraft.player_gate_service import wait_for_player_gate
 from mcdr2restic.restore.restore_task_repository import clear_restore_tasks
 from mcdr2restic.snapshots.snapshot_cache import (
     invalidate_snapshot_cache as invalidate_snapshot_cache_impl,
@@ -311,6 +312,9 @@ class PluginEntrypoint:
                 mc_ready_provider=lambda target: is_mc_ready(self.runtime, target),
                 skip_predicate=lambda cfg: should_skip_for_no_player_activity(
                     self.runtime, cfg
+                ),
+                player_gate_waiter=lambda server, notify_admins: wait_for_player_gate(
+                    self.runtime, server, notify_admins
                 ),
                 admin_notifier=notification_dispatcher.notify_admins,
             ),

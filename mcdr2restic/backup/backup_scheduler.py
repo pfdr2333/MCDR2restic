@@ -26,6 +26,7 @@ SkipPredicate = Callable[[Dict[str, Any]], bool]
 AdminNotifier = Callable[
     [str, Optional[Dict[str, Any]], Optional[Dict[str, Any]], bool], None
 ]
+PlayerGateWaiter = Callable[[PluginServerInterface, AdminNotifier], bool]
 ScheduleProvider = Callable[[], Optional[Tuple[float, str]]]
 ScheduleTrigger = Callable[[], None]
 MAINTENANCE_BACKUP_PRIORITY_GRACE_SECONDS = 1.0
@@ -40,6 +41,8 @@ class SchedulerDependencies(NamedTuple):
     mc_ready_provider: McReadyProvider
     skip_predicate: SkipPredicate
     admin_notifier: AdminNotifier
+    # 触发前人数门控等待；None 表示未接入（恢复流程等调用方不设门控）
+    player_gate_waiter: Optional[PlayerGateWaiter] = None
 
 
 class BackupScheduler:
@@ -55,6 +58,7 @@ class BackupScheduler:
         self.mc_ready_provider = dependencies.mc_ready_provider
         self.skip_predicate = dependencies.skip_predicate
         self.admin_notifier = dependencies.admin_notifier
+        self.player_gate_waiter = dependencies.player_gate_waiter
         self.stop_event = threading.Event()
         self._wakeup_state_lock = threading.Lock()
         # 每个调度线程持有独立唤醒事件：共享单事件时一次唤醒只能被一个线程
@@ -220,6 +224,10 @@ class BackupScheduler:
             return
         if self.skip_predicate(cfg):
             self._handle_no_player_activity_skip(cfg)
+            return
+        if self.player_gate_waiter is not None and not self.player_gate_waiter(
+            self.server, self.admin_notifier
+        ):
             return
         self.backup_runner(self.server, BackupTrigger.SCHEDULED)
 

@@ -16,6 +16,9 @@ from mcdr2restic.minecraft.minecraft_service import (
     sleep_or_cancel,
 )
 from mcdr2restic.core.models import BackupProblem
+from mcdr2restic.minecraft.player_gate_service import (
+    start_backup_player_gate_monitor,
+)
 from mcdr2restic.restic.restic_config import (
     assert_backup_sources_do_not_contain_repository,
     assert_repository_disk_space_available,
@@ -68,7 +71,13 @@ def run_backup_body(
     )
     prepare_backup_repository(ctx)
     prepare_minecraft_for_backup(app_runtime, server, cfg)
-    return run_backup_command(ctx)
+    # save-off 已生效：门控监控整个 restic 运行窗口，人数持续超阈时中断备份
+    monitor = start_backup_player_gate_monitor(app_runtime, server, cfg)
+    try:
+        return run_backup_command(ctx)
+    finally:
+        if monitor is not None:
+            monitor.stop()
 
 
 def run_maintenance_body(

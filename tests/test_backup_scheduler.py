@@ -10,7 +10,7 @@ from mcdr2restic.core.models import BackupTrigger
 
 
 class BackupSchedulerTests(unittest.TestCase):
-    def make_scheduler(self, cfg=None, ready=True, skip=False):
+    def make_scheduler(self, cfg=None, ready=True, skip=False, gate_waiter=None):
         config = cfg or {"enabled": True, "notification": {"notify_on_skip": True}}
         config_provider = mock.Mock(return_value=config)
         backup_runner = mock.Mock()
@@ -27,6 +27,7 @@ class BackupSchedulerTests(unittest.TestCase):
                 mc_ready_provider=ready_provider,
                 skip_predicate=skip_predicate,
                 admin_notifier=notifier,
+                player_gate_waiter=gate_waiter,
             ),
         )
         return scheduler, backup_runner, maintenance_runner, notifier
@@ -48,6 +49,32 @@ class BackupSchedulerTests(unittest.TestCase):
         backup_runner.assert_not_called()
         self.assertEqual(notifier.call_args.args[0], "backup_skip_no_player")
         self.assertFalse(notifier.call_args.args[3])
+
+    def test_normal_trigger_blocked_by_player_gate(self):
+        gate_waiter = mock.Mock(return_value=False)
+        scheduler, backup_runner, _, notifier = self.make_scheduler(gate_waiter=gate_waiter)
+
+        scheduler._trigger_normal_backup()
+
+        backup_runner.assert_not_called()
+        gate_waiter.assert_called_once_with(scheduler.server, notifier)
+
+    def test_normal_trigger_passes_player_gate_and_runs(self):
+        gate_waiter = mock.Mock(return_value=True)
+        scheduler, backup_runner, _, _ = self.make_scheduler(gate_waiter=gate_waiter)
+
+        scheduler._trigger_normal_backup()
+
+        backup_runner.assert_called_once_with(scheduler.server, BackupTrigger.SCHEDULED)
+
+    def test_forced_trigger_ignores_player_gate(self):
+        gate_waiter = mock.Mock(return_value=False)
+        scheduler, backup_runner, _, _ = self.make_scheduler(gate_waiter=gate_waiter)
+
+        scheduler._trigger_forced_backup()
+
+        backup_runner.assert_called_once_with(scheduler.server, BackupTrigger.FORCED)
+        gate_waiter.assert_not_called()
 
     def test_forced_trigger_runs_even_when_normal_skip_predicate_is_true(self):
         scheduler, backup_runner, _, _ = self.make_scheduler(skip=True)
