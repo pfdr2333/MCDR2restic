@@ -63,11 +63,14 @@ MCDReforged 插件：调用 [restic](https://restic.readthedocs.io/en/stable/) �
 
 ## 命令
 
+所有命令的默认根是 `!!restic`，别名 `!!m2r`（两者完全等价），下文统一用更短的 `!!m2r` 示例；直接输入根命令即查看状态。
+
 | 命令 | 说明 |
 | --- | --- |
 | `!!m2r status [p <页码>]` | 查看状态与快照列表 |
 | `!!m2r backup` | 立即备份 |
 | `!!m2r start` / `stop` | 启用 / 停用定时备份 |
+| `!!m2r cancel` | 取消当前正在运行的任务，不改变定时备份开关 |
 | `!!m2r init` | 手动初始化仓库 |
 | `!!m2r unlock` | 解锁仓库 |
 | `!!m2r maintenance` | 手动执行仓库维护 |
@@ -81,6 +84,7 @@ MCDReforged 插件：调用 [restic](https://restic.readthedocs.io/en/stable/) �
 | `!!m2r restore apply` | 执行恢复任务队列 |
 | `!!m2r restore apply --skip-safety` | 执行恢复任务队列，跳过保护快照 |
 | `!!m2r unrestore <ID>\|all` | 删除某个 / 所有恢复任务 |
+| `!!m2r notify-test` | 向所有已启用的通知渠道发送测试消息 |
 | `!!m2r reload` | 重载配置 |
 
 默认命令权限等级为 `3`，可在配置中修改。

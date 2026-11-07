@@ -63,11 +63,14 @@ Adjust the configuration as needed, then run `!!m2r reload`.
 
 ## Commands
 
+The default root is `!!restic` with `!!m2r` as an alias (fully equivalent); shorter `!!m2r` examples are used below, and typing the bare root shows the status.
+
 | Command | Description |
 | --- | --- |
 | `!!m2r status [p <page>]` | Show status and the snapshot list |
 | `!!m2r backup` | Trigger an immediate backup |
 | `!!m2r start` / `stop` | Enable / disable scheduled backups |
+| `!!m2r cancel` | Cancel the currently running task without touching the scheduling switch |
 | `!!m2r init` | Initialize the repository manually |
 | `!!m2r unlock` | Unlock the repository |
 | `!!m2r maintenance` | Run repository maintenance manually |
@@ -81,6 +84,7 @@ Adjust the configuration as needed, then run `!!m2r reload`.
 | `!!m2r restore apply` | Apply the restore task queue |
 | `!!m2r restore apply --skip-safety` | Apply the restore task queue without a safety snapshot |
 | `!!m2r unrestore <ID>\|all` | Delete one / all restore tasks |
+| `!!m2r notify-test` | Send a test message to all enabled notification channels |
 | `!!m2r reload` | Reload configuration |
 
 The default command permission level is `3` and can be changed in the configuration.
