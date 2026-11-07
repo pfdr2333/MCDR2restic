@@ -359,6 +359,10 @@ def schedule_status_text(
             if isinstance(translate_or_language, str)
             else DEFAULT_LANGUAGE
         )
+    # 插件停用后调度线程并不排程，倒计时只是误导（P3-3）；
+    # 与状态页"启用"行的缺省口径保持一致
+    if not cfg.get("enabled", True):
+        return translate("status.schedule.disabled")
     try:
         result = (
             compute_force_wait_seconds(cfg, language)

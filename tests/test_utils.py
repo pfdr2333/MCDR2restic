@@ -50,6 +50,17 @@ class UtilsTests(unittest.TestCase):
         self.assertEqual(schedule_status_text(cfg, False, "zh_cn"), "固定间隔 60 秒")
         self.assertEqual(schedule_status_text(cfg, True, "zh_cn"), "关闭")
 
+    def test_schedule_status_text_disabled_when_plugin_stopped(self):
+        # 插件停用后调度线程并不排程，状态页不得再显示倒计时（P3-3）
+        cfg = {
+            "enabled": False,
+            "schedule": {"interval_seconds": 60, "cron_expression": "0"},
+            "force_schedule": {"interval_seconds": 0, "cron_expression": "0 3 * * *"},
+        }
+
+        self.assertEqual(schedule_status_text(cfg, False, "zh_cn"), "关闭")
+        self.assertEqual(schedule_status_text(cfg, True, "zh_cn"), "关闭")
+
     def test_render_status_output_uses_source_translate(self):
         source = FakeCommandSource(language="zh_cn")
         server = FakePluginServer(language="en_us")
