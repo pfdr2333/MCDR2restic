@@ -217,7 +217,7 @@
   "mcdr2restic.info.notify.test.disabled": "未啟用",
   "mcdr2restic.info.notify.test.not_started": "客戶端未就緒",
   "mcdr2restic.info.notify.test.failed": "傳送失敗：{error}",
-  "mcdr2restic.info.notify.test_message": "MCDR2Restic 通知渠道測試訊息（{time}）。收到本條說明該渠道投遞正常。",
+  "mcdr2restic.info.notify.test_message": "通知渠道測試訊息（{time}）。收到本條說明該渠道投遞正常。",
   "mcdr2restic.label.notify.channel.onebot": "OneBot",
   "mcdr2restic.label.notify.channel.discord": "Discord",
   "mcdr2restic.label.notify.channel.custom_webhook": "自定義 Webhook",

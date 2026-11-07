@@ -83,7 +83,10 @@ class NotificationDispatcher:
             prefix = str(
                 channel_cfg.get("message_prefix") or DEFAULT_MESSAGE_PREFIX
             )
-            return prefix + tr(language, "info.notify.test_message", time=now_text())
+            # 与常规消息模板的 "{prefix} 正文" 保持同一分隔风格（P3-2）
+            return "{} {}".format(
+                prefix, tr(language, "info.notify.test_message", time=now_text())
+            )
 
         results = []
         for spec in self._channel_specs():

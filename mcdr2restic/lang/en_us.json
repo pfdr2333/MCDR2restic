@@ -219,7 +219,7 @@
   "info.notify.test.disabled": "disabled",
   "info.notify.test.not_started": "client not ready",
   "info.notify.test.failed": "send failed: {error}",
-  "info.notify.test_message": "MCDR2Restic notification channel test message ({time}). Receiving this confirms the channel works.",
+  "info.notify.test_message": "Notification channel test message ({time}). Receiving this confirms the channel works.",
   "label.notify.channel.onebot": "OneBot",
   "label.notify.channel.discord": "Discord",
   "label.notify.channel.custom_webhook": "Custom webhook",

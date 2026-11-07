@@ -524,6 +524,10 @@ class NotifyTestTests(unittest.TestCase):
 
         self.assertEqual(statuses["onebot"], "sent")
         self.assertEqual([user_id for user_id, _ in client.sent], [123])
+        text = client.sent[0][1]
+        # 前缀与正文之间须有分隔，且模板正文不再自带插件名（P3-2）
+        self.assertTrue(text.startswith("[MCDR2Restic] "))
+        self.assertNotIn("MCDR2Restic]MCDR2Restic", text)
 
     def test_reports_disabled_for_unenabled_channel(self):
         cfg = dict(self.CHANNEL_CFG, discord={"enabled": False})
