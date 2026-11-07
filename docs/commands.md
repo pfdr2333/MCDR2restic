@@ -15,6 +15,7 @@
 ├─ init
 ├─ maintenance
 ├─ unlock
+│  └─ --remove-all
 ├─ exec <restic 参数...> [| 过滤阶段]
 ├─ restore
 │  ├─ list
@@ -139,6 +140,13 @@
 - 解锁前请先确认不是“别的机器还在正常写这个仓库”
 - 插件只会自动处理“本机死进程遗留的陈旧锁”
 - 其他锁需要你自己判断后再手动解
+- 取消正在执行的锁仓库命令（如 `exec check`）会强杀 `restic`，留下本机陈旧锁，之后用 `unlock` 清理
+
+### `!!m2r unlock --remove-all`
+
+强制移除仓库里的全部锁，包括 restic 认为“仍被存活进程持有”的锁。
+
+普通 `unlock` 依据锁文件里记录的 PID 判断持锁进程是否存活；如果那个 PID 恰好被其它进程复用，restic 会把陈旧锁当成有效锁跳过，`unlock` 就清不掉。确认没有任何 restic 进程在使用该仓库后，用这条命令强制清理。
 
 ### `!!m2r maintenance`
 
