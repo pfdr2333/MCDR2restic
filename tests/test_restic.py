@@ -642,7 +642,7 @@ class ResticProgressTests(unittest.TestCase):
         runtime = create_runtime()
         runtime.service.server = FakePluginServer()
 
-        def fake_read(app_runtime, process, progress, interval, deadline):
+        def fake_read(app_runtime, process, progress, interval, deadline, line_sink=None):
             return restic_runner.ResticProcessOutcome("", "", 0, False)
 
         with (
@@ -674,7 +674,7 @@ class ResticProgressTests(unittest.TestCase):
         runtime = create_runtime()
         runtime.service.server = FakePluginServer()
 
-        def fake_read(app_runtime, process, progress, interval, deadline):
+        def fake_read(app_runtime, process, progress, interval, deadline, line_sink=None):
             progress.summary = {"snapshot_id": "abcdef123456"}
             return restic_runner.ResticProcessOutcome("", "", 0, False)
 
