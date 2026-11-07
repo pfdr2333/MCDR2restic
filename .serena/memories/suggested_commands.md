@@ -5,7 +5,7 @@ Run from repo root. venv: `source .venv/Scripts/activate` (Git Bash on Windows â
 ## Tests (CI parity â€” unittest, not pytest)
 ```
 python -m coverage run --branch --source=mcdr2restic,tools -m unittest discover -s tests -p "test_*.py"
-python -m coverage report --show-missing --fail-under=55
+python -m coverage report --show-missing --fail-under=65
 ```
 Must run from repo root: `tests/support.py` inserts REPO_ROOT into sys.path and installs the mcdreforged stub. Single module: `python -m unittest tests.test_restic_runner` (or `-k pattern` via `python -m unittest discover -s tests -p "test_*.py" -k name`).
 

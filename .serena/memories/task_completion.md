@@ -2,10 +2,10 @@
 
 Run from repo root (venv activated). Mirror of `.github/workflows/ci.yml`:
 
-1. Tests + coverage (fail-under 55):
+1. Tests + coverage (fail-under 65):
 ```
 python -m coverage run --branch --source=mcdr2restic,tools -m unittest discover -s tests -p "test_*.py"
-python -m coverage report --show-missing --fail-under=55
+python -m coverage report --show-missing --fail-under=65
 ```
 2. Syntax gate: `python -m compileall -q mcdr2restic tests tools`
 3. Lint gate (added 2025-11): `ruff check .` — config in `ruff.toml`; also enforced by CI `lint` job.
