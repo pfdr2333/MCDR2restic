@@ -1,0 +1,3 @@
+# golden 固件要求逐字节比对：索引中固定为 LF，禁止 checkout 时按平台转成 CRLF
+tests/data/*.txt -text
+tests/data/*.json -text
