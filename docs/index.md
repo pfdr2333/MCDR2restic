@@ -19,9 +19,10 @@ MCDR2Restic 是一个基于 MCDReforged 的 Minecraft 备份插件。它将 [res
 
 1. [快速开始](getting-started.md)
 2. [命令](commands.md)
-3. [配置](configuration.md)
-4. [状态与恢复](restore.md)
-5. [常见问题](faq.md)
+3. [透传与 restic](exec.md)
+4. [配置](configuration.md)
+5. [状态与恢复](restore.md)
+6. [常见问题](faq.md)
 
 ## 术语说明
 

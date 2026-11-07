@@ -101,6 +101,7 @@ Full configuration references, scheduling details, and FAQs live in the [online 
 
 - [Getting started](docs/getting-started.md)
 - [Commands](docs/commands.md)
+- [Exec passthrough & restic](docs/exec.md)
 - [Configuration](docs/configuration.md)
 - [Restore & status](docs/restore.md)
 - [FAQ](docs/faq.md)

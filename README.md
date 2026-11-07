@@ -101,6 +101,7 @@ MCDReforged 插件：调用 [restic](https://restic.readthedocs.io/en/stable/) �
 
 - [快速开始](docs/getting-started.md)
 - [命令说明](docs/commands.md)
+- [透传与 restic](docs/exec.md)
 - [配置说明](docs/configuration.md)
 - [状态与恢复](docs/restore.md)
 - [常见问题](docs/faq.md)

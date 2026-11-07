@@ -186,6 +186,8 @@ restic:
 - `self-update` 会绕过插件管理的 restic 版本固定与校验机制，请勿对插件自动下载的 restic 二进制使用
 - 带空格的引号参数里不要使用独立的 `|`（如 `--tag "a | b"`），会被当成过滤阶段分隔符
 
+更多 exec 示例、快照管理和损坏修复等 restic 基础操作，见[透传与 restic](exec.md)。
+
 ## 恢复相关命令
 
 ### `!!m2r restore <快照ID>`
