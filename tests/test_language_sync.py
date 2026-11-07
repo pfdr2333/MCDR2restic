@@ -52,5 +52,23 @@ class LanguageDivergenceCheckTests(unittest.TestCase):
         self.assertEqual(normalize_base_sha("abc123"), "abc123")
 
 
+class ConfigTextsSyncTests(unittest.TestCase):
+    """zh_tw 配置模板文本由同步工具生成，必须与 zh_cn 键集对齐。"""
+
+    def test_zh_tw_config_texts_cover_all_zh_cn_keys(self):
+        def load(language):
+            path = os.path.join(
+                REPO_ROOT, "mcdr2restic", "config_texts", "{}.json".format(language)
+            )
+            with open(path, "r", encoding="utf8") as file:
+                return json.load(file)
+
+        zh_cn = load("zh_cn")
+        zh_tw = load("zh_tw")
+        self.assertEqual(set(zh_tw), set(zh_cn))
+        for key, value in zh_tw.items():
+            self.assertTrue(value.strip(), "empty zh_tw template text: {}".format(key))
+
+
 if __name__ == "__main__":
     unittest.main()

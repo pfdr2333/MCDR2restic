@@ -93,7 +93,7 @@ jobs:
 
       - name: Check generated files are committed
         run: |
-          if ! git diff --exit-code -- lang mcdr2restic/lang mcdr2restic/config_templates; then
+          if ! git diff --exit-code -- lang mcdr2restic/lang mcdr2restic/config_texts; then
             echo "::error::Language resources are out of sync. Run 'python tools/sync_language_resources.py' locally and commit the generated files."
             exit 1
           fi
