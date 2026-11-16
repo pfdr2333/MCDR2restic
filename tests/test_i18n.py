@@ -168,7 +168,7 @@ class I18nTests(unittest.TestCase):
             self.assertEqual(loaded["language"], expected_language)
             self.assertIn("messages:", template)
             self.assertIn("maintenance_schedule:", template)
-            self.assertIn("config_version: 10", template)
+            self.assertIn("config_version: 11", template)
             self.assertNotIn("__MCDR2RESTIC_", template)
             self.assertIsInstance(loaded, dict)
 

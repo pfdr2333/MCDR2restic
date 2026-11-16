@@ -11,7 +11,11 @@ DEFAULT_MESSAGE_KEYS = (
     "backup_success",
     "backup_failure",
     "backup_skip_no_player",
+    "backup_skipped",
     "backup_not_ready",
+    "backup_stale_warning",
+    "maintenance_failed",
+    "maintenance_skipped",
     "schedule_config_error",
 )
 

@@ -6,7 +6,7 @@
     "permission_level": 3,
     "root": "!!restic"
   },
-  "config_version": 10,
+  "config_version": 11,
   "custom_webhook": {
     "enabled": false,
     "headers": {},
@@ -42,8 +42,12 @@
     "backup_failure": "{prefix} Backup problem\nTrigger: {label}\nStatus: {status}\nDetail: {detail}\nEnd time: {end_time}",
     "backup_not_ready": "{prefix} Backup skipped\n{message}",
     "backup_skip_no_player": "{prefix} Backup skipped\nNo players joined or left during this period, and nobody was online at the final check",
+    "backup_skipped": "{prefix} Scheduled backup skipped\n{message}",
+    "backup_stale_warning": "{prefix} No successful backup for {hours} hours (last success: {last_success})\nThe last {skips} scheduled backups were deferred because {current}/{max_online} players online reached the gate threshold\nRunning a backup now is unsafe: save-off must stay active for the whole run, and a long freeze at peak can pile unsaved chunks up in JVM memory and exhaust the server\nWait for the player count to drop below the threshold, run {root} backup manually during off-peak hours, or pin a night-time fallback with force_schedule\nIf you are sure memory headroom is sufficient and accept the crash risk, set backup_player_gate_max_online to 0 to disable the gate\nDocumentation: {doc_url}",
     "backup_start": "{prefix} Backup started\nTrigger: {label}\nTime: {start_time}",
     "backup_success": "{prefix} Backup completed\nTrigger: {label}\nDuration: {duration_seconds}s\nEnd time: {end_time}",
+    "maintenance_failed": "{prefix} Repository maintenance failed\n{message}\nTime: {time}",
+    "maintenance_skipped": "{prefix} Repository maintenance skipped\n{message}\nTime: {time}",
     "schedule_config_error": "{prefix} Schedule configuration error\nFailed to calculate the next backup time: {error}"
   },
   "minecraft": {
@@ -63,7 +67,8 @@
     "notify_on_failure": true,
     "notify_on_skip": false,
     "notify_on_start": true,
-    "notify_on_success": true
+    "notify_on_success": true,
+    "stale_backup_warning_hours": 24
   },
   "onebot": {
     "access_token": "",
@@ -129,11 +134,12 @@
     "start_timeout_seconds": 120
   },
   "schedule": {
-    "backup_player_gate_enabled": false,
-    "backup_player_gate_max_online": 5,
+    "backup_player_gate_max_online": 0,
     "backup_player_gate_overlimit_seconds": 600,
     "cron_expression": "0 0 0,3,6,9,12,15,18,21 * * *",
     "interval_seconds": 0,
+    "max_defer_seconds": 0,
+    "min_gap_seconds": 1800,
     "online_check_command": "list",
     "require_player_activity_in_wait_period": true
   },

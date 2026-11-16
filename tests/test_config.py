@@ -98,7 +98,7 @@ class ConfigurationTests(unittest.TestCase):
 
         migrate_legacy_config(cfg)
 
-        self.assertTrue(cfg["schedule"]["backup_player_gate_enabled"])
+        self.assertNotIn("backup_player_gate_enabled", cfg["schedule"])
         self.assertEqual(cfg["schedule"]["backup_player_gate_max_online"], 5)
         self.assertEqual(cfg["schedule"]["backup_player_gate_overlimit_seconds"], 600)
 
@@ -111,9 +111,10 @@ class ConfigurationTests(unittest.TestCase):
 
         migrate_legacy_config(cfg)
 
-        self.assertFalse(cfg["schedule"]["backup_player_gate_enabled"])
+        self.assertNotIn("backup_player_gate_enabled", cfg["schedule"])
+        self.assertEqual(cfg["schedule"]["backup_player_gate_max_online"], 0)
 
-    def test_migrate_legacy_config_preserves_existing_player_gate_choice(self):
+    def test_migrate_legacy_config_forces_remote_gate_even_when_disabled(self):
         cfg = {
             "config_version": 1,
             "restic": {"repository": "sftp:user@host:/backup"},
@@ -122,7 +123,20 @@ class ConfigurationTests(unittest.TestCase):
 
         migrate_legacy_config(cfg)
 
-        self.assertFalse(cfg["schedule"]["backup_player_gate_enabled"])
+        self.assertNotIn("backup_player_gate_enabled", cfg["schedule"])
+        self.assertEqual(cfg["schedule"]["backup_player_gate_max_online"], 5)
+
+    def test_migrate_legacy_config_respects_explicit_zero_threshold(self):
+        cfg = {
+            "config_version": 11,
+            "restic": {"repository": "sftp:user@host:/backup"},
+            "schedule": {"backup_player_gate_max_online": 0},
+        }
+
+        migrate_legacy_config(cfg)
+
+        # 新阈值语义下 0 是用户显式关闭，迁移不得重新打开
+        self.assertEqual(cfg["schedule"]["backup_player_gate_max_online"], 0)
 
     def test_apply_config_file_migrations_backfills_player_gate_for_remote_repo(self):
         lines = [
@@ -142,7 +156,7 @@ class ConfigurationTests(unittest.TestCase):
         migrated = "".join(apply_config_file_migrations(lines, "en_us", cfg))
         migrated_cfg = yaml.safe_load(migrated)
 
-        self.assertTrue(migrated_cfg["schedule"]["backup_player_gate_enabled"])
+        self.assertNotIn("backup_player_gate_enabled", migrated_cfg["schedule"])
         self.assertEqual(migrated_cfg["schedule"]["backup_player_gate_max_online"], 5)
         self.assertEqual(
             migrated_cfg["schedule"]["backup_player_gate_overlimit_seconds"], 600
@@ -176,7 +190,7 @@ class ConfigurationTests(unittest.TestCase):
         self.assertIn("maintenance_schedule:", migrated)
         self.assertNotIn("  require_player_joined_in_wait_period:", migrated)
         self.assertNotIn("  online_check_interval_seconds:", migrated)
-        self.assertIn("config_version: 10", migrated)
+        self.assertIn("config_version: 11", migrated)
 
     def test_apply_config_file_migrations_removes_deprecated_restore_key(self):
         lines = [
@@ -398,7 +412,7 @@ class ConfigurationTests(unittest.TestCase):
         migrated = apply_config_file_migrations(lines, "en_us", cfg)
 
         self.assertIn("  timeout_seconds: 60" + crlf, migrated)
-        self.assertEqual(migrated[-1], "config_version: 10" + crlf)
+        self.assertEqual(migrated[-1], "config_version: 11" + crlf)
         self.assertTrue(migrated[-2].endswith(crlf))
 
     def test_apply_config_file_migrations_inserts_all_registered_top_level_blocks(
@@ -560,7 +574,7 @@ class ConfigurationTests(unittest.TestCase):
                 backup = file.read()
 
             self.assertEqual(backup, original)
-            self.assertEqual(yaml.safe_load(migrated)["config_version"], 10)
+            self.assertEqual(yaml.safe_load(migrated)["config_version"], 11)
             self.assertFalse(os.path.exists(config_path + ".temp"))
 
     def test_migration_backup_rotates_when_same_version_backup_exists(self):
@@ -669,7 +683,7 @@ class ConfigurationTests(unittest.TestCase):
             self.assertEqual(events, ["migrate_finished", "flip_finished"])
             with open(config_path, "r", encoding="utf8") as file:
                 final = yaml.safe_load(file.read())
-            self.assertEqual(final["config_version"], 10)
+            self.assertEqual(final["config_version"], 11)
             self.assertFalse(final["enabled"])
 
     @mock.patch("mcdr2restic.core.i18n._ACTIVE_LANGUAGE", "")
@@ -913,3 +927,25 @@ class StateFileDurabilityTests(unittest.TestCase):
 
         self.assertEqual(save.call_count, 1)
         self.assertEqual(runtime.config_state.player_state_persisted_at, 10.0)
+
+    def test_config_migration_refreshes_legacy_player_gate_comment(self):
+        lines = [
+            "enabled: true\n",
+            "schedule:\n",
+            "  # 门控允许的最大在线人数（默认 5）：达到该人数则推迟。\n",
+            "  backup_player_gate_max_online: 5\n",
+            "config_version: 10\n",
+        ]
+        cfg = {"schedule": {"backup_player_gate_max_online": 5}}
+
+        migrated = "".join(apply_config_file_migrations(lines, "zh_cn", cfg))
+
+        self.assertIn("该阈值就是门控唯一的开关", migrated)
+        self.assertIn("backup_player_gate_max_online: 5", migrated)
+        self.assertNotIn("（默认 5）", migrated)
+
+        migrated_again = "".join(
+            apply_config_file_migrations(migrated.splitlines(keepends=True), "zh_cn", cfg)
+        )
+        self.assertEqual(migrated_again, migrated)
+

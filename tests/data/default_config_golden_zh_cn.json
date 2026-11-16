@@ -6,7 +6,7 @@
     "permission_level": 3,
     "root": "!!restic"
   },
-  "config_version": 10,
+  "config_version": 11,
   "custom_webhook": {
     "enabled": false,
     "headers": {},
@@ -42,8 +42,12 @@
     "backup_failure": "{prefix} 备份异常\n触发：{label}\n状态：{status}\n详情：{detail}\n结束时间：{end_time}",
     "backup_not_ready": "{prefix} 备份已跳过\n{message}",
     "backup_skip_no_player": "{prefix} 跳过备份\n本周期没有玩家加入或退出，触发检查时也没有玩家在线",
+    "backup_skipped": "{prefix} 定时备份已跳过\n{message}",
+    "backup_stale_warning": "{prefix} 已 {hours} 小时没有成功备份（上次成功：{last_success}）\n最近 {skips} 次定时备份因在线人数 {current}/{max_online} 达到门控阈值而推迟\n现在直接补备份并不安全：备份全程要保持 save-off，高峰期长时间冻结会让未保存的区块堆在 JVM 内存里，可能挤爆服务器\n建议等人数降到阈值以下自动开始；也可挑低峰期手动 {root} backup，或用 force_schedule 固定在凌晨兜底\n若确认内存余量充足并愿意承担崩服风险，可把 backup_player_gate_max_online 改为 0 关闭门控\n说明文档：{doc_url}",
     "backup_start": "{prefix} 备份开始\n触发：{label}\n时间：{start_time}",
     "backup_success": "{prefix} 备份成功\n触发：{label}\n耗时：{duration_seconds} 秒\n结束时间：{end_time}",
+    "maintenance_failed": "{prefix} 仓库维护失败\n{message}\n时间：{time}",
+    "maintenance_skipped": "{prefix} 仓库维护已跳过\n{message}\n时间：{time}",
     "schedule_config_error": "{prefix} 调度配置错误\n计算下次备份时间失败：{error}"
   },
   "minecraft": {
@@ -63,7 +67,8 @@
     "notify_on_failure": true,
     "notify_on_skip": false,
     "notify_on_start": true,
-    "notify_on_success": true
+    "notify_on_success": true,
+    "stale_backup_warning_hours": 24
   },
   "onebot": {
     "access_token": "",
@@ -129,11 +134,12 @@
     "start_timeout_seconds": 120
   },
   "schedule": {
-    "backup_player_gate_enabled": false,
-    "backup_player_gate_max_online": 5,
+    "backup_player_gate_max_online": 0,
     "backup_player_gate_overlimit_seconds": 600,
     "cron_expression": "0 0 0,3,6,9,12,15,18,21 * * *",
     "interval_seconds": 0,
+    "max_defer_seconds": 0,
+    "min_gap_seconds": 1800,
     "online_check_command": "list",
     "require_player_activity_in_wait_period": true
   },

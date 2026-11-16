@@ -6,6 +6,7 @@ from __future__ import annotations
 from mcdr2restic.config.schema.model import Field, Section
 from mcdr2restic.defaults.default_constants import (
     DEFAULT_MAINTENANCE_CRON,
+    DEFAULT_MIN_GAP_SECONDS,
     DEFAULT_PROXY_PREFIXES,
     DEFAULT_SAVE_ALL_DONE_PATTERNS,
     DEFAULT_UPDATE_API_URL,
@@ -39,6 +40,16 @@ SCHEDULE = Section(
             comment_key="template.comment.schedule.cron_expression",
         ),
         Field(
+            "min_gap_seconds",
+            DEFAULT_MIN_GAP_SECONDS,
+            comment_key="template.comment.schedule.min_gap_seconds",
+        ),
+        Field(
+            "max_defer_seconds",
+            0,
+            comment_key="template.comment.schedule.max_defer_seconds",
+        ),
+        Field(
             "require_player_activity_in_wait_period",
             True,
             comment_key=("template.comment.schedule.require_player_activity_in_wait_period"),
@@ -49,13 +60,8 @@ SCHEDULE = Section(
             comment_key="template.comment.schedule.online_check_command",
         ),
         Field(
-            "backup_player_gate_enabled",
-            False,
-            comment_key="template.comment.schedule.backup_player_gate_enabled",
-        ),
-        Field(
             "backup_player_gate_max_online",
-            5,
+            0,
             comment_key="template.comment.schedule.backup_player_gate_max_online",
         ),
         Field(
