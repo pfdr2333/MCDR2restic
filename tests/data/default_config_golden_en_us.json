@@ -6,7 +6,7 @@
     "permission_level": 3,
     "root": "!!restic"
   },
-  "config_version": 11,
+  "config_version": 12,
   "custom_webhook": {
     "enabled": false,
     "headers": {},
@@ -48,7 +48,9 @@
     "backup_success": "{prefix} Backup completed\nTrigger: {label}\nDuration: {duration_seconds}s\nEnd time: {end_time}",
     "maintenance_failed": "{prefix} Repository maintenance failed\n{message}\nTime: {time}",
     "maintenance_skipped": "{prefix} Repository maintenance skipped\n{message}\nTime: {time}",
-    "schedule_config_error": "{prefix} Schedule configuration error\nFailed to calculate the next backup time: {error}"
+    "schedule_config_error": "{prefix} Schedule configuration error\nFailed to calculate the next backup time: {error}",
+    "staging_hint": "[beta] A staging repository can shorten the save-off freeze window: write to a local repository first, then copy to the remote repository asynchronously.\nIt is disabled by default, and interfaces or behavior may change, so do not rely on it as the only backup.\nCosts: reserve local disk space roughly equal to the world size; the first enable is still a full local write; the remote copy may lag; configuration and troubleshooting are more complex.\nDocumentation: {documentation_url}\nEnable: set staging.enabled: true and staging.repository in config.yml; see the documentation for details.",
+    "staging_remote_stale": "[beta] The staging repository's remote copy is about {hours} hours behind (local latest snapshot {local_time}, remote latest snapshot {remote_time}). Check remote reachability and copy status."
   },
   "minecraft": {
     "save_all_command": "save-all flush",
@@ -148,6 +150,28 @@
     "enabled": true,
     "page_size": 10,
     "query_timeout_seconds": 30
+  },
+  "staging": {
+    "cache_dir": "",
+    "copy_limit_upload_kib": 0,
+    "copy_retry_backoff_seconds": [
+      60,
+      300,
+      900
+    ],
+    "copy_retry_max": 3,
+    "deep_prune_interval_days": 7,
+    "deep_prune_max_unused": "0",
+    "emergency_prune_timeout_seconds": 120,
+    "enabled": false,
+    "keep_last": 2,
+    "min_free_percent_after": 10,
+    "password": "",
+    "password_file": "./config/mcdr2restic/staging-password.txt",
+    "prune_max_repack_size": "20G",
+    "prune_max_unused": "5%",
+    "remote_stale_warning_hours": 24,
+    "repository": ""
   },
   "update_check": {
     "api_url": "https://api.github.com/repos/pfdr2333/MCDR2restic/releases/latest",

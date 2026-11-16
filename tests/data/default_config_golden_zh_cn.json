@@ -6,7 +6,7 @@
     "permission_level": 3,
     "root": "!!restic"
   },
-  "config_version": 11,
+  "config_version": 12,
   "custom_webhook": {
     "enabled": false,
     "headers": {},
@@ -48,7 +48,9 @@
     "backup_success": "{prefix} 备份成功\n触发：{label}\n耗时：{duration_seconds} 秒\n结束时间：{end_time}",
     "maintenance_failed": "{prefix} 仓库维护失败\n{message}\n时间：{time}",
     "maintenance_skipped": "{prefix} 仓库维护已跳过\n{message}\n时间：{time}",
-    "schedule_config_error": "{prefix} 调度配置错误\n计算下次备份时间失败：{error}"
+    "schedule_config_error": "{prefix} 调度配置错误\n计算下次备份时间失败：{error}",
+    "staging_hint": "[beta] 中转库可缩短备份时的 save-off 冻结窗口：先写入本地库，再异步复制到远端。\n它默认关闭，接口与行为可能变化，不建议作为唯一备份手段。\n代价：本地磁盘需预留约 world 体量；首次启用仍是全量写入；远端复制可能暂时落后；配置与故障处理更复杂。\n文档：{documentation_url}\n启用：在 config.yml 中设置 staging.enabled: true 与 staging.repository，详见文档。",
+    "staging_remote_stale": "[beta] 中转库的远端副本已落后约 {hours} 小时（本地最新快照 {local_time}，远端最新快照 {remote_time}）。请检查远端可达性与复制状态。"
   },
   "minecraft": {
     "save_all_command": "save-all flush",
@@ -148,6 +150,28 @@
     "enabled": true,
     "page_size": 10,
     "query_timeout_seconds": 30
+  },
+  "staging": {
+    "cache_dir": "",
+    "copy_limit_upload_kib": 0,
+    "copy_retry_backoff_seconds": [
+      60,
+      300,
+      900
+    ],
+    "copy_retry_max": 3,
+    "deep_prune_interval_days": 7,
+    "deep_prune_max_unused": "0",
+    "emergency_prune_timeout_seconds": 120,
+    "enabled": false,
+    "keep_last": 2,
+    "min_free_percent_after": 10,
+    "password": "",
+    "password_file": "./config/mcdr2restic/staging-password.txt",
+    "prune_max_repack_size": "20G",
+    "prune_max_unused": "5%",
+    "remote_stale_warning_hours": 24,
+    "repository": ""
   },
   "update_check": {
     "api_url": "https://api.github.com/repos/pfdr2333/MCDR2restic/releases/latest",

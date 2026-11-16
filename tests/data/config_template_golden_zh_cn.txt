@@ -141,6 +141,46 @@ __MCDR2RESTIC_DEFAULT_BACKUP_COMMENT__
     - '(?i)no errors? (?:were )?found'
   max_output_chars_in_notification: 1800
 
+staging:
+  # [beta] 中转库：先备份到本地库，再异步复制到远端库，缩短 save-off 冻结窗口。
+  # 默认关闭；接口与行为可能变化，不建议作为唯一备份手段。启用前请阅读 docs/staging.md。
+  # 中转库、cache_dir、password_file 都必须位于任何 backup 源之外。
+  # 总开关。false 时完全走现有直传流程，不创建本地库、不启动复制线程。
+  enabled: false
+  # [beta] 中转库路径（本地文件系统），必须在所有 backup 源之外；相对路径基于 restic.working_directory（默认 MCDR 根目录）。
+  repository: ""
+  # 中转库密码，留空时使用 password_file。
+  password: ""
+  # 中转库密码文件，仅在 password 为空时使用；必须在 backup 源之外。
+  password_file: "./config/mcdr2restic/staging-password.txt"
+  # 备份后剩余空间下限（占磁盘总容量百分比）：dry-run 估算写入量后，剩余空间低于该值拒绝备份。
+  min_free_percent_after: 10
+  # 本地库保留快照数；至少 1 个用于增量父快照，默认 2 留回退余地。
+  keep_last: 2
+  # 日常 prune 允许的未使用数据比例，默认 5%。
+  prune_max_unused: "5%"
+  # 深度 prune 间隔天数（0 = 关闭）；深度 prune 使用更严格的未使用上限。
+  deep_prune_interval_days: 7
+  # 深度 prune 的未使用数据上限，默认 0。
+  deep_prune_max_unused: "0"
+  # 单次 prune 的最大重打包量，限制内存与磁盘峰值。
+  prune_max_repack_size: "20G"
+  # restic 缓存目录；留空 = 中转库父目录下的 cache。必须在 backup 源之外。
+  cache_dir: ""
+  # 远端复制失败的最大重试次数。
+  copy_retry_max: 3
+  # 重试退避秒数，依次使用，超出列表后沿用最后一个。
+  copy_retry_backoff_seconds:
+    - 60
+    - 300
+    - 900
+  # 复制到远端的上传限速（KiB/s），0 = 不限制。
+  copy_limit_upload_kib: 0
+  # 远端落后超过该小时数时告警（0 = 关闭）。
+  remote_stale_warning_hours: 24
+  # 备份中磁盘写满时，应急 prune 的最长执行时间（秒）。
+  emergency_prune_timeout_seconds: 120
+
 onebot:
   # OneBot v11 通知。填好 admin_qqs 后把 enabled 改为 true。
   enabled: false
@@ -239,6 +279,10 @@ messages:
     __MCDR2RESTIC_MESSAGE_maintenance_skipped__
   schedule_config_error: |-
     __MCDR2RESTIC_MESSAGE_schedule_config_error__
+  staging_hint: |-
+    __MCDR2RESTIC_MESSAGE_staging_hint__
+  staging_remote_stale: |-
+    __MCDR2RESTIC_MESSAGE_staging_remote_stale__
 
 __MCDR2RESTIC_CONFIG_VERSION_MARKER_COMMENT__
-config_version: 11
+config_version: 12

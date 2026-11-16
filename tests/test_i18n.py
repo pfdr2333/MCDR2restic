@@ -42,6 +42,9 @@ except ImportError:
     )
 
 
+from mcdr2restic.defaults.default_constants import CONFIG_VERSION
+
+
 class I18nTests(unittest.TestCase):
     def test_make_source_translate_prefers_source_language_over_server_default(self):
         server = FakePluginServer(language="en_us")
@@ -168,7 +171,7 @@ class I18nTests(unittest.TestCase):
             self.assertEqual(loaded["language"], expected_language)
             self.assertIn("messages:", template)
             self.assertIn("maintenance_schedule:", template)
-            self.assertIn("config_version: 11", template)
+            self.assertIn("config_version: {}".format(CONFIG_VERSION), template)
             self.assertNotIn("__MCDR2RESTIC_", template)
             self.assertIsInstance(loaded, dict)
 

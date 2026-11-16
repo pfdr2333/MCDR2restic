@@ -141,6 +141,46 @@ __MCDR2RESTIC_DEFAULT_BACKUP_COMMENT__
     - '(?i)no errors? (?:were )?found'
   max_output_chars_in_notification: 1800
 
+staging:
+  # [beta] Staging repository: back up locally first, then copy to the remote repository asynchronously to shorten the save-off freeze window.
+  # Disabled by default; interfaces and behavior may change, so do not rely on it as the only backup. Read docs/staging.md before enabling.
+  # The staging repository, cache_dir and password_file must all be outside every backup source.
+  # Master switch. When false the existing direct-to-remote flow is used unchanged; no local repository is created and no copy thread is started.
+  enabled: false
+  # [beta] Staging repository path (local filesystem), outside all backup sources. Relative paths resolve against restic.working_directory (MCDR root by default).
+  repository: ""
+  # Staging repository password. Leave empty to use password_file.
+  password: ""
+  # Staging repository password file, used only when password is empty. Must be outside backup sources.
+  password_file: "./config/mcdr2restic/staging-password.txt"
+  # Minimum free space after backup, as a percentage of total disk size. The dry-run estimate is subtracted before checking.
+  min_free_percent_after: 10
+  # Number of snapshots kept locally. At least 1 is needed as the incremental parent; 2 leaves a fallback.
+  keep_last: 2
+  # Unused data allowed by the daily prune, 5% by default.
+  prune_max_unused: "5%"
+  # Deep prune interval in days (0 = disabled). Deep prune uses a stricter unused-data limit.
+  deep_prune_interval_days: 7
+  # Unused-data limit for deep prune, 0 by default.
+  deep_prune_max_unused: "0"
+  # Maximum data repacked by one prune, limiting memory and disk peaks.
+  prune_max_repack_size: "20G"
+  # restic cache directory. Empty = cache under the staging repository's parent. Must be outside backup sources.
+  cache_dir: ""
+  # Maximum retries after a failed copy to the remote repository.
+  copy_retry_max: 3
+  # Retry backoff in seconds, used in order; the last value repeats.
+  copy_retry_backoff_seconds:
+    - 60
+    - 300
+    - 900
+  # Upload limit for copying to the remote repository in KiB/s; 0 = unlimited.
+  copy_limit_upload_kib: 0
+  # Warn when the remote copy lags behind by more than this many hours (0 = disabled).
+  remote_stale_warning_hours: 24
+  # Maximum time for the emergency prune when the disk fills during backup, in seconds.
+  emergency_prune_timeout_seconds: 120
+
 onebot:
   # OneBot v11 notifications. Fill admin_qqs, then set enabled to true.
   enabled: false
@@ -240,6 +280,10 @@ messages:
     __MCDR2RESTIC_MESSAGE_maintenance_skipped__
   schedule_config_error: |-
     __MCDR2RESTIC_MESSAGE_schedule_config_error__
+  staging_hint: |-
+    __MCDR2RESTIC_MESSAGE_staging_hint__
+  staging_remote_stale: |-
+    __MCDR2RESTIC_MESSAGE_staging_remote_stale__
 
 __MCDR2RESTIC_CONFIG_VERSION_MARKER_COMMENT__
-config_version: 11
+config_version: 12

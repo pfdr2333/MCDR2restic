@@ -16,7 +16,7 @@ SNAPSHOT_DB_NAME: Final[str] = "snapshots.sqlite3"
 
 LEGACY_CONFIG_NAME: Final[str] = "config.json"
 
-CONFIG_VERSION: Final[int] = 11
+CONFIG_VERSION: Final[int] = 12
 
 DEFAULT_MAINTENANCE_CRON: Final[str] = "0 0 3 * * *"
 
@@ -25,6 +25,12 @@ DEFAULT_MIN_GAP_SECONDS: Final[int] = 1800
 
 # 陈旧备份告警的说明文档页（页面级 URL，锚点会随标题增删漂移）
 DOCUMENTATION_CONFIGURATION_URL: Final[str] = "https://m2r.pfdr.cc/configuration/"
+
+# [beta] 中转库说明文档页
+DOCUMENTATION_STAGING_URL: Final[str] = "https://m2r.pfdr.cc/staging/"
+
+# [beta] 门控等待超时跳过备份后的方案提示冷却时间
+STAGING_HINT_COOLDOWN_SECONDS: Final[int] = 7 * 24 * 60 * 60
 
 DEFAULT_MESSAGE_PREFIX: Final[str] = "[MCDR2Restic]"
 

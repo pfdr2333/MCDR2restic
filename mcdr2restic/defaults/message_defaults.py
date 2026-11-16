@@ -17,6 +17,8 @@ DEFAULT_MESSAGE_KEYS = (
     "maintenance_failed",
     "maintenance_skipped",
     "schedule_config_error",
+    "staging_hint",
+    "staging_remote_stale",
 )
 
 
