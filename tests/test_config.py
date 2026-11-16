@@ -812,6 +812,29 @@ class ConfigurationTests(unittest.TestCase):
             self.assertFalse(os.path.exists(config_path))
 
 
+    def test_config_migration_rewrites_gate_threshold_from_migrated_config(self):
+        lines = [
+            "enabled: true\n",
+            "schedule:\n",
+            "  backup_player_gate_enabled: false\n",
+            "  backup_player_gate_max_online: 5\n",
+            "restic:\n",
+            '  repository: "D:/mcdr/backup"\n',
+            "config_version: 10\n",
+        ]
+        cfg = yaml.safe_load("".join(lines))
+        migrate_legacy_config(cfg)
+
+        migrated = "".join(apply_config_file_migrations(lines, "zh_cn", cfg))
+        migrated_cfg = yaml.safe_load(migrated)
+
+        self.assertEqual(cfg["schedule"]["backup_player_gate_max_online"], 0)
+        self.assertEqual(
+            migrated_cfg["schedule"]["backup_player_gate_max_online"], 0
+        )
+        self.assertNotIn("backup_player_gate_enabled", migrated_cfg["schedule"])
+
+
 class StateFileDurabilityTests(unittest.TestCase):
     def test_save_yaml_file_is_atomic_and_tolerates_stale_temp(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -960,4 +983,3 @@ class StateFileDurabilityTests(unittest.TestCase):
             apply_config_file_migrations(migrated.splitlines(keepends=True), "zh_cn", cfg)
         )
         self.assertEqual(migrated_again, migrated)
-

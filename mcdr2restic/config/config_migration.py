@@ -268,6 +268,7 @@ def apply_config_file_migrations(
     lines = remove_deprecated_runtime_lines(lines)
     lines = ensure_missing_field_lines(lines, language, cfg)
     lines = ensure_restic_timeout_value(lines, cfg)
+    lines = ensure_backup_player_gate_value(lines, cfg)
     lines = ensure_missing_top_level_blocks(lines, language)
     return ensure_config_version_tail(lines, language)
 
@@ -349,6 +350,36 @@ def ensure_restic_timeout_value(lines: List[str], cfg: Dict[str, Any]) -> List[s
         match = pattern.match(lines[index])
         if match:
             lines[index] = rewrite_yaml_value_line(lines[index], match.group(1), restic.get("timeout_seconds", 0))
+            break
+    return lines
+
+
+def ensure_backup_player_gate_value(
+    lines: List[str], cfg: Dict[str, Any]
+) -> List[str]:
+    """把数据层迁移后的门控阈值回写到文件。
+
+    旧配置删除布尔开关时会把本地库的显式关闭收敛为 0；文件里原有的
+    max_online 值不会被 ensure_missing_field_lines 更新，不回写会导致
+    下一次 reload/启动又按旧值开启门控。
+    """
+
+    schedule = get_config_section(cfg, "schedule")
+    if "backup_player_gate_max_online" not in schedule:
+        return lines
+    start, end = find_top_level_block(lines, "schedule")
+    if start is None:
+        return lines
+
+    pattern = re.compile(r"^(\s+backup_player_gate_max_online\s*:\s*).*$")
+    for index in range(start + 1, end):
+        match = pattern.match(lines[index])
+        if match:
+            lines[index] = rewrite_yaml_value_line(
+                lines[index],
+                match.group(1),
+                schedule.get("backup_player_gate_max_online"),
+            )
             break
     return lines
 
