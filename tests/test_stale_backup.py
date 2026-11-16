@@ -4,6 +4,7 @@ try:
 except ImportError:
     from support import FakePluginServer, SimpleNamespace, mock, threading, unittest
 
+import time
 from datetime import datetime, timedelta
 
 from mcdr2restic.backup import stale_backup_warning
@@ -32,6 +33,8 @@ def make_cfg(hours_ago=30.0, threshold=24, gate_count=3):
             "last_success_backup_end_time": last_success.strftime(
                 "%Y-%m-%d %H:%M:%S"
             ),
+            "backup_running_seconds_since_success": int(hours_ago * 3600),
+            "server_running_since_epoch": None,
             "gate_deferral_count_since_success": gate_count,
             "stale_backup_warned_at": None,
         },
@@ -95,6 +98,25 @@ class StaleBackupWarningTests(unittest.TestCase):
 
         self.assertFalse(warned)
         notifier.assert_not_called()
+
+    def test_downtime_is_not_counted(self):
+        cfg = make_cfg(hours_ago=100)
+        cfg["runtime"]["backup_running_seconds_since_success"] = 0
+
+        warned, notifier, _, _ = self.call(cfg)
+
+        self.assertFalse(warned)
+        notifier.assert_not_called()
+
+    def test_active_running_segment_counts(self):
+        cfg = make_cfg(hours_ago=0)
+        cfg["runtime"]["backup_running_seconds_since_success"] = 0
+        cfg["runtime"]["server_running_since_epoch"] = time.time() - 25 * 3600
+
+        warned, notifier, _, _ = self.call(cfg)
+
+        self.assertTrue(warned)
+        notifier.assert_called_once()
 
     def test_resolves_success_anchor_from_legacy_status(self):
         cfg = make_cfg()

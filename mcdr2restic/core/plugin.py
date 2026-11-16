@@ -9,6 +9,10 @@ from mcdreforged.api.all import Info, PluginServerInterface
 
 from mcdr2restic.backup.backup_runner import BackupRunner
 from mcdr2restic.backup.backup_scheduler import BackupScheduler, SchedulerDependencies
+from mcdr2restic.backup.running_time import (
+    start_server_running_clock,
+    stop_server_running_clock,
+)
 from mcdr2restic.commands.command_context import CommandContext
 from mcdr2restic.commands.command_handlers import CommandHandlers
 from mcdr2restic.core.runtime import PluginRuntime, create_runtime
@@ -65,6 +69,8 @@ class PluginEntrypoint:
         self.shutdown_previous_module(server, prev_module)
         self.prepare_runtime(server)
         load_config(self.runtime, server)
+        if self.runtime.service.server_ready:
+            start_server_running_clock(self.runtime, server)
         warn_if_remote_gate_disabled(server, get_config_snapshot(self.runtime))
         self.register_commands(server)
         self.register_help_messages(server)
@@ -133,11 +139,13 @@ class PluginEntrypoint:
 
     def on_server_startup(self, server: PluginServerInterface):
         self.runtime.service.server_ready = True
+        start_server_running_clock(self.runtime, server)
         server.logger.info(server_tr(server, "log.plugin.server_started"))
         handle_restore_server_startup(self.runtime, server)
 
     def on_server_stop(self, server: PluginServerInterface, server_return_code: int):
         self.runtime.service.server_ready = False
+        stop_server_running_clock(self.runtime, server)
         self.record_server_stopped(server)
         if handle_restore_server_stop(
             self.runtime, server, server_return_code, clear_restore_tasks
@@ -176,6 +184,7 @@ class PluginEntrypoint:
 
     def shutdown_runtime(self, server: PluginServerInterface, reason: str):
         self.runtime.service.stopping.set()
+        stop_server_running_clock(self.runtime, server)
         self.cancel_pending_backup()
         self.stop_update_checker()
         self.stop_scheduler()

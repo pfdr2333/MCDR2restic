@@ -13,6 +13,7 @@ from typing import Any, Callable, Dict, Optional
 
 from mcdreforged.api.all import PluginServerInterface
 
+from mcdr2restic.backup.running_time import running_hours_since_success
 from mcdr2restic.backup.scheduling import parse_schedule_time
 from mcdr2restic.config.state_store import (
     ensure_runtime,
@@ -74,11 +75,11 @@ def _maybe_warn_stale_backup(
     last_success_text, last_success = resolve_last_success_backup(cfg)
     if last_success is None:
         return False
-    now = datetime.now()
-    stale_hours = max(0, int((now - last_success).total_seconds() // 3600))
+    runtime_state = get_config_section(cfg, "runtime")
+    stale_hours = running_hours_since_success(runtime_state)
     if stale_hours < threshold_hours:
         return False
-    runtime_state = get_config_section(cfg, "runtime")
+    now = datetime.now()
     warned_at = parse_schedule_time(runtime_state.get("stale_backup_warned_at"))
     if warned_at is not None and now - warned_at < timedelta(
         hours=STALE_WARNING_COOLDOWN_HOURS

@@ -197,7 +197,7 @@ notification:
   notify_on_success: true # Notify when a backup succeeds.
   notify_on_failure: true # Notify when a backup fails.
   notify_on_skip: false # Notify when a backup is skipped.
-  stale_backup_warning_hours: 24 # Warn when the last successful backup is older than this many hours while scheduled backups are being deferred by the player gate (0 = off). Default 24 hours.
+  stale_backup_warning_hours: 24 # Warn when the server has accumulated this many running hours since the last successful backup while scheduled backups are being deferred by the player gate (0 = off). Default 24 hours.
 
 snapshot_cache:
   # Snapshot list cache for the status command.

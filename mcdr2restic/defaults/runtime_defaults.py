@@ -26,6 +26,9 @@ _DEFAULT_RUNTIME: Dict[str, Any] = {
     # 仅真实成功备份更新；RPO 与陈旧告警只认这个时间
     "last_success_backup_end_time": None,
     "last_backup_duration_seconds": 0,
+    # 距上次成功备份的服务器实际运行时间；停服期间不计入
+    "backup_running_seconds_since_success": 0,
+    "server_running_since_epoch": None,
     # 跳过只记录在这里，不污染 last_backup_status
     "last_skip_time": None,
     "last_skip_reason": "",

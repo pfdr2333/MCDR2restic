@@ -197,7 +197,7 @@ notification:
   notify_on_success: true # 备份成功时通知
   notify_on_failure: true # 备份失败时通知
   notify_on_skip: false # 备份被跳过时通知
-  stale_backup_warning_hours: 24 # 距上次成功备份超过该小时数、且定时备份正被人数门控推迟时告警（0 = 关闭）。默认 24 小时。
+  stale_backup_warning_hours: 24 # 服务器累计运行时间超过该小时数仍未成功备份、且定时备份正被人数门控推迟时告警（0 = 关闭）。默认 24 小时。
 
 snapshot_cache:
   # status 命令的快照列表缓存。

@@ -316,6 +316,8 @@ class BackupRunnerTests(unittest.TestCase):
         self.assertEqual(runtime_state["last_backup_duration_seconds"], 12)
         self.assertIsNone(runtime_state["stale_backup_warned_at"])
         self.assertEqual(runtime_state["gate_deferral_count_since_success"], 0)
+        self.assertEqual(runtime_state["backup_running_seconds_since_success"], 0)
+        self.assertIsNotNone(runtime_state["server_running_since_epoch"])
 
     def test_failed_run_keeps_previous_success_anchor(self):
         runtime, runner = self.make_runner()

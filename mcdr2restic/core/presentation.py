@@ -10,6 +10,7 @@ from typing import Any, Callable, Dict, List, NamedTuple, Optional
 
 from mcdreforged.api.all import PluginServerInterface
 
+from mcdr2restic.backup.running_time import running_hours_since_success
 from mcdr2restic.backup.scheduling import (
     compute_force_wait_seconds,
     compute_wait_seconds,
@@ -145,7 +146,7 @@ def format_last_success_backup(
         moment = parse_schedule_time(text)
     if moment is None:
         return translate("status.last_success_backup.never")
-    hours = max(0, int((datetime.now() - moment).total_seconds() // 3600))
+    hours = running_hours_since_success(runtime_state)
     return translate("status.last_success_backup.value", hours=hours, time=text)
 
 

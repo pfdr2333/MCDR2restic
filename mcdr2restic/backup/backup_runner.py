@@ -9,6 +9,7 @@ from typing import Any, Callable, Dict, Optional, Union
 
 from mcdreforged.api.all import PluginServerInterface
 
+from mcdr2restic.backup.running_time import reset_running_clock_state
 from mcdr2restic.backup.scheduling import (
     ScheduledOccurrence,
     parse_schedule_time,
@@ -619,10 +620,11 @@ class BackupRunner:
             runtime_state["last_backup_message"] = outcome.message
             runtime_state["last_backup_duration_seconds"] = outcome.duration_seconds
             if outcome.status == BackupRunStatus.SUCCESS:
-                # RPO 只认成功备份；成功后复位陈旧告警与门控推迟计数
+                # RPO 只认成功备份；成功后复位陈旧告警、门控推迟计数与运行时间累计
                 runtime_state["last_success_backup_end_time"] = finished_at
                 runtime_state["stale_backup_warned_at"] = None
                 runtime_state["gate_deferral_count_since_success"] = 0
+                reset_running_clock_state(runtime_state, server_running=True)
             save_config_unlocked(self.app_runtime, server)
 
     def _notify_backup_finished(
