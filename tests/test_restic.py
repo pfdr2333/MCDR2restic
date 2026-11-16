@@ -310,7 +310,7 @@ class ResticLockRecoveryTests(unittest.TestCase):
         retry_result = ResticCommandResult("maintenance", ["forget"], 0, "", "", 0)
         calls = []
 
-        def fake_run(_runtime, _restic_cfg, args, phase, _deadline):
+        def fake_run(_runtime, _restic_cfg, args, phase, _deadline, slot=None):
             calls.append((phase, list(args)))
             if len(calls) == 1:
                 return locked_result
@@ -729,7 +729,7 @@ class ResticProgressTests(unittest.TestCase):
         runtime = create_runtime()
         runtime.service.server = FakePluginServer()
 
-        def fake_read(_app_runtime, _process, progress, _interval, _deadline, _line_sink=None):
+        def fake_read(_app_runtime, _process, progress, _interval, _deadline, _line_sink=None, _slot=None):
             return restic_runner.ResticProcessOutcome("", "", 0, False)
 
         with (
@@ -761,7 +761,7 @@ class ResticProgressTests(unittest.TestCase):
         runtime = create_runtime()
         runtime.service.server = FakePluginServer()
 
-        def fake_read(_app_runtime, _process, progress, _interval, _deadline, _line_sink=None):
+        def fake_read(_app_runtime, _process, progress, _interval, _deadline, _line_sink=None, _slot=None):
             progress.summary = {"snapshot_id": "abcdef123456"}
             return restic_runner.ResticProcessOutcome("", "", 0, False)
 

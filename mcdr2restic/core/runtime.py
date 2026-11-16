@@ -63,6 +63,18 @@ class PendingBackupState:
 
 
 @dataclass
+class ResticExecutionSlot:
+    """一次 restic 进程执行的独立取消与进程槽位。
+
+    备份使用 ``BackupRuntimeState`` 本身；中转库复制等并行任务必须使用
+    独立实例，避免共用一个 cancel 事件时互相误杀。
+    """
+
+    cancel: threading.Event = field(default_factory=threading.Event)
+    current_process: Optional[subprocess.Popen] = None
+
+
+@dataclass
 class BackupRuntimeState:
     lock: threading.Lock = field(default_factory=threading.Lock)
     cancel: threading.Event = field(default_factory=threading.Event)
