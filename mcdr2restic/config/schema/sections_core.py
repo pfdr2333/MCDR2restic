@@ -61,7 +61,7 @@ SCHEDULE = Section(
         ),
         Field(
             "backup_player_gate_max_online",
-            0,
+            5,
             comment_key="template.comment.schedule.backup_player_gate_max_online",
         ),
         Field(

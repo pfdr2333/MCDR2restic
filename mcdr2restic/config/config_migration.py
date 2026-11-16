@@ -77,13 +77,13 @@ def migrate_restic_config(cfg: Dict[str, Any], old_version: int):
 
 
 def migrate_backup_player_gate_config(cfg: Dict[str, Any]):
-    """人数门控收敛为阈值单一开关，并按备份库类型决定默认值。
+    """人数门控收敛为阈值单一开关，并按备份库类型收敛旧开关。
 
     阈值大于 0 即开启，等于 0 关闭；旧的布尔开关 backup_player_gate_enabled
-    废弃删除。远程备份库上传慢，save-off 会一直保持到备份结束，高峰期易把
-    服务器内存挤爆，旧配置升级时强制开启兜底（显式关闭的也改为默认阈值）；
-    本地库备份极快，保持关闭避免无谓推迟备份。已经是阈值语义的配置不再
-    改写，0 就是用户显式关闭。
+    废弃删除。所有缺失阈值的新旧配置默认写入 5：远程库上传慢，提前开启可
+    防止用户后来改成远程仓库却忘了配门控；本地库如确认备份很快，可显式改
+    成 0。旧布尔开关时代本地库显式关闭的保持 0，远程库显式关闭的强制改回
+    默认阈值；已经是阈值语义的配置不再改写，0 就是用户显式关闭。
     """
     schedule = cfg.get("schedule")
     if not isinstance(schedule, dict):
@@ -96,7 +96,11 @@ def migrate_backup_player_gate_config(cfg: Dict[str, Any]):
     )
     remote = bool(repository) and not is_local_restic_repository(repository)
     if "backup_player_gate_max_online" not in schedule:
-        schedule["backup_player_gate_max_online"] = 5 if remote else 0
+        # 旧布尔开关显式关闭的本地库保持关闭；其余（含无开关旧配置）默认开启
+        if legacy_enabled is False and not remote:
+            schedule["backup_player_gate_max_online"] = 0
+        else:
+            schedule["backup_player_gate_max_online"] = 5
         return
     if legacy_enabled is None:
         # 新语义配置：0 是显式关闭，迁移必须尊重用户选择

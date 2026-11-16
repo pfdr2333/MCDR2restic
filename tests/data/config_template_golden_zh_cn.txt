@@ -34,10 +34,10 @@ schedule:
   online_check_command: "list"
   # 备份玩家人数门控：在线人数达到该值时推迟定时备份，降至阈值以下自动开始；
   # 备份运行中人数持续超过阈值达 backup_player_gate_overlimit_seconds 时中断备份并恢复世界自动保存。
-  # 该阈值就是门控唯一的开关：大于 0 开启，改成 0 关闭。远程备份库（sftp/rest/s3/rclone 等）上传慢，
-  # save-off 会一直保持到备份结束，高峰期容易把服务器内存挤爆，默认开启（5 人）；本地备份库默认 0。
-  # 把 0 改成大于 0 即可开启；把大于 0 改成 0 表示你已确认接受风险、主动关闭。
-  backup_player_gate_max_online: 0
+  # 该阈值就是门控唯一的开关：大于 0 开启，改成 0 关闭。所有新配置默认 5 人开启：
+  # 远程备份库（sftp/rest/s3/rclone 等）上传慢，save-off 会一直保持到备份结束，高峰期容易把服务器内存挤爆；
+  # 本地库如果备份很快、确认不需要，也可以改成 0。把大于 0 改成 0 表示你已确认接受风险、主动关闭。
+  backup_player_gate_max_online: 5
   # 备份运行中在线人数持续超过阈值的容忍时长（秒，默认 600）：超过即中断备份并恢复世界自动保存。
   # 触发前的推迟期限由 max_defer_seconds 与 min_gap_seconds 决定，超出即跳过本次；中断对 restic 无副作用，残余数据由 forget/prune 周期回收。
   backup_player_gate_overlimit_seconds: 600

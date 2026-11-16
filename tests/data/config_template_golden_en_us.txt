@@ -34,10 +34,10 @@ schedule:
   online_check_command: "list"
   # Backup player gate: when online players reach this count, scheduled backups are postponed until the count drops below it;
   # while a backup is running, players staying above the threshold for backup_player_gate_overlimit_seconds interrupt the backup and restore world autosave.
-  # This threshold is the gate's only switch: above 0 enables it, 0 disables it. Remote repositories (sftp/rest/s3/rclone etc.) upload slowly and keep
-  # save-off active until the backup finishes, which can exhaust server memory at peak, so they default to 5; local repositories default to 0.
-  # Raise 0 above 0 to enable it; setting a non-zero value back to 0 means you consciously accept the risk and turn it off.
-  backup_player_gate_max_online: 0
+  # This threshold is the gate's only switch: above 0 enables it, 0 disables it. All new configs start at 5:
+  # remote repositories (sftp/rest/s3/rclone etc.) upload slowly and keep save-off active until the backup finishes, which can exhaust server memory at peak;
+  # local repositories may set it to 0 if backups are fast and the risk is understood. Changing a non-zero value to 0 means you consciously accept the risk.
+  backup_player_gate_max_online: 5
   # How long (seconds, default 600) online players may stay above the threshold during a running backup before it is interrupted and autosave restored.
   # Pre-start deferral is bounded by max_defer_seconds and min_gap_seconds; past the deadline this run is skipped. Interruption is safe with restic's content-addressed storage; leftover data is reclaimed by forget/prune.
   backup_player_gate_overlimit_seconds: 600

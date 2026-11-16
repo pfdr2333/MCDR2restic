@@ -102,11 +102,23 @@ class ConfigurationTests(unittest.TestCase):
         self.assertEqual(cfg["schedule"]["backup_player_gate_max_online"], 5)
         self.assertEqual(cfg["schedule"]["backup_player_gate_overlimit_seconds"], 600)
 
-    def test_migrate_legacy_config_keeps_player_gate_off_for_local_repository(self):
+    def test_migrate_legacy_config_defaults_player_gate_on_for_local_repository(self):
         cfg = {
             "config_version": 1,
             "restic": {"repository": "D:/mcdr/backup"},
             "schedule": {},
+        }
+
+        migrate_legacy_config(cfg)
+
+        self.assertNotIn("backup_player_gate_enabled", cfg["schedule"])
+        self.assertEqual(cfg["schedule"]["backup_player_gate_max_online"], 5)
+
+    def test_migrate_legacy_config_keeps_local_gate_off_when_explicitly_disabled(self):
+        cfg = {
+            "config_version": 1,
+            "restic": {"repository": "D:/mcdr/backup"},
+            "schedule": {"backup_player_gate_enabled": False},
         }
 
         migrate_legacy_config(cfg)

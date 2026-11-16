@@ -79,7 +79,7 @@ schedule:
   cron_expression: "0 0 0,3,6,9,12,15,18,21 * * *"
   require_player_activity_in_wait_period: true
   online_check_command: "list"
-  backup_player_gate_max_online: 0
+  backup_player_gate_max_online: 5
   backup_player_gate_overlimit_seconds: 600
 ```
 
@@ -133,7 +133,8 @@ schedule:
 服务器在这段时间不落盘，高峰期大量玩家在线时，未保存的区块数据会把 JVM 内存挤爆，直接崩服。
 
 人数门控就是针对这个场景的保险丝。阈值本身就是唯一开关：大于 0 开启，等于 0 关闭。
-远程备份库在配置迁移时默认写入 5（强制开启），本地库默认 0；不会再有单独的启用布尔开关。
+**所有新配置默认 5 人开启**，即使当前用的是本地库：这样以后改远程仓库时门控已经就位，不会出现“换库后忘记配门控”的崩服窗口。
+旧配置迁移时，远程库强制开启，本地库保留原有显式关闭的选择；不会再有单独的启用布尔开关。
 
 门控在两个位置拦截：
 
@@ -154,7 +155,7 @@ schedule:
 说明：
 
 - `backup_player_gate_max_online`：门控阈值（人）。等于或超过该人数就推迟/计时中断；
-  **改成 0 即关闭门控**。远程库关闭时启动会给出一次告警，提醒你确认自己知道后果
+  **新配置默认 5，改成 0 即关闭门控**。远程库关闭时启动会给出一次告警，提醒你确认自己知道后果
 - `backup_player_gate_overlimit_seconds`：运行中容忍时长（秒）。人数只是短暂超过
   （比如有人上线几分钟又走了）不会触发中断，持续超过才中断
 - 手动命令 `!!restic backup` 与强制调度 `force_schedule` 不受门控：
@@ -341,7 +342,7 @@ repository: "s3:s3.example.com/my-minecraft-backup"
 ```
 
 ::: warning
-仓库在远端（sftp / rest / s3 / b2 / rclone 等）时，备份上传慢，`save-off` 会一直保持到备份结束，高峰期容易把服务器内存挤爆。**人数门控对远程仓库默认强制开启**（阈值 `schedule.backup_player_gate_max_online`，详见正常定时备份一节）；只有显式把阈值改成 0 才会关闭，关闭后启动时会提醒你确认风险。
+仓库在远端（sftp / rest / s3 / b2 / rclone 等）时，备份上传慢，`save-off` 会一直保持到备份结束，高峰期容易把服务器内存挤爆。**人数门控默认开启（新配置 5 人，远程库迁移强制开启）**（阈值 `schedule.backup_player_gate_max_online`，详见正常定时备份一节）；只有显式把阈值改成 0 才会关闭，关闭后启动时会提醒你确认风险。
 :::
 
 ### `disk_check_enabled`

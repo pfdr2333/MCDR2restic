@@ -52,7 +52,7 @@
   "template.comment.restic.working_directory": "# restic 程序工作目錄，留空表示繼承 MCDR 根目錄（config.yml 所在目錄）。",
   "template.comment.restore.pre_restore_backup_tag": "# 恢復前自動建立的保護快照使用的 tag。",
   "template.comment.restore.start_timeout_seconds": "# 恢復流程中停止/啟動 Minecraft 的超時（秒）。",
-  "template.comment.schedule.backup_player_gate_max_online": "# 備份玩家人數門控：線上人數達到該值時推遲定時備份，降至閾值以下自動開始；\n# 備份執行中人數持續超過閾值達 backup_player_gate_overlimit_seconds 時中斷備份並恢復世界自動儲存。\n# 該閾值就是門控唯一的開關：大於 0 開啟，改成 0 關閉。遠端備份庫（sftp/rest/s3/rclone 等）上傳慢，\n# save-off 會一直保持到備份結束，高峰期容易把伺服器記憶體擠爆，預設開啟（5 人）；本地備份庫預設 0。\n# 把 0 改成大於 0 即可開啟；把大於 0 改成 0 表示你已確認接受風險、主動關閉。",
+  "template.comment.schedule.backup_player_gate_max_online": "# 備份玩家人數門控：線上人數達到該值時推遲定時備份，降至閾值以下自動開始；\n# 備份執行中人數持續超過閾值達 backup_player_gate_overlimit_seconds 時中斷備份並恢復世界自動儲存。\n# 該閾值就是門控唯一的開關：大於 0 開啟，改成 0 關閉。所有新配置預設 5 人開啟：\n# 遠端備份庫（sftp/rest/s3/rclone 等）上傳慢，save-off 會一直保持到備份結束，高峰期容易把伺服器記憶體擠爆；\n# 本地庫如果備份很快、確認不需要，也可以改成 0。把大於 0 改成 0 表示你已確認接受風險、主動關閉。",
   "template.comment.schedule.backup_player_gate_overlimit_seconds": "# 備份執行中線上人數持續超過閾值的容忍時長（秒，預設 600）：超過即中斷備份並恢復世界自動儲存。\n# 觸發前的推遲期限由 max_defer_seconds 與 min_gap_seconds 決定，超出即跳過本次；中斷對 restic 無副作用，殘餘資料由 forget/prune 週期回收。",
   "template.comment.schedule.cron_expression": "# 6 位 cron：秒 分 時 日 月 周。預設每 3 小時一次。",
   "template.comment.schedule.interval_seconds": "# interval_seconds > 0 時用固定間隔；為 0 時用下面的 6 位 cron。",
