@@ -5,7 +5,12 @@ except ImportError:
 
 import threading
 
-from mcdr2restic.core.models import BackupCanceled, BackupProblem
+from mcdr2restic.core.models import (
+    BackupCanceled,
+    BackupProblem,
+    MaintenanceOutcome,
+    MaintenanceRunStatus,
+)
 from mcdr2restic.restic.maintenance_runner import MaintenanceRunner
 
 
@@ -74,7 +79,8 @@ class MaintenanceRunnerTests(unittest.TestCase):
         server = FakePluginServer(language="en_us")
 
         with mock.patch(
-            "mcdr2restic.restic.maintenance_runner.run_maintenance_body"
+            "mcdr2restic.restic.maintenance_runner.run_maintenance_body",
+            return_value=MaintenanceOutcome(MaintenanceRunStatus.SUCCESS, "ok"),
         ) as run_body:
             result = runner.run_waiting(server)
 
@@ -169,7 +175,8 @@ class MaintenanceRunnerTests(unittest.TestCase):
             "mcdr2restic.restic.maintenance_runner.get_config_snapshot",
             side_effect=fake_snapshot,
         ), mock.patch(
-            "mcdr2restic.restic.maintenance_runner.run_maintenance_body"
+            "mcdr2restic.restic.maintenance_runner.run_maintenance_body",
+            return_value=MaintenanceOutcome(MaintenanceRunStatus.SUCCESS, "ok"),
         ):
             self.assertTrue(runner.run_waiting(server))
 
@@ -186,7 +193,8 @@ class MaintenanceRunnerTests(unittest.TestCase):
 
         def waiting():
             with mock.patch(
-                "mcdr2restic.restic.maintenance_runner.run_maintenance_body"
+                "mcdr2restic.restic.maintenance_runner.run_maintenance_body",
+                return_value=MaintenanceOutcome(MaintenanceRunStatus.SUCCESS, "ok"),
             ) as run_body:
                 result["value"] = runner.run_waiting(server)
                 result["body_calls"] = run_body.call_count
@@ -202,3 +210,57 @@ class MaintenanceRunnerTests(unittest.TestCase):
         # 锁始终未被维护线程抢走
         self.assertTrue(runtime.backup.lock.locked())
         runtime.backup.lock.release()
+
+    def test_run_scheduled_skips_without_blocking_when_slot_busy(self):
+        runtime, runner = self.make_runner()
+        runner.admin_notifier = mock.Mock()
+        runtime.config_state.config = {
+            "language": "en_us",
+            "notification": {"notify_on_skip": True},
+        }
+        server = FakePluginServer(language="en_us")
+        runtime.backup.lock.acquire()
+        try:
+            with mock.patch(
+                "mcdr2restic.restic.maintenance_runner.save_config_unlocked"
+            ):
+                result = runner.run_scheduled(server, "2026-01-01 03:00:00")
+        finally:
+            runtime.backup.lock.release()
+
+        self.assertFalse(result)
+        self.assertEqual(
+            runtime.config_state.config["runtime"]["last_maintenance_status"],
+            "skipped",
+        )
+        self.assertEqual(
+            runner.admin_notifier.call_args.args[0], "maintenance_skipped"
+        )
+
+    def test_failed_maintenance_notifies_and_records_status(self):
+        runtime, runner = self.make_runner()
+        runner.admin_notifier = mock.Mock()
+        runtime.config_state.config = {
+            "language": "zh_cn",
+            "notification": {"notify_on_failure": True},
+        }
+        server = FakePluginServer()
+
+        with mock.patch(
+            "mcdr2restic.restic.maintenance_runner.run_maintenance_body",
+            side_effect=BackupProblem(i18n_key="error.maintenance.failed", error="boom"),
+        ), mock.patch(
+            "mcdr2restic.restic.maintenance_runner.save_config_unlocked"
+        ):
+            result = runner._run_with_acquired_lock(server)
+
+        self.assertFalse(result)
+        self.assertEqual(
+            runtime.config_state.config["runtime"]["last_maintenance_status"],
+            "failed",
+        )
+        self.assertEqual(
+            runner.admin_notifier.call_args.args[0], "maintenance_failed"
+        )
+        self.assertTrue(runner.admin_notifier.call_args.args[3])
+

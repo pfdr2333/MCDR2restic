@@ -23,6 +23,13 @@ class BackupRunStatus(TextEnum):
     INTERRUPTED = "interrupted"
 
 
+class MaintenanceRunStatus(TextEnum):
+    NEVER = "never"
+    SUCCESS = "success"
+    SKIPPED = "skipped"
+    FAILED = "failed"
+
+
 class BackupTrigger(TextEnum):
     MANUAL = "manual"
     SCHEDULED = "scheduled"
@@ -44,6 +51,15 @@ def normalize_backup_run_status(status: Any) -> BackupRunStatus:
         return BackupRunStatus(str(status or BackupRunStatus.NEVER.value))
     except ValueError:
         return BackupRunStatus.FAILED
+
+
+def normalize_maintenance_run_status(status: Any) -> MaintenanceRunStatus:
+    if isinstance(status, MaintenanceRunStatus):
+        return status
+    try:
+        return MaintenanceRunStatus(str(status or MaintenanceRunStatus.NEVER.value))
+    except ValueError:
+        return MaintenanceRunStatus.FAILED
 
 
 def normalize_restore_phase(phase: Any) -> RestorePhase:
@@ -188,6 +204,24 @@ class BackupRunOutcome:
     @property
     def failed(self) -> bool:
         return self.status != BackupRunStatus.SUCCESS
+
+    @property
+    def status_value(self) -> str:
+        return self.status.value
+
+
+@dataclass(frozen=True)
+class MaintenanceOutcome:
+    status: MaintenanceRunStatus
+    message: str
+
+    @property
+    def success(self) -> bool:
+        return self.status == MaintenanceRunStatus.SUCCESS
+
+    @property
+    def skipped(self) -> bool:
+        return self.status == MaintenanceRunStatus.SKIPPED
 
     @property
     def status_value(self) -> str:

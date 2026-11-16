@@ -16,9 +16,15 @@ SNAPSHOT_DB_NAME: Final[str] = "snapshots.sqlite3"
 
 LEGACY_CONFIG_NAME: Final[str] = "config.json"
 
-CONFIG_VERSION: Final[int] = 10
+CONFIG_VERSION: Final[int] = 11
 
 DEFAULT_MAINTENANCE_CRON: Final[str] = "0 0 3 * * *"
+
+# 定时备份距上次备份结束的最小间隔：避免长备份刚结束又立刻开下一份
+DEFAULT_MIN_GAP_SECONDS: Final[int] = 1800
+
+# 陈旧备份告警的说明文档页（页面级 URL，锚点会随标题增删漂移）
+DOCUMENTATION_CONFIGURATION_URL: Final[str] = "https://m2r.pfdr.cc/configuration/"
 
 DEFAULT_MESSAGE_PREFIX: Final[str] = "[MCDR2Restic]"
 

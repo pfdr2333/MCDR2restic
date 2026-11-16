@@ -48,6 +48,7 @@ class StatusCommands:
                     backup_running=lambda: is_backup_running(app_runtime),
                     restore_running=lambda: is_restore_running(app_runtime),
                     mc_ready=lambda target: is_mc_ready(app_runtime, target),
+                    pending_backup=app_runtime.current_pending_backup,
                 ),
                 app_runtime.service.snapshot_query_lock,
                 page,

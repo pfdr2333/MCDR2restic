@@ -58,24 +58,21 @@ class PlayerGateTestBase(unittest.TestCase):
 
 class PlayerGateSettingsTest(PlayerGateTestBase):
     def test_settings_default_to_disabled(self):
-        enabled, max_online, overlimit = player_gate_settings({"schedule": {}})
+        max_online, overlimit = player_gate_settings({"schedule": {}})
 
-        self.assertFalse(enabled)
-        self.assertEqual(max_online, 5)
+        self.assertEqual(max_online, 0)
         self.assertEqual(overlimit, 600)
 
     def test_settings_fall_back_on_invalid_values(self):
         cfg = {
             "schedule": {
-                "backup_player_gate_enabled": True,
                 "backup_player_gate_max_online": "not-a-number",
                 "backup_player_gate_overlimit_seconds": -3,
             }
         }
 
-        enabled, max_online, overlimit = player_gate_settings(cfg)
+        max_online, overlimit = player_gate_settings(cfg)
 
-        self.assertTrue(enabled)
         self.assertEqual(max_online, 0)
         self.assertEqual(overlimit, 0)
 
@@ -123,26 +120,25 @@ class WaitForPlayerGateTest(PlayerGateTestBase):
         self.addCleanup(self._patcher.stop)
 
     def test_returns_true_immediately_when_disabled(self):
-        app_runtime = make_app_runtime({"schedule": {"backup_player_gate_enabled": False}})
+        app_runtime = make_app_runtime({"schedule": {"backup_player_gate_max_online": 0}})
         server = make_server("There are 3 of a max of 20 players online: a, b, c")
 
-        self.assertTrue(wait_for_player_gate(app_runtime, server, mock.Mock()))
+        self.assertTrue(wait_for_player_gate(app_runtime, server, mock.Mock()).passed)
 
     def test_returns_true_when_count_below_threshold(self):
         app_runtime = make_app_runtime(
-            {"schedule": {"backup_player_gate_enabled": True, "backup_player_gate_max_online": 5}}
+            {"schedule": {"backup_player_gate_max_online": 5}}
         )
         server = make_server("There are 3 of a max of 20 players online: a, b, c")
         notifier = mock.Mock()
 
-        self.assertTrue(wait_for_player_gate(app_runtime, server, notifier))
+        self.assertTrue(wait_for_player_gate(app_runtime, server, notifier).passed)
         notifier.assert_not_called()
 
     def test_waits_until_players_drop_below_threshold(self):
         app_runtime = make_app_runtime(
             {
                 "schedule": {
-                    "backup_player_gate_enabled": True,
                     "backup_player_gate_max_online": 5,
                 },
                 "notification": {"notify_on_skip": True},
@@ -159,7 +155,7 @@ class WaitForPlayerGateTest(PlayerGateTestBase):
         thread = threading.Thread(target=release_gate)
         thread.start()
         try:
-            result["passed"] = wait_for_player_gate(app_runtime, server, notifier)
+            result["passed"] = wait_for_player_gate(app_runtime, server, notifier).passed
         finally:
             thread.join()
 
@@ -167,12 +163,54 @@ class WaitForPlayerGateTest(PlayerGateTestBase):
         self.assertEqual(notifier.call_args.args[0], "backup_player_gate_waiting")
         self.assertTrue(server.logger.warning.called)
 
+    def test_returns_canceled_when_pending_canceled(self):
+        from mcdr2restic.core.runtime import PendingBackupState
+
+        app_runtime = make_app_runtime(
+            {"schedule": {"backup_player_gate_max_online": 5}}
+        )
+        server = make_server("There are 6 of a max of 20 players online: a, b, c, d, e, f")
+        pending = PendingBackupState(scheduled_at="2026-01-01 00:00:00")
+        pending.cancel.set()
+
+        result = wait_for_player_gate(app_runtime, server, mock.Mock(), pending)
+
+        self.assertEqual(result.status.value, "canceled")
+
+    def test_returns_deadline_when_pending_deadline_passed(self):
+        from mcdr2restic.core.runtime import PendingBackupState
+
+        app_runtime = make_app_runtime(
+            {"schedule": {"backup_player_gate_max_online": 5}}
+        )
+        server = make_server("There are 6 of a max of 20 players online: a, b, c, d, e, f")
+        pending = PendingBackupState(
+            scheduled_at="2026-01-01 00:00:00",
+            deadline_monotonic=time.monotonic() - 1,
+        )
+
+        result = wait_for_player_gate(app_runtime, server, mock.Mock(), pending)
+
+        self.assertEqual(result.status.value, "deadline")
+
+    def test_returns_disabled_when_backups_are_disabled(self):
+        app_runtime = make_app_runtime(
+            {
+                "enabled": False,
+                "schedule": {"backup_player_gate_max_online": 5},
+            }
+        )
+        server = make_server("There are 6 of a max of 20 players online: a, b, c, d, e, f")
+
+        result = wait_for_player_gate(app_runtime, server, mock.Mock())
+
+        self.assertEqual(result.status.value, "disabled")
+
     def test_returns_false_when_plugin_stopping(self):
         stopping = threading.Event()
         app_runtime = make_app_runtime(
             {
                 "schedule": {
-                    "backup_player_gate_enabled": True,
                     "backup_player_gate_max_online": 5,
                 }
             },
@@ -188,7 +226,7 @@ class WaitForPlayerGateTest(PlayerGateTestBase):
         thread = threading.Thread(target=stop_soon)
         thread.start()
         try:
-            self.assertFalse(wait_for_player_gate(app_runtime, server, notifier))
+            self.assertFalse(wait_for_player_gate(app_runtime, server, notifier).passed)
         finally:
             thread.join()
 
@@ -206,7 +244,6 @@ class PlayerGateMonitorTest(PlayerGateTestBase):
             cfg
             or {
                 "schedule": {
-                    "backup_player_gate_enabled": True,
                     "backup_player_gate_max_online": 5,
                     "backup_player_gate_overlimit_seconds": 1,
                 }
@@ -247,7 +284,6 @@ class PlayerGateMonitorTest(PlayerGateTestBase):
             "There are 6 of a max of 20 players online: a, b, c, d, e, f",
             cfg={
                 "schedule": {
-                    "backup_player_gate_enabled": True,
                     "backup_player_gate_max_online": 5,
                     # 容忍时长远大于轮询周期，几轮采样内不应触发
                     "backup_player_gate_overlimit_seconds": 600,

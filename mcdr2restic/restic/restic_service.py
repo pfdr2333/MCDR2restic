@@ -15,7 +15,11 @@ from mcdr2restic.minecraft.minecraft_service import (
     is_mc_ready,
     sleep_or_cancel,
 )
-from mcdr2restic.core.models import BackupProblem
+from mcdr2restic.core.models import (
+    BackupProblem,
+    MaintenanceOutcome,
+    MaintenanceRunStatus,
+)
 from mcdr2restic.minecraft.player_gate_service import (
     start_backup_player_gate_monitor,
 )
@@ -85,7 +89,7 @@ def run_maintenance_body(
     server: PluginServerInterface,
     cfg: Dict[str, Any],
     invalidate_snapshot_cache_func: SnapshotCacheInvalidator,
-):
+) -> MaintenanceOutcome:
     restic_cfg = get_config_section(cfg, "restic")
     ctx = ResticOperationContext(
         app_runtime=app_runtime,
@@ -96,7 +100,7 @@ def run_maintenance_body(
         command_root=command_root_from_config(cfg),
     )
     newly_initialized = prepare_maintenance_repository(ctx)
-    run_backup_maintenance(ctx, newly_initialized)
+    return run_backup_maintenance(ctx, newly_initialized)
 
 
 def prepare_backup_repository(ctx: ResticOperationContext) -> bool:
@@ -114,13 +118,22 @@ def prepare_maintenance_repository(ctx: ResticOperationContext) -> bool:
     return ensure_restic_repository_initialized(ctx)
 
 
-def run_backup_maintenance(ctx: ResticOperationContext, newly_initialized: bool):
+def run_backup_maintenance(
+    ctx: ResticOperationContext, newly_initialized: bool
+) -> MaintenanceOutcome:
     if newly_initialized:
-        ctx.server.logger.info(
-            server_tr(ctx.server, "info.restic.maintenance_skipped_after_init")
+        return MaintenanceOutcome(
+            MaintenanceRunStatus.SKIPPED,
+            server_tr(ctx.server, "info.restic.maintenance_skipped_after_init"),
         )
-        return
-    for command in ctx.restic_cfg.get(RESTIC_CFG_MAINTENANCE_COMMANDS, []):
+    commands = ctx.restic_cfg.get(RESTIC_CFG_MAINTENANCE_COMMANDS, [])
+    if not isinstance(commands, list) or not commands:
+        # 空命令列表不是成功：报告跳过，避免出现"维护完成"却什么都没做
+        return MaintenanceOutcome(
+            MaintenanceRunStatus.SKIPPED,
+            server_tr(ctx.server, "info.maintenance.skipped_no_commands"),
+        )
+    for command in commands:
         check_canceled(ctx.app_runtime)
         result = run_restic_command_with_lock_recovery(
             ctx,
@@ -133,6 +146,10 @@ def run_backup_maintenance(ctx: ResticOperationContext, newly_initialized: bool)
         invalidate_snapshot_cache_for_operation(
             ctx, "snapshot.cache.reason.maintenance_finished"
         )
+    return MaintenanceOutcome(
+        MaintenanceRunStatus.SUCCESS,
+        server_tr(ctx.server, "info.maintenance.success"),
+    )
 
 
 def prepare_minecraft_for_backup(

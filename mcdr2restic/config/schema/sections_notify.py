@@ -124,5 +124,11 @@ NOTIFICATION = Section(
             comment_key="template.comment.notification.notify_on_skip",
             comment_inline=True,
         ),
+        Field(
+            "stale_backup_warning_hours",
+            24,
+            comment_key="template.comment.notification.stale_backup_warning_hours",
+            comment_inline=True,
+        ),
     ),
 )

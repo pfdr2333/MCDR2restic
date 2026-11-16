@@ -145,6 +145,16 @@ class CancelCommandTests(unittest.TestCase):
         cancel_backup.assert_not_called()
         self.assertIn("已请求取消恢复流程", source.replies[-1])
 
+    def test_cancel_cancels_pending_deferred_backup(self):
+        commands, runtime = self.make_commands()
+        source = PermissiveCommandSource(FakePluginServer())
+        pending = runtime.register_pending_backup("2026-01-01 00:00:00")
+
+        commands.command_cancel(source)
+
+        self.assertTrue(pending.cancel.is_set())
+        self.assertIn("已取消推迟中的定时备份", source.replies[-1])
+
     def test_cancel_without_running_tasks_replies_nothing_running(self):
         commands, _ = self.make_commands()
         source = PermissiveCommandSource(FakePluginServer())

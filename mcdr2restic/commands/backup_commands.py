@@ -38,10 +38,12 @@ class BackupCommands:
         with self.context.app_runtime.config_state.lock:
             save_enabled_unlocked(self.context.app_runtime, server, False)
             save_config_unlocked(self.context.app_runtime, server)
+        pending = self.context.app_runtime.current_pending_backup()
+        self.context.app_runtime.cancel_pending_backup()
         self.context.wake_scheduler()
-        self.reply_stop_result(source)
+        self.reply_stop_result(source, pending)
 
-    def reply_stop_result(self, source: CommandSource):
+    def reply_stop_result(self, source: CommandSource, pending=None):
         server = self.context.server_from_source(source)
         if is_backup_running(self.context.app_runtime):
             request_cancel_current_backup(
@@ -49,12 +51,24 @@ class BackupCommands:
             )
             reply_tr(source, server, "info.backup.disabled_cancel_requested")
             return
+        if pending is not None:
+            reply_tr(
+                source,
+                server,
+                "info.backup.disabled_pending_canceled",
+                scheduled_time=pending.scheduled_time_text,
+            )
+            return
         reply_tr(source, server, "info.backup.disabled")
 
     def command_cancel(self, source: CommandSource):
         if not self.context.check_command_permission(source):
             return
         server = self.context.server_from_source(source)
+        pending = self.context.app_runtime.current_pending_backup()
+        # 取消当前任务时一并取消排队中的推迟，否则备份结束后它会立刻接上
+        if pending is not None:
+            self.context.app_runtime.cancel_pending_backup()
         # 恢复流程优先：它的 restic 进程同样记录在 backup.current_process 上
         if is_restore_running(self.context.app_runtime):
             request_cancel_running_restore(
@@ -66,7 +80,23 @@ class BackupCommands:
             request_cancel_current_backup(
                 self.context.app_runtime, server_tr(server, "reason.manual_cancel")
             )
+            if pending is not None:
+                reply_tr(
+                    source,
+                    server,
+                    "info.backup.cancel_requested_with_pending",
+                    scheduled_time=pending.scheduled_time_text,
+                )
+                return
             reply_tr(source, server, "info.backup.cancel_requested")
+            return
+        if pending is not None:
+            reply_tr(
+                source,
+                server,
+                "info.backup.pending_canceled",
+                scheduled_time=pending.scheduled_time_text,
+            )
             return
         reply_tr(source, server, "info.cancel.nothing_running")
 

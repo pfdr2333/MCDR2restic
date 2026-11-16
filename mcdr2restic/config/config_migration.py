@@ -21,7 +21,10 @@ from mcdr2restic.config.config_lines import (
 )
 from mcdr2restic.config.config_paths import get_data_file_path
 from mcdr2restic.config.schema import SECTIONS
-from mcdr2restic.config.template_render import migration_field_entry_lines
+from mcdr2restic.config.template_render import (
+    comment_lines,
+    migration_field_entry_lines,
+)
 from mcdr2restic.core.i18n import server_tr
 from mcdr2restic.defaults.config_template_resources import (
     available_config_template_languages,
@@ -74,21 +77,40 @@ def migrate_restic_config(cfg: Dict[str, Any], old_version: int):
 
 
 def migrate_backup_player_gate_config(cfg: Dict[str, Any]):
-    """旧配置升级时按备份库类型填充人数门控默认值。
+    """人数门控收敛为阈值单一开关，并按备份库类型收敛旧开关。
 
-    远程库上传慢，save-off 会一直保持到备份结束，高峰期易把服务器
-    内存挤爆，默认开启兜底；本地库备份极快，保持关闭避免无谓推迟备份。
+    阈值大于 0 即开启，等于 0 关闭；旧的布尔开关 backup_player_gate_enabled
+    废弃删除。所有缺失阈值的新旧配置默认写入 5：远程库上传慢，提前开启可
+    防止用户后来改成远程仓库却忘了配门控；本地库如确认备份很快，可显式改
+    成 0。旧布尔开关时代本地库显式关闭的保持 0，远程库显式关闭的强制改回
+    默认阈值；已经是阈值语义的配置不再改写，0 就是用户显式关闭。
     """
     schedule = cfg.get("schedule")
     if not isinstance(schedule, dict):
         return
-    schedule.setdefault("backup_player_gate_max_online", 5)
     schedule.setdefault("backup_player_gate_overlimit_seconds", 600)
-    if "backup_player_gate_enabled" in schedule:
-        return
+    legacy_enabled = schedule.pop("backup_player_gate_enabled", None)
     restic = cfg.get("restic")
-    repository = str(restic.get("repository") or "") if isinstance(restic, dict) else ""
-    schedule["backup_player_gate_enabled"] = not is_local_restic_repository(repository)
+    repository = (
+        str(restic.get("repository") or "").strip() if isinstance(restic, dict) else ""
+    )
+    remote = bool(repository) and not is_local_restic_repository(repository)
+    if "backup_player_gate_max_online" not in schedule:
+        # 旧布尔开关显式关闭的本地库保持关闭；其余（含无开关旧配置）默认开启
+        if legacy_enabled is False and not remote:
+            schedule["backup_player_gate_max_online"] = 0
+        else:
+            schedule["backup_player_gate_max_online"] = 5
+        return
+    if legacy_enabled is None:
+        # 新语义配置：0 是显式关闭，迁移必须尊重用户选择
+        return
+    max_online = safe_int(schedule.get("backup_player_gate_max_online"), 0)
+    if remote:
+        if max_online <= 0:
+            schedule["backup_player_gate_max_online"] = 5
+    elif not legacy_enabled:
+        schedule["backup_player_gate_max_online"] = 0
 
 
 def migrate_restic_secret_keys(restic: Dict[str, Any], environment: Dict[str, Any]):
@@ -143,6 +165,8 @@ def config_version_from_mapping(data: Dict[str, Any], path: str) -> int:
 DEPRECATED_SCHEDULE_KEYS = (
     "require_player_joined_in_wait_period",
     "online_check_interval_seconds",
+    # 门控开关已收敛为人数阈值本身（0 关闭），布尔开关不再生效（2026-11）
+    "backup_player_gate_enabled",
 )
 
 DEPRECATED_RESTORE_KEYS = ("stop_timeout_seconds",)
@@ -237,12 +261,14 @@ def apply_config_file_migrations(
 ) -> List[str]:
     lines = ensure_language_line(lines, language, cfg)
     lines = remove_deprecated_schedule_lines(lines)
+    lines = refresh_player_gate_comment_lines(lines, language)
     lines = remove_deprecated_restore_lines(lines)
     lines = remove_deprecated_restic_lines(lines)
     # runtime 顶级块是内存生成态，文件里的残留块早已无任何效果（P3-7）
     lines = remove_deprecated_runtime_lines(lines)
     lines = ensure_missing_field_lines(lines, language, cfg)
     lines = ensure_restic_timeout_value(lines, cfg)
+    lines = ensure_backup_player_gate_value(lines, cfg)
     lines = ensure_missing_top_level_blocks(lines, language)
     return ensure_config_version_tail(lines, language)
 
@@ -328,6 +354,36 @@ def ensure_restic_timeout_value(lines: List[str], cfg: Dict[str, Any]) -> List[s
     return lines
 
 
+def ensure_backup_player_gate_value(
+    lines: List[str], cfg: Dict[str, Any]
+) -> List[str]:
+    """把数据层迁移后的门控阈值回写到文件。
+
+    旧配置删除布尔开关时会把本地库的显式关闭收敛为 0；文件里原有的
+    max_online 值不会被 ensure_missing_field_lines 更新，不回写会导致
+    下一次 reload/启动又按旧值开启门控。
+    """
+
+    schedule = get_config_section(cfg, "schedule")
+    if "backup_player_gate_max_online" not in schedule:
+        return lines
+    start, end = find_top_level_block(lines, "schedule")
+    if start is None:
+        return lines
+
+    pattern = re.compile(r"^(\s+backup_player_gate_max_online\s*:\s*).*$")
+    for index in range(start + 1, end):
+        match = pattern.match(lines[index])
+        if match:
+            lines[index] = rewrite_yaml_value_line(
+                lines[index],
+                match.group(1),
+                schedule.get("backup_player_gate_max_online"),
+            )
+            break
+    return lines
+
+
 def rewrite_yaml_value_line(line: str, prefix: str, value: Any) -> str:
     # 沿用该行原有换行符：CRLF 文件被重写成 LF 行会产生仅换行符差异
     # 的伪迁移（P3-1，首启即报"已迁移并补全"）
@@ -400,6 +456,57 @@ def remove_deprecated_schedule_lines(lines: List[str]) -> List[str]:
     return [line for index, line in enumerate(lines) if index not in remove_indexes]
 
 
+def refresh_player_gate_comment_lines(lines: List[str], language: str) -> List[str]:
+    """把旧的门控注释刷新为阈值/期限语义。
+
+    旧注释会告诉本地库用户阈值默认 5，并声称推迟等待不受时限；这与
+    新语义（0 = 关闭、推迟有 deadline）冲突。仅当检测到旧措辞时替换
+    注释文本，不碰用户的值，也不影响新格式配置。
+    """
+
+    for key, comment_key, markers in (
+        (
+            "backup_player_gate_max_online",
+            "template.comment.schedule.backup_player_gate_max_online",
+            ("backup_player_gate_enabled", "默认 5", "default 5"),
+        ),
+        (
+            "backup_player_gate_overlimit_seconds",
+            "template.comment.schedule.backup_player_gate_overlimit_seconds",
+            ("不受此时长限制", "not limited by this duration"),
+        ),
+    ):
+        lines = replace_legacy_schedule_comment(lines, language, key, comment_key, markers)
+    return lines
+
+
+def replace_legacy_schedule_comment(
+    lines: List[str],
+    language: str,
+    key: str,
+    comment_key: str,
+    legacy_markers: Tuple[str, ...],
+) -> List[str]:
+    start, end = find_top_level_block(lines, "schedule")
+    if start is None:
+        return lines
+    block = lines[start:end]
+    key_index = find_nested_key_index(block, key)
+    if key_index is None:
+        return lines
+    comment_start = find_comment_run_start(block, key_index)
+    old_comments = "".join(block[comment_start:key_index]).lower()
+    if not any(marker in old_comments for marker in legacy_markers):
+        return lines
+    key_line = block[key_index]
+    eol = "\r\n" if key_line.endswith("\r\n") else "\n"
+    new_comments = [
+        "{}{}".format(line, eol)
+        for line in comment_lines(language, comment_key, 2)
+    ]
+    return lines[: start + comment_start] + new_comments + lines[start + key_index :]
+
+
 def remove_deprecated_restore_lines(lines: List[str]) -> List[str]:
     start, end = find_top_level_block(lines, "restore")
     if start is None:
@@ -445,11 +552,20 @@ def remove_deprecated_runtime_lines(lines: List[str]) -> List[str]:
 def deprecated_schedule_line_indexes(lines: List[str], start: int, end: int) -> Set[int]:
     remove_indexes: Set[int] = set()
     key_pattern = re.compile(r"^\s+([A-Za-z_][A-Za-z0-9_-]*)\s*:")
+    block = lines[start:end]
     for index in range(start + 1, end):
         match = key_pattern.match(lines[index])
         if not match or match.group(1) not in DEPRECATED_SCHEDULE_KEYS:
             continue
         remove_indexes.add(index)
+        key = match.group(1)
+        if key == "backup_player_gate_enabled":
+            # 该键的注释块是上方连续的四行说明，按连续注释整体删除，
+            # 避免旧文案留在新阈值配置里自相矛盾
+            key_index = index - start
+            comment_start = find_comment_run_start(block, key_index)
+            remove_indexes.update(range(start + comment_start, index))
+            continue
         remove_indexes.update(deprecated_schedule_comment_indexes(lines, start, index))
     return remove_indexes
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import subprocess
 import threading
+import time
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, Optional
 
@@ -37,12 +38,39 @@ class ServiceRuntimeState:
 
 
 @dataclass
+class PendingBackupState:
+    """推迟中的定时备份。
+
+    cancel 是推迟阶段专用的中止信号：与 backup.cancel 分开，避免取消推迟
+    后残留的取消事件误杀下一次正常备份。deadline_monotonic 是本次推迟的
+    期限（单调时钟），越过即跳过本次，等下一个计划点。
+    """
+
+    scheduled_at: str = ""
+    deadline_monotonic: Optional[float] = None
+    cancel: threading.Event = field(default_factory=threading.Event)
+    thread: Optional[threading.Thread] = None
+
+    @property
+    def scheduled_time_text(self) -> str:
+        return self.scheduled_at or "-"
+
+    def deadline_passed(self) -> bool:
+        return (
+            self.deadline_monotonic is not None
+            and time.monotonic() >= self.deadline_monotonic
+        )
+
+
+@dataclass
 class BackupRuntimeState:
     lock: threading.Lock = field(default_factory=threading.Lock)
     cancel: threading.Event = field(default_factory=threading.Event)
     current_process: Optional[subprocess.Popen] = None
     thread: Optional[threading.Thread] = None
     label: Optional[str] = None
+    pending: Optional[PendingBackupState] = None
+    pending_lock: threading.Lock = field(default_factory=threading.Lock)
 
 
 @dataclass
@@ -84,6 +112,38 @@ class PluginRuntime:
                 return True
             if give_up_when is not None and give_up_when():
                 return False
+
+    def register_pending_backup(
+        self,
+        scheduled_at: str = "",
+        deadline_monotonic: Optional[float] = None,
+    ) -> PendingBackupState:
+        """登记推迟中的定时备份；单槽位，新登记覆盖旧登记（旧任务自行退出）。"""
+        pending = PendingBackupState(
+            scheduled_at=scheduled_at, deadline_monotonic=deadline_monotonic
+        )
+        with self.backup.pending_lock:
+            previous = self.backup.pending
+            self.backup.pending = pending
+        if previous is not None:
+            previous.cancel.set()
+        return pending
+
+    def clear_pending_backup(self, pending: PendingBackupState):
+        with self.backup.pending_lock:
+            if self.backup.pending is pending:
+                self.backup.pending = None
+
+    def current_pending_backup(self) -> Optional[PendingBackupState]:
+        with self.backup.pending_lock:
+            return self.backup.pending
+
+    def cancel_pending_backup(self) -> bool:
+        pending = self.current_pending_backup()
+        if pending is None:
+            return False
+        pending.cancel.set()
+        return True
 
 
 def create_runtime() -> PluginRuntime:
