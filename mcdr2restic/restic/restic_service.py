@@ -55,9 +55,31 @@ from mcdr2restic.restic.restic_context import (
 from mcdr2restic.restic.restic_result import assert_restic_success
 from mcdr2restic.core.runtime import PluginRuntime
 from mcdr2restic.core.utils import get_config_section, safe_int
+from mcdr2restic.staging.staging_config import staging_enabled
 
 
 def run_backup_body(
+    app_runtime: PluginRuntime,
+    server: PluginServerInterface,
+    cfg: Dict[str, Any],
+    invalidate_snapshot_cache_func: SnapshotCacheInvalidator,
+    use_staging: bool = True,
+) -> str:
+    """[beta] 中转库开启时先写本地库；否则保持原有直传远端行为。"""
+
+    if use_staging and staging_enabled(cfg):
+        # 延迟导入避免 staging_backup 与 restic_service 的模块级循环依赖
+        from mcdr2restic.staging.staging_backup import run_staging_backup_body
+
+        return run_staging_backup_body(
+            app_runtime, server, cfg, invalidate_snapshot_cache_func
+        )
+    return run_direct_backup_body(
+        app_runtime, server, cfg, invalidate_snapshot_cache_func
+    )
+
+
+def run_direct_backup_body(
     app_runtime: PluginRuntime,
     server: PluginServerInterface,
     cfg: Dict[str, Any],
