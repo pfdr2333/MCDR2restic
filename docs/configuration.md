@@ -79,8 +79,7 @@ schedule:
   cron_expression: "0 0 0,3,6,9,12,15,18,21 * * *"
   require_player_activity_in_wait_period: true
   online_check_command: "list"
-  backup_player_gate_enabled: false
-  backup_player_gate_max_online: 5
+  backup_player_gate_max_online: 0
   backup_player_gate_overlimit_seconds: 600
 ```
 
@@ -127,45 +126,56 @@ schedule:
 - 正常调度的 `cron_expression` 不建议留空
 - 它不是维护调度，留空不会自动变成默认时间
 
-### 备份玩家人数门控（远程库强烈建议开启）
+### 备份玩家人数门控（远程库默认开启）
 
 备份全程要保持 `save-off`（世界冻结）才能保证快照一致。本地库备份通常几秒到几分钟就结束；
 但**远程备份库（sftp / rest / s3 / rclone 等）上传慢，`save-off` 会一直保持到备份结束**——
 服务器在这段时间不落盘，高峰期大量玩家在线时，未保存的区块数据会把 JVM 内存挤爆，直接崩服。
 
-人数门控就是针对这个场景的保险丝，默认关闭，在两个位置拦截：
+人数门控就是针对这个场景的保险丝。阈值本身就是唯一开关：大于 0 开启，等于 0 关闭。
+远程备份库在配置迁移时默认写入 5（强制开启），本地库默认 0；不会再有单独的启用布尔开关。
+
+门控在两个位置拦截：
 
 - **触发前**：定时备份到点时在线人数达到 `backup_player_gate_max_online`，备份推迟，
-  每 60 秒重查一次，人数降回阈值内自动开始（不限等待时长，插件停止时放弃）。
-  每次推迟都会写入日志并按 `notify_on_skip` 通知管理员，注明当前人数与阈值。
+  每 60 秒重查一次，人数降回阈值内自动开始。推迟可被 `!!m2r cancel`、`!!m2r stop`、
+  插件停止或本次期限终止；越过期限就跳过本次，等下一个计划点。
+  开始推迟、被取消/停用/期限终止都会写入日志，并按 `notify_on_skip` 通知管理员。
 - **运行中**：备份执行期间人数持续超过阈值达 `backup_player_gate_overlimit_seconds`
   （默认 600 秒，即 10 分钟），中断备份并立即恢复 `save-on`。
   restic 按内容寻址存储，中断的备份没有副作用，残余数据由 forget/prune 周期回收。
 
 ```yaml
 schedule:
-  backup_player_gate_enabled: true
   backup_player_gate_max_online: 5
   backup_player_gate_overlimit_seconds: 600
 ```
 
 说明：
 
-- `backup_player_gate_max_online`：门控阈值（人）。等于或超过该人数就推迟/计时中断
+- `backup_player_gate_max_online`：门控阈值（人）。等于或超过该人数就推迟/计时中断；
+  **改成 0 即关闭门控**。远程库关闭时启动会给出一次告警，提醒你确认自己知道后果
 - `backup_player_gate_overlimit_seconds`：运行中容忍时长（秒）。人数只是短暂超过
   （比如有人上线几分钟又走了）不会触发中断，持续超过才中断
 - 手动命令 `!!restic backup` 与强制调度 `force_schedule` 不受门控：
   前者是管理员在场时的显式操作，后者承担"无论如何都要有备份"的数据兜底职责
 - 人数优先通过 RCON 实时查询（`online_check_command`），RCON 不可用时回退加入/退出
   事件维护的计数；采样失败一律放行，不会因为 RCON 故障卡住备份或误中断
-- 全新安装默认关闭；从旧版本升级时，配置迁移会按备份库类型自动填充——远程库默认开启，
-  本地库保持关闭
 
-### 什么时候该开
+### 定时备份的相邻间隔与推迟期限
 
-- 备份库是远程库（sftp / rest / s3 / b2 / rclone 等），或本地磁盘慢、世界很大：
-  **建议开启**，阈值按服务器规模取 3～10
-- 备份库在本机 SSD 且世界不大：可以不开，避免高峰期备份被推迟
+```yaml
+schedule:
+  min_gap_seconds: 1800     # 距上次备份结束不足 30 分钟则跳过本次定时备份
+  max_defer_seconds: 0      # 0 = 自动计算推迟期限
+```
+
+- `min_gap_seconds`：定时备份距上次真实备份结束的最小间隔，避免长备份刚结束又立刻开下一份。
+  手动备份与 `force_schedule` 不受限制；0 表示不限
+- `max_defer_seconds`：单次推迟的最长期限。0 表示自动取
+  "下一个计划点 − max(上次备份耗时, 最小间隔)"，越过期限即跳过本次，等下一个计划点
+- 被跳过的定时备份只记在 `last_skip_*` 状态里，不会改写"最近备份状态"
+- 调度按计划点游标推进，不因等待或执行耗时向后漂移
 
 ## 3. 强制备份调度
 
@@ -331,7 +341,7 @@ repository: "s3:s3.example.com/my-minecraft-backup"
 ```
 
 ::: warning
-仓库在远端（sftp / rest / s3 / b2 / rclone 等）时，备份上传慢，`save-off` 会一直保持到备份结束，高峰期容易把服务器内存挤爆。**强烈建议开启备份玩家人数门控**（`schedule.backup_player_gate_enabled`，详见正常定时备份一节）；从旧版本升级的配置会按仓库类型自动默认开启。
+仓库在远端（sftp / rest / s3 / b2 / rclone 等）时，备份上传慢，`save-off` 会一直保持到备份结束，高峰期容易把服务器内存挤爆。**人数门控对远程仓库默认强制开启**（阈值 `schedule.backup_player_gate_max_online`，详见正常定时备份一节）；只有显式把阈值改成 0 才会关闭，关闭后启动时会提醒你确认风险。
 :::
 
 ### `disk_check_enabled`
@@ -583,7 +593,13 @@ notification:
   notify_on_success: true
   notify_on_failure: true
   notify_on_skip: false
+  stale_backup_warning_hours: 24
 ```
+
+- `notify_on_skip`：定时备份被跳过（人数门控、最小间隔、期限、无玩家活动、槽位忙等）时通知
+- `stale_backup_warning_hours`：距上次成功备份超过该小时数、且定时备份正被人数门控推迟时，
+  发一次陈旧备份告警；24 小时后仍未恢复会再次提醒，成功备份后立即复位。0 表示关闭。
+  告警会说明为什么不能立刻补备份、当前人数与阈值，以及临时兜底方式
 
 ## 8. 快照缓存
 
