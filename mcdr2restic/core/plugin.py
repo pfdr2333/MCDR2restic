@@ -45,7 +45,9 @@ from mcdr2restic.minecraft.player_activity_service import (
     handle_player_left,
     should_skip_for_no_player_activity,
 )
-from mcdr2restic.minecraft.player_gate_service import wait_for_player_gate
+from mcdr2restic.minecraft.player_gate_service import (
+    warn_if_remote_gate_disabled,
+)
 from mcdr2restic.restore.restore_task_repository import clear_restore_tasks
 from mcdr2restic.snapshots.snapshot_cache import (
     invalidate_snapshot_cache as invalidate_snapshot_cache_impl,
@@ -63,6 +65,7 @@ class PluginEntrypoint:
         self.shutdown_previous_module(server, prev_module)
         self.prepare_runtime(server)
         load_config(self.runtime, server)
+        warn_if_remote_gate_disabled(server, get_config_snapshot(self.runtime))
         self.register_commands(server)
         self.register_help_messages(server)
         self.restart_onebot(server)
@@ -173,6 +176,7 @@ class PluginEntrypoint:
 
     def shutdown_runtime(self, server: PluginServerInterface, reason: str):
         self.runtime.service.stopping.set()
+        self.cancel_pending_backup()
         self.stop_update_checker()
         self.stop_scheduler()
         self.cancel_running_backup(reason)
@@ -209,6 +213,16 @@ class PluginEntrypoint:
         if thread is not None and thread.is_alive():
             thread.join(timeout=5)
 
+    def cancel_pending_backup(self):
+        pending = self.runtime.current_pending_backup()
+        self.runtime.cancel_pending_backup()
+        if (
+            pending is not None
+            and pending.thread is not None
+            and pending.thread.is_alive()
+        ):
+            pending.thread.join(timeout=5)
+
     def stop_onebot(self):
         if self.runtime.service.onebot is None:
             return
@@ -237,6 +251,7 @@ class PluginEntrypoint:
         )
 
     def reload_services(self, server: PluginServerInterface):
+        warn_if_remote_gate_disabled(server, get_config_snapshot(self.runtime))
         self.restart_onebot(server)
         self.restart_discord(server)
         self.restart_custom_webhook(server)
@@ -308,15 +323,14 @@ class PluginEntrypoint:
             SchedulerDependencies(
                 config_provider=lambda: get_config_snapshot(self.runtime),
                 backup_runner=backup_runner.start_deferred_thread,
-                maintenance_runner=self.create_maintenance_runner().run_waiting,
+                scheduled_backup_runner=backup_runner.start_scheduled_thread,
+                maintenance_runner=self.create_maintenance_runner().run_scheduled,
                 mc_ready_provider=lambda target: is_mc_ready(self.runtime, target),
                 skip_predicate=lambda cfg: should_skip_for_no_player_activity(
                     self.runtime, cfg
                 ),
-                player_gate_waiter=lambda server, notify_admins: wait_for_player_gate(
-                    self.runtime, server, notify_admins
-                ),
                 admin_notifier=notification_dispatcher.notify_admins,
+                record_backup_skip=backup_runner.record_backup_skip,
             ),
         )
         self.runtime.service.scheduler.start()
@@ -336,6 +350,7 @@ class PluginEntrypoint:
             is_restore_running,
             self.create_notification_dispatcher().notify_admins,
             self.invalidate_snapshot_cache,
+            mc_ready_provider=lambda target: is_mc_ready(self.runtime, target),
         )
 
     def create_maintenance_runner(self) -> MaintenanceRunner:
@@ -343,6 +358,7 @@ class PluginEntrypoint:
             self.runtime,
             is_restore_running,
             self.invalidate_snapshot_cache,
+            self.create_notification_dispatcher().notify_admins,
         )
 
 

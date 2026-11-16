@@ -6,6 +6,7 @@ try:
         SchedulerDependencies,
         compute_maintenance_wait_seconds,
         datetime,
+        mock,
         parse_daily_time,
         tr_error,
         unittest,
@@ -18,12 +19,17 @@ except ImportError:
         SchedulerDependencies,
         compute_maintenance_wait_seconds,
         datetime,
+        mock,
         parse_daily_time,
         tr_error,
         unittest,
     )
 
 from mcdr2restic.backup.cron import parse_field_part
+from mcdr2restic.backup.scheduling import (
+    ScheduleSpec,
+    compute_defer_deadline,
+)
 
 
 class SchedulingTests(unittest.TestCase):
@@ -69,22 +75,30 @@ class SchedulingTests(unittest.TestCase):
             SchedulerDependencies(
                 config_provider=lambda: {"enabled": True},
                 backup_runner=lambda target, label: True,
-                maintenance_runner=lambda target: True,
+                scheduled_backup_runner=lambda target, occurrence: True,
+                maintenance_runner=lambda target, scheduled_at: True,
                 mc_ready_provider=lambda target: True,
                 skip_predicate=lambda cfg: False,
                 admin_notifier=lambda key, data, cfg, important: None,
+                record_backup_skip=lambda scheduled, reason, message: None,
             ),
         )
         triggered = []
+        spec = type(
+            "FakeSpec",
+            (),
+            {"next_after": lambda self, after: after + datetime.resolution},
+        )()
 
-        def trigger():
-            triggered.append(True)
+        def trigger(due, next_due):
+            triggered.append((due, next_due))
             scheduler.stop_event.set()
 
-        scheduler._run_schedule_loop("测试", lambda: (0, "now"), trigger)
+        with mock.patch.object(scheduler, "_wait", return_value=False):
+            scheduler._run_schedule_loop("schedule.normal", lambda cfg: spec, trigger)
 
-        self.assertEqual(triggered, [True])
-        self.assertIn("MCDR2Restic 测试调度线程已启动", server.logger.info_messages)
+        self.assertEqual(len(triggered), 1)
+        self.assertIn("MCDR2Restic 正常调度线程已启动", server.logger.info_messages)
 
 
 class CronTests(unittest.TestCase):
@@ -127,3 +141,42 @@ class CronTests(unittest.TestCase):
         self.assertIn(
             "Cron expression must have 6 fields", tr_error("en_us", error.exception)
         )
+
+    def test_interval_spec_advances_from_anchor(self):
+        anchor = datetime(2026, 1, 1, 6, 0, 0)
+        spec = ScheduleSpec(interval_seconds=3600)
+
+        self.assertEqual(
+            spec.next_after(anchor), datetime(2026, 1, 1, 7, 0, 0)
+        )
+
+    def test_cron_spec_advances_from_previous_plan_point(self):
+        spec = ScheduleSpec(cron=CronExpression("0 0 6,9 * * *"))
+
+        self.assertEqual(
+            spec.next_after(datetime(2026, 1, 1, 6, 0, 0)),
+            datetime(2026, 1, 1, 9, 0, 0),
+        )
+
+    def test_auto_defer_deadline_uses_next_due_minus_reserve(self):
+        scheduled = datetime(2026, 1, 1, 6, 0, 0)
+        next_due = datetime(2026, 1, 1, 9, 0, 0)
+
+        deadline = compute_defer_deadline(
+            scheduled, next_due, last_duration_seconds=1200, min_gap_seconds=1800,
+            max_defer_seconds=0,
+        )
+
+        self.assertEqual(deadline, datetime(2026, 1, 1, 8, 30, 0))
+
+    def test_explicit_max_defer_overrides_auto_deadline(self):
+        scheduled = datetime(2026, 1, 1, 6, 0, 0)
+        next_due = datetime(2026, 1, 1, 9, 0, 0)
+
+        deadline = compute_defer_deadline(
+            scheduled, next_due, last_duration_seconds=0, min_gap_seconds=0,
+            max_defer_seconds=600,
+        )
+
+        self.assertEqual(deadline, datetime(2026, 1, 1, 6, 10, 0))
+
