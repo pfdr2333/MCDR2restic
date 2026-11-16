@@ -290,3 +290,64 @@ class BackupRunnerTests(unittest.TestCase):
         self.assertTrue(
             any("onebot broken" in m for m in server.logger.warning_messages)
         )
+
+    def test_success_records_success_anchor_and_resets_gate_warning(self):
+        runtime, runner = self.make_runner()
+        runtime.config_state.config = {
+            "runtime": {
+                "last_success_backup_end_time": "2026-01-01 00:00:00",
+                "stale_backup_warned_at": "2026-01-01 01:00:00",
+                "gate_deferral_count_since_success": 4,
+            }
+        }
+        server = FakePluginServer()
+
+        with mock.patch("mcdr2restic.backup.backup_runner.save_config_unlocked"):
+            runner._record_backup_finished(
+                server,
+                BackupRunOutcome(BackupRunStatus.SUCCESS, "ok", "", 12),
+                "2026-01-02 03:04:05",
+            )
+
+        runtime_state = runtime.config_state.config["runtime"]
+        self.assertEqual(
+            runtime_state["last_success_backup_end_time"], "2026-01-02 03:04:05"
+        )
+        self.assertEqual(runtime_state["last_backup_duration_seconds"], 12)
+        self.assertIsNone(runtime_state["stale_backup_warned_at"])
+        self.assertEqual(runtime_state["gate_deferral_count_since_success"], 0)
+
+    def test_failed_run_keeps_previous_success_anchor(self):
+        runtime, runner = self.make_runner()
+        runtime.config_state.config = {
+            "runtime": {"last_success_backup_end_time": "2026-01-01 00:00:00"}
+        }
+        server = FakePluginServer()
+
+        with mock.patch("mcdr2restic.backup.backup_runner.save_config_unlocked"):
+            runner._record_backup_finished(
+                server,
+                BackupRunOutcome(BackupRunStatus.FAILED, "boom", "detail", 3),
+                "2026-01-02 03:04:05",
+            )
+
+        runtime_state = runtime.config_state.config["runtime"]
+        self.assertEqual(
+            runtime_state["last_success_backup_end_time"], "2026-01-01 00:00:00"
+        )
+        self.assertEqual(runtime_state["last_backup_status"], "failed")
+
+    def test_record_backup_skip_does_not_pollute_last_backup_status(self):
+        runtime, runner = self.make_runner()
+        runtime.config_state.config = {
+            "runtime": {"last_backup_status": "success"}
+        }
+
+        with mock.patch("mcdr2restic.backup.backup_runner.save_config_unlocked"):
+            runner.record_backup_skip("2026-01-02 03:00:00", "min_gap", "too soon")
+
+        runtime_state = runtime.config_state.config["runtime"]
+        self.assertEqual(runtime_state["last_backup_status"], "success")
+        self.assertEqual(runtime_state["last_skip_scheduled_time"], "2026-01-02 03:00:00")
+        self.assertEqual(runtime_state["last_skip_reason"], "too soon")
+

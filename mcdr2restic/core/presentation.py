@@ -5,6 +5,7 @@ import re
 import sqlite3
 import threading
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any, Callable, Dict, List, NamedTuple, Optional
 
 from mcdreforged.api.all import PluginServerInterface
@@ -12,9 +13,10 @@ from mcdreforged.api.all import PluginServerInterface
 from mcdr2restic.backup.scheduling import (
     compute_force_wait_seconds,
     compute_wait_seconds,
+    parse_schedule_time,
 )
 from mcdr2restic.core.i18n import DEFAULT_LANGUAGE, normalize_translate, tr_error
-from mcdr2restic.core.models import BackupRunStatus
+from mcdr2restic.core.models import BackupRunStatus, MaintenanceRunStatus
 from mcdr2restic.restic.restic_guidance import command_root_from_config
 from mcdr2restic.snapshots.snapshot_cache import (
     build_snapshot_cache_key,
@@ -65,6 +67,7 @@ class RuntimeStatusProviders(NamedTuple):
     backup_running: Callable[[], bool]
     restore_running: Callable[[], bool]
     mc_ready: Callable[[Optional[PluginServerInterface]], bool]
+    pending_backup: Callable[[], Optional[Any]] = lambda: None
 
 
 def render_status_output(
@@ -99,6 +102,9 @@ def build_status_view(
         "last_backup_status": localized_backup_status(
             last_backup_status_raw, translate
         ),
+        "pending_backup": format_pending_backup(
+            providers.pending_backup(), translate
+        ),
     }
 
 
@@ -120,10 +126,71 @@ def build_player_activity_view(
         "last_online_source": localized_online_source(
             runtime_state.get("last_online_check_source"), translate
         ),
+        "last_success_backup": format_last_success_backup(runtime_state, translate),
+        "last_maintenance": format_last_maintenance(runtime_state, translate),
+        "last_skip": format_last_skip(runtime_state, translate),
         "last_backup_status_raw": runtime_state.get(
             "last_backup_status", BackupRunStatus.NEVER.value
         ),
     }
+
+
+def format_last_success_backup(
+    runtime_state: Dict[str, Any], translate: Callable[..., str]
+) -> str:
+    text = str(runtime_state.get("last_success_backup_end_time") or "").strip()
+    moment = parse_schedule_time(text)
+    if moment is None and str(runtime_state.get("last_backup_status") or "") == "success":
+        text = str(runtime_state.get("last_backup_end_time") or "").strip()
+        moment = parse_schedule_time(text)
+    if moment is None:
+        return translate("status.last_success_backup.never")
+    hours = max(0, int((datetime.now() - moment).total_seconds() // 3600))
+    return translate("status.last_success_backup.value", hours=hours, time=text)
+
+
+def format_last_maintenance(
+    runtime_state: Dict[str, Any], translate: Callable[..., str]
+) -> str:
+    status_text = localized_maintenance_status(
+        runtime_state.get("last_maintenance_status"), translate
+    )
+    time_text = str(runtime_state.get("last_maintenance_end_time") or "").strip()
+    if not time_text:
+        return translate("status.last_maintenance.never")
+    return translate("status.last_maintenance.value", status=status_text, time=time_text)
+
+
+def format_last_skip(
+    runtime_state: Dict[str, Any], translate: Callable[..., str]
+) -> str:
+    time_text = str(runtime_state.get("last_skip_time") or "").strip()
+    if not time_text:
+        return translate("status.last_skip.never")
+    return translate(
+        "status.last_skip.value",
+        time=time_text,
+        reason=str(runtime_state.get("last_skip_reason") or "-"),
+    )
+
+
+def format_pending_backup(
+    pending: Optional[Any], translate: Callable[..., str]
+) -> str:
+    if pending is None:
+        return translate("status.pending_backup.none")
+    scheduled_text = str(getattr(pending, "scheduled_time_text", "") or "-")
+    scheduled = parse_schedule_time(scheduled_text)
+    deferred_seconds = 0
+    if scheduled is not None:
+        deferred_seconds = max(
+            0, int((datetime.now() - scheduled).total_seconds())
+        )
+    return translate(
+        "status.pending_backup.value",
+        scheduled_time=scheduled_text,
+        deferred_seconds=deferred_seconds,
+    )
 
 
 def build_schedule_status_view(
@@ -154,6 +221,10 @@ def format_status_view(
         translate("status.normal_backup", value=status_view["normal_next_text"]),
         translate("status.forced_backup", value=status_view["force_next_text"]),
         translate("status.last_backup_status", value=status_view["last_backup_status"]),
+        translate("status.last_success_backup", value=status_view["last_success_backup"]),
+        translate("status.last_maintenance", value=status_view["last_maintenance"]),
+        translate("status.last_skip", value=status_view["last_skip"]),
+        translate("status.pending_backup", value=status_view["pending_backup"]),
     ]
 
 
@@ -423,6 +494,19 @@ def localized_backup_status(status: Any, translate_or_language: Any) -> str:
         BackupRunStatus.FAILED.value: "backup.status.failed",
         BackupRunStatus.CANCELED.value: "backup.status.canceled",
         BackupRunStatus.INTERRUPTED.value: "backup.status.interrupted",
+    }
+    key = mapping.get(text)
+    return translate(key) if key else text
+
+
+def localized_maintenance_status(status: Any, translate_or_language: Any) -> str:
+    translate = normalize_translate(translate_or_language)
+    text = str(status or MaintenanceRunStatus.NEVER.value)
+    mapping = {
+        MaintenanceRunStatus.NEVER.value: "maintenance.status.never",
+        MaintenanceRunStatus.SUCCESS.value: "maintenance.status.success",
+        MaintenanceRunStatus.SKIPPED.value: "maintenance.status.skipped",
+        MaintenanceRunStatus.FAILED.value: "maintenance.status.failed",
     }
     key = mapping.get(text)
     return translate(key) if key else text

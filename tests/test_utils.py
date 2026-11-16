@@ -90,3 +90,36 @@ class UtilsTests(unittest.TestCase):
 
         self.assertIn("MCDR2Restic 状态", output)
         self.assertIn("正常备份：固定间隔 60 秒", output)
+
+    def test_status_output_includes_success_maintenance_and_pending_rows(self):
+        class Pending:
+            scheduled_time_text = "2026-01-01 00:00:00"
+
+        source = FakeCommandSource(language="zh_cn")
+        server = FakePluginServer(language="en_us")
+        cfg = {
+            "enabled": True,
+            "runtime": {"last_backup_status": "never"},
+            "schedule": {"interval_seconds": 60, "cron_expression": "0"},
+            "force_schedule": {"interval_seconds": 0, "cron_expression": "0"},
+            "snapshot_cache": {"enabled": False},
+        }
+
+        output = render_status_output(
+            StatusViewContext.create(
+                cfg, "zh_cn", server, make_source_translate(source, server)
+            ),
+            RuntimeStatusProviders(
+                backup_running=lambda: False,
+                restore_running=lambda: False,
+                mc_ready=lambda _: True,
+                pending_backup=lambda: Pending(),
+            ),
+            threading.Lock(),
+            1,
+        )
+
+        self.assertIn("距上次成功备份：从未成功备份", output)
+        self.assertIn("上次仓库维护：从未执行", output)
+        self.assertIn("推迟中的定时备份：原计划 2026-01-01 00:00:00", output)
+
