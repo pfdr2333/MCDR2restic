@@ -29,7 +29,7 @@
 staging:
   enabled: true
   repository: "./staging-repo"          # 必须在备份源之外
-  password: "换成强密码"                 # 与 password_file 二选一，file 优先
+  password: "换成强密码"                 # 与 password_file 二选一，password 优先
   password_file: ""
   min_free_percent_after: 15
 ```
@@ -65,6 +65,7 @@ staging:
 
 - 启动、每次本地备份成功、退避到期、手动 `staging copy` 都会触发；
 - 只复制游标之后的新快照，显式传快照 ID，避免已从远端删除的旧快照被重新复制回来；
+- 远端探测有 `remote_probe_timeout_seconds`（默认 30 秒）独立短超时，远端宕机或断网时复制按退避重试而不是无限挂起；
 - 网络/锁冲突按 60、300、900 秒退避重试；鉴权/配额失败停止自动重试；chunker 不匹配为永久失败；
 - 恢复流程开始时复制让位，稍后自动重试；
 - 复制、维护、purge 与手管 restic 命令由 `staging.io_lock` 串行，备份不占该锁。
@@ -91,6 +92,8 @@ staging:
 ```
 
 状态页也会增加三行：当前模式（中转库 beta / 直传）、本地最新快照、远端最新快照。
+
+> 直接删除远端库中的复制快照（手动 forget 等）后，该快照不会从游标复活，本地 `keep_last` prune 也可能随后删除本地副本。删除远端快照前请自行确认本地库仍有保留。
 
 `staging purge` 只支持文件系统路径的远端仓库（例如本地目录、挂载盘）。S3、REST、SFTP 等后端请新建空仓库后重新初始化。远端路径必须在备份源之外，且不能与中转库路径互相包含。purge 会把旧远端目录改名为 `<原路径>.purged-<时间>` 保留，再从本地库重新初始化并复制；初始化失败会自动把旧目录改回。确认新副本可用后再手动删除旧目录。
 
@@ -134,7 +137,7 @@ staging:
 | `staging.enabled` | `false` | 总开关；关闭时零副作用 |
 | `staging.repository` | `""` | 本地中转库路径，必须在备份源之外 |
 | `staging.password` | `""` | 中转库密码 |
-| `staging.password_file` | `./config/mcdr2restic/staging-password.txt` | 密码文件，优先于 `password` |
+| `staging.password_file` | `./config/mcdr2restic/staging-password.txt` | 密码文件，仅在 `password` 为空时使用 |
 | `staging.min_free_percent_after` | `10` | 备份后剩余空间下限（占磁盘总容量百分比） |
 | `staging.keep_last` | `2` | 本地保留快照数 |
 | `staging.prune_max_unused` | `"5%"` | 日常 prune 允许的未使用数据比例 |
@@ -147,6 +150,7 @@ staging:
 | `staging.copy_limit_upload_kib` | `0` | 复制到远端的上传限速（KiB/s），0 不限制 |
 | `staging.remote_stale_warning_hours` | `24` | 远端落后告警阈值（小时），0 关闭 |
 | `staging.emergency_prune_timeout_seconds` | `120` | 盘满应急 prune 的超时 |
+| `staging.remote_probe_timeout_seconds` | `30` | 远端探测（cat-config）最长等待（秒），0 不限制；到期终止进程并按不可达处理 |
 
 ## beta 退出条件
 

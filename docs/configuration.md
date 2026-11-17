@@ -534,7 +534,7 @@ max_output_chars_in_notification: 1800
 staging:
   enabled: true
   repository: "./staging-repo"       # 必须在所有备份源之外
-  password: "换成强密码"              # 与 password_file 二选一，file 优先
+  password: "换成强密码"              # 与 password_file 二选一，password 优先
   password_file: ""
   min_free_percent_after: 15         # 备份后剩余空间下限（占磁盘总容量）
 ```

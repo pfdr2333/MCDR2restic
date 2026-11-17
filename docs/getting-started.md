@@ -27,7 +27,7 @@
 !!MCDR plugin install -U mcdr2restic
 ```
 
-手动安装：在 [GitHub Releases](https://github.com/pfdr2333/MCDR2restic/releases/latest) 中下载最新版本的 `.mcdr` 文件（文件名形如 `MCDR2Restic_v0.11.0.mcdr`），放入 MCDR 的 `plugins` 文件夹中，再以实际文件名执行加载，例如 `!!MCDR plugin load MCDR2Restic_v0.11.0.mcdr`。
+手动安装：在 [GitHub Releases](https://github.com/pfdr2333/MCDR2restic/releases/latest) 中下载最新版本的 `.mcdr` 文件（文件名形如 `MCDR2Restic_v0.12.0.mcdr`），放入 MCDR 的 `plugins` 文件夹中，再以实际文件名执行加载，例如 `!!MCDR plugin load MCDR2Restic_v0.12.0.mcdr`。
 
 重载后，如果 `config/mcdr2restic/config.yml` 不存在，插件会自动生成一份示例配置。
 
@@ -90,6 +90,28 @@
 6. 执行 `restic backup`
 
 第一次成功后，再执行一次 `!!m2r status`，通常就能看到快照列表。
+
+## 使用对象存储远端（S3 等）
+
+`restic.repository` 不限于本地路径，也可以指向对象存储或远程仓库，例如：
+
+```yaml
+restic:
+  repository: "s3:http://192.168.1.118:9000/mcdr-backup"
+  environment:
+    AWS_ACCESS_KEY_ID: "换成你的访问密钥"
+    AWS_SECRET_ACCESS_KEY: "换成你的私密密钥"
+```
+
+对象存储远端有一个本地仓库没有的前置步骤：**首次使用前必须先初始化远端仓库**。本地仓库插件会自动 `restic init`，但直传模式的远端仓库不会自动初始化。如果第一次备份报 `repository does not exist ... Is there a repository at the following location?`，就是还没初始化，执行一次：
+
+```text
+!!m2r exec init
+```
+
+之后再执行 `!!m2r backup` 即可。
+
+> 中转库（staging）模式例外：它启用后会自动初始化远端库，无需手动 `init`。但启用中转库前同样建议先用直传模式初始化远端并验证一次备份，确认远端凭据没问题。
 
 ## 最容易踩的 5 个坑
 
