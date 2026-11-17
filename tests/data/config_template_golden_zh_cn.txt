@@ -145,7 +145,7 @@ staging:
   # [beta] 中转库：先备份到本地库，再异步复制到远端库，缩短 save-off 冻结窗口。
   # 默认关闭；接口与行为可能变化，不建议作为唯一备份手段。启用前请阅读 docs/staging.md。
   # 中转库、cache_dir、password_file 都必须位于任何 backup 源之外。
-  # 总开关。false 时完全走现有直传流程，不创建本地库、不启动复制线程。
+  # [beta] 总开关。false 时完全走现有直传流程，不创建本地库、不启动复制线程。
   enabled: false
   # [beta] 中转库路径（本地文件系统），必须在所有 backup 源之外；相对路径基于 restic.working_directory（默认 MCDR 根目录）。
   repository: ""

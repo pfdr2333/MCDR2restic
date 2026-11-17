@@ -17,6 +17,11 @@
 ├─ unlock
 │  └─ --remove-all
 ├─ exec <restic 参数...> [| 过滤阶段]
+├─ staging
+│  ├─ status
+│  ├─ copy
+│  └─ purge
+│     └─ --force
 ├─ restore
 │  ├─ list
 │  ├─ apply
@@ -199,6 +204,20 @@ restic:
 - 带空格的引号参数里不要使用独立的 `|`（如 `--tag "a | b"`），会被当成过滤阶段分隔符
 
 更多 exec 示例、快照管理和损坏修复等 restic 基础操作，见[透传与 restic](exec.md)。
+
+### `!!m2r staging status`
+
+查看中转库（beta）状态：当前模式、本地/远端最新快照、磁盘剩余、待复制快照数、上次复制结果与 chunker 参数是否一致。
+
+→ [中转库文档](staging.md)
+
+### `!!m2r staging copy`
+
+手动触发一次本地→远端补齐。受恢复流程与 `staging.io_lock` 约束；复制失败会按配置退避重试。
+
+### `!!m2r staging purge [--force]`
+
+重建中转库的远端仓库，仅支持文件系统型远端。远端最新快照不旧于本地时默认拒绝，确认后加 `--force`。旧远端目录会改名为 `<原路径>.purged-<时间>` 保留，失败自动回滚。
 
 ## 恢复相关命令
 

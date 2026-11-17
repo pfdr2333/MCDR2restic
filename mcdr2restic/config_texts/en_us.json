@@ -72,7 +72,7 @@
   "template.comment.staging.deep_prune_interval_days": "# Deep prune interval in days (0 = disabled). Deep prune uses a stricter unused-data limit.",
   "template.comment.staging.deep_prune_max_unused": "# Unused-data limit for deep prune, 0 by default.",
   "template.comment.staging.emergency_prune_timeout_seconds": "# Maximum time for the emergency prune when the disk fills during backup, in seconds.",
-  "template.comment.staging.enabled": "# Master switch. When false the existing direct-to-remote flow is used unchanged; no local repository is created and no copy thread is started.",
+  "template.comment.staging.enabled": "# [beta] Master switch. When false the existing direct-to-remote flow is used unchanged; no local repository is created and no copy thread is started.",
   "template.comment.staging.keep_last": "# Number of snapshots kept locally. At least 1 is needed as the incremental parent; 2 leaves a fallback.",
   "template.comment.staging.min_free_percent_after": "# Minimum free space after backup, as a percentage of total disk size. The dry-run estimate is subtracted before checking.",
   "template.comment.staging.password": "# Staging repository password. Leave empty to use password_file.",

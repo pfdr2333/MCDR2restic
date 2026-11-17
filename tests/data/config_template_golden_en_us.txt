@@ -145,7 +145,7 @@ staging:
   # [beta] Staging repository: back up locally first, then copy to the remote repository asynchronously to shorten the save-off freeze window.
   # Disabled by default; interfaces and behavior may change, so do not rely on it as the only backup. Read docs/staging.md before enabling.
   # The staging repository, cache_dir and password_file must all be outside every backup source.
-  # Master switch. When false the existing direct-to-remote flow is used unchanged; no local repository is created and no copy thread is started.
+  # [beta] Master switch. When false the existing direct-to-remote flow is used unchanged; no local repository is created and no copy thread is started.
   enabled: false
   # [beta] Staging repository path (local filesystem), outside all backup sources. Relative paths resolve against restic.working_directory (MCDR root by default).
   repository: ""

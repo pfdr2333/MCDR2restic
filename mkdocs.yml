@@ -35,6 +35,7 @@ nav:
   - 命令: commands.md
   - 透传与 restic: exec.md
   - 配置: configuration.md
+  - 中转库（beta）: staging.md
   - 状态与恢复: restore.md
   - 常见问题: faq.md
 

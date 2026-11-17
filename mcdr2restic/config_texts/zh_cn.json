@@ -72,7 +72,7 @@
   "template.comment.staging.deep_prune_interval_days": "# 深度 prune 间隔天数（0 = 关闭）；深度 prune 使用更严格的未使用上限。",
   "template.comment.staging.deep_prune_max_unused": "# 深度 prune 的未使用数据上限，默认 0。",
   "template.comment.staging.emergency_prune_timeout_seconds": "# 备份中磁盘写满时，应急 prune 的最长执行时间（秒）。",
-  "template.comment.staging.enabled": "# 总开关。false 时完全走现有直传流程，不创建本地库、不启动复制线程。",
+  "template.comment.staging.enabled": "# [beta] 总开关。false 时完全走现有直传流程，不创建本地库、不启动复制线程。",
   "template.comment.staging.keep_last": "# 本地库保留快照数；至少 1 个用于增量父快照，默认 2 留回退余地。",
   "template.comment.staging.min_free_percent_after": "# 备份后剩余空间下限（占磁盘总容量百分比）：dry-run 估算写入量后，剩余空间低于该值拒绝备份。",
   "template.comment.staging.password": "# 中转库密码，留空时使用 password_file。",
