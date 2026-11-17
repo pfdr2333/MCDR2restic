@@ -179,9 +179,20 @@ class StagingCommandTest(unittest.TestCase):
         self.assertEqual(local["password"], "staging-pass")
         self.assertEqual(local["password_file"], "")
 
-    def test_password_file_takes_priority_over_password(self):
+    def test_password_takes_priority_over_default_password_file(self):
+        # 只填 password 时默认 password_file 路径不得抢走凭据（E2E P2-1）
+        cfg = staging_cfg("/data/staging-repo", password="wins")
+        settings = get_staging_settings(cfg)
+        paths = resolve_staging_paths(settings, cfg["restic"])
+
+        local = build_local_restic_config(cfg["restic"], settings, paths)
+
+        self.assertEqual(local["password"], "wins")
+        self.assertEqual(local["password_file"], "")
+
+    def test_password_file_used_only_when_password_empty(self):
         cfg = staging_cfg(
-            "/data/staging-repo", password="ignored", password_file="/data/pass.txt"
+            "/data/staging-repo", password="", password_file="/data/pass.txt"
         )
         settings = get_staging_settings(cfg)
         paths = resolve_staging_paths(settings, cfg["restic"])

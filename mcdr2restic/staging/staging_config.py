@@ -74,6 +74,7 @@ class StagingSettings:
     copy_limit_upload_kib: int
     remote_stale_warning_hours: int
     emergency_prune_timeout_seconds: int
+    remote_probe_timeout_seconds: int
 
 
 @dataclass(frozen=True)
@@ -119,6 +120,9 @@ def get_staging_settings(cfg: Dict[str, Any]) -> StagingSettings:
         ),
         emergency_prune_timeout_seconds=non_negative_int(
             section.get("emergency_prune_timeout_seconds", 120), 120
+        ),
+        remote_probe_timeout_seconds=non_negative_int(
+            section.get("remote_probe_timeout_seconds", 30), 30
         ),
     )
 
@@ -306,11 +310,15 @@ def build_copy_source_config(
 def local_source_credentials(
     settings: StagingSettings, paths: StagingPaths
 ) -> Tuple[str, str]:
-    """中转库凭据：password_file 优先于 password（与配置注释一致）。"""
+    """中转库凭据：password 优先，password_file 仅在 password 为空时生效。
 
-    if paths.password_file:
-        return "", paths.password_file
-    return settings.password, ""
+    与主 restic 段及配置注释语义一致；否则默认 password_file 指向的文件
+    不存在时，只填 password 的用户启用即坏。
+    """
+
+    if settings.password:
+        return settings.password, ""
+    return "", paths.password_file
 
 
 def remote_source_credentials(restic_cfg: Dict[str, Any]) -> Tuple[str, str]:
