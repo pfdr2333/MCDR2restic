@@ -46,3 +46,7 @@ markdown_extensions:
   - tables
   - toc:
       permalink: true
+      # 默认 slugify 会剥离中文，标题锚点退化为 _1/_2 自动序号；Unicode slugify 保留中文原文，锚点随标题文本确定
+      slugify: !!python/object/apply:pymdownx.slugs.slugify
+        kwds:
+          case: lower
