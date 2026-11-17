@@ -45,6 +45,7 @@ from mcdr2restic.staging.staging_repository import (
     RepoProbeStatus,
     compare_restic_times,
     latest_snapshot_time,
+    make_remote_probe_deadline,
     probe_repository,
     read_snapshots,
     run_initialization,
@@ -115,11 +116,14 @@ def purge_staging_remote(  # noqa: C901,PLR0912,PLR0915 回滚分支与路径校
         read_snapshots(app_runtime, server, local_cfg, slot=slot)
     )
     remote_probe = probe_repository(
-        app_runtime, build_remote_restic_config(restic_cfg), slot=slot
+        app_runtime,
+        build_remote_restic_config(restic_cfg),
+        slot=slot,
+        deadline=make_remote_probe_deadline(settings.remote_probe_timeout_seconds),
     )
     if (
         remote_probe.status
-        in (RepoProbeStatus.AUTH, RepoProbeStatus.UNREACHABLE)
+        in (RepoProbeStatus.AUTH, RepoProbeStatus.QUOTA, RepoProbeStatus.UNREACHABLE)
         and os.path.exists(remote_path)
         and not force
     ):
@@ -165,7 +169,12 @@ def purge_staging_remote(  # noqa: C901,PLR0912,PLR0915 回滚分支与路径校
             "error.staging.purge_failed",
             slot,
         )
-        verify = probe_repository(app_runtime, remote_cfg, slot=slot)
+        verify = probe_repository(
+            app_runtime,
+            remote_cfg,
+            slot=slot,
+            deadline=make_remote_probe_deadline(settings.remote_probe_timeout_seconds),
+        )
         if not verify.ok:
             raise BackupProblem(
                 i18n_key="error.staging.purge_failed", error=verify.error

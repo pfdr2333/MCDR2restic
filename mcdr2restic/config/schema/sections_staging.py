@@ -98,5 +98,10 @@ STAGING = Section(
             120,
             comment_key="template.comment.staging.emergency_prune_timeout_seconds",
         ),
+        Field(
+            "remote_probe_timeout_seconds",
+            30,
+            comment_key="template.comment.staging.remote_probe_timeout_seconds",
+        ),
     ),
 )

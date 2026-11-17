@@ -180,6 +180,8 @@ staging:
   remote_stale_warning_hours: 24
   # Maximum time for the emergency prune when the disk fills during backup, in seconds.
   emergency_prune_timeout_seconds: 120
+  # Maximum wait (seconds) for remote repository probes (cat-config); 0 = unlimited. On timeout the process is terminated and treated as unreachable.
+  remote_probe_timeout_seconds: 30
 
 onebot:
   # OneBot v11 notifications. Fill admin_qqs, then set enabled to true.
@@ -286,4 +288,4 @@ messages:
     __MCDR2RESTIC_MESSAGE_staging_remote_stale__
 
 __MCDR2RESTIC_CONFIG_VERSION_MARKER_COMMENT__
-config_version: 12
+config_version: 13

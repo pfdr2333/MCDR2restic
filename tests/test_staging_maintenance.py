@@ -118,11 +118,25 @@ class MaintenanceTest(unittest.TestCase):
 
     def test_copy_backlog_skips_entire_maintenance(self):
         outcome, order, _copy = self.run_maintenance(
-            CopyCycleResult("failed", message="network down", retryable=True)
+            CopyCycleResult(
+                "failed", message="network down", pending_count=2, retryable=True
+            )
         )
 
         self.assertEqual(outcome.status, MaintenanceRunStatus.SKIPPED)
         self.assertEqual(order, [])
+        # 文案区分"确有未复制快照"与"复制失败"（E2E P3-3）
+        self.assertIn("2", outcome.message)
+
+    def test_copy_failure_without_backlog_uses_copy_failed_message(self):
+        # E2E 现场：backlog=0 但复制步骤失败，旧文案误称"仍有未复制快照"
+        outcome, _order, _copy = self.run_maintenance(
+            CopyCycleResult("failed", message="remote down", retryable=True)
+        )
+
+        self.assertEqual(outcome.status, MaintenanceRunStatus.SKIPPED)
+        self.assertIn("复制未成功", outcome.message)
+        self.assertNotIn("未复制", outcome.message.split("：")[0])
 
     def test_remote_initialized_skips_remote_commands_but_still_prunes_local(self):
         outcome, order, _copy = self.run_maintenance(

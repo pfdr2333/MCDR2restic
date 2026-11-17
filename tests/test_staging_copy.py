@@ -22,7 +22,7 @@ except ImportError:
 
 from mcdr2restic.core.models import BackupCanceled
 from mcdr2restic.defaults.runtime_defaults import build_default_runtime
-from mcdr2restic.staging import staging_copy, staging_warning, staging_worker
+from mcdr2restic.staging import staging_copy, staging_repository, staging_warning, staging_worker
 from mcdr2restic.staging.staging_config import (
     get_staging_settings,
     resolve_staging_paths,
@@ -219,6 +219,41 @@ class CopyCycleTest(unittest.TestCase):
 
         self.assertEqual(cycle.status, STAGING_COPY_STATUS_FAILED)
         self.assertTrue(cycle.retryable)
+
+    def test_local_missing_without_cursor_waits_for_first_backup(self):
+        # 刚启用、首备未跑：静默等待而不是连环 WARNING（E2E P3-2）
+        cycle = self.run_cycle(
+            probe_repository=mock.Mock(
+                return_value=mock.Mock(
+                    ok=False,
+                    status=staging_repository.RepoProbeStatus.MISSING,
+                    error="repository does not exist",
+                )
+            )
+        )
+
+        self.assertEqual(cycle.status, STAGING_COPY_STATUS_SKIPPED)
+        self.assertTrue(cycle.retryable)
+        self.assertEqual(self.server.logger.warning_messages, [])
+        self.assertTrue(self.server.logger.info_messages)
+
+    def test_local_missing_with_cursor_still_warns(self):
+        # 有游标说明此前成功备份过，本地库突然缺失是真故障，保持告警
+        self.runtime.config_state.config["runtime"].update(
+            {"staging_cursor_time": "2026-01-01T00:00:00Z"}
+        )
+        cycle = self.run_cycle(
+            probe_repository=mock.Mock(
+                return_value=mock.Mock(
+                    ok=False,
+                    status=staging_repository.RepoProbeStatus.MISSING,
+                    error="repository does not exist",
+                )
+            )
+        )
+
+        self.assertEqual(cycle.status, STAGING_COPY_STATUS_FAILED)
+        self.assertTrue(self.server.logger.warning_messages)
 
 
 class WorkerTest(unittest.TestCase):

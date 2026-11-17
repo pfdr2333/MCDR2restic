@@ -106,13 +106,20 @@ def run_maintenance_locked(  # noqa: PLR0913 维护上下文集中在一个内�
         app_runtime, server, cfg, settings, paths, slot=app_runtime.staging.copy_slot
     )
     if not copy_result.success:
+        # 区分"确有未复制快照"与"复制步骤本身失败"：backlog 为 0 时
+        # 旧文案会误导用户以为还有快照没复制
+        if copy_result.pending_count > 0:
+            message_key = "info.staging.maintenance_copy_backlog"
+            message_params: Dict[str, Any] = {
+                "count": copy_result.pending_count,
+                "error": copy_result.message,
+            }
+        else:
+            message_key = "info.staging.maintenance_copy_failed"
+            message_params = {"error": copy_result.message}
         return MaintenanceOutcome(
             MaintenanceRunStatus.SKIPPED,
-            tr(
-                language,
-                "info.staging.maintenance_copy_backlog",
-                error=copy_result.message,
-            ),
+            tr(language, message_key, **message_params),
         )
     deadline = make_restic_deadline(restic_cfg)
     command_root = command_root_from_config(cfg)

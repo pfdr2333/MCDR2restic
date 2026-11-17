@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import re
+import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
@@ -18,7 +19,12 @@ from mcdreforged.api.all import PluginServerInterface
 
 from mcdr2restic.core.i18n import tr_error
 from mcdr2restic.core.language import get_mcdr_language
-from mcdr2restic.core.models import BackupProblem, ResticCommandResult, TextEnum
+from mcdr2restic.core.models import (
+    BackupCanceled,
+    BackupProblem,
+    ResticCommandResult,
+    TextEnum,
+)
 from mcdr2restic.core.runtime import PluginRuntime
 from mcdr2restic.restic.restic_config import get_effective_restic_repository
 from mcdr2restic.restic.restic_result import (
@@ -53,6 +59,26 @@ AUTH_ERROR_MARKERS = (
     "password is incorrect",
     "no key found",
     "invalid password",
+    # S3 鉴权信号（MinIO/AWS 等对象存储）：不归类会导致复制按 UNREACHABLE
+    # 无限退避重试，违背 staging.md「鉴权失败停止自动重试」的承诺。
+    # 错误码（如 SignatureDoesNotMatch）小写后无空格，需要专门变体
+    "access denied",
+    "request signature",
+    "signaturedoesnotmatch",
+    "invalidaccesskeyid",
+    "invalid token",
+    "unauthorized",
+    "401",
+    "403",
+)
+QUOTA_ERROR_MARKERS = (
+    "quota",
+    "entity too large",
+    "entitytoolarge",
+    "insufficient storage",
+    "insufficientstorage",
+    "storage limit",
+    "out of space",
 )
 MISSING_REPOSITORY_MARKERS = (
     "repository does not exist",
@@ -73,6 +99,7 @@ class RepoProbeStatus(TextEnum):
     OK = "ok"
     MISSING = "missing"
     AUTH = "auth"
+    QUOTA = "quota"
     UNREACHABLE = "unreachable"
 
 
@@ -91,20 +118,42 @@ class RepoProbe:
         return self.status == RepoProbeStatus.MISSING
 
 
+def make_remote_probe_deadline(timeout_seconds: int) -> Optional[float]:
+    """[beta] 远端探测的独立短超时；独立于 restic.timeout_seconds，0 = 关闭。
+
+    restic 对不可达远端有分钟级内部重试，预检与复制线程若不设上界会被
+    拖成假死；本地探测不经过此函数，磁盘操作不需要这个上界。
+    """
+
+    if timeout_seconds <= 0:
+        return None
+    return time.monotonic() + max(1, timeout_seconds)
+
+
 def probe_repository(
     app_runtime: PluginRuntime,
     restic_cfg: Dict[str, Any],
     slot: Any = None,
     deadline: Optional[float] = None,
 ) -> RepoProbe:
-    result = run_restic_command(
-        app_runtime,
-        restic_cfg,
-        build_cat_config_args(),
-        CAT_CONFIG_PHASE,
-        deadline,
-        slot=slot,
-    )
+    try:
+        result = run_restic_command(
+            app_runtime,
+            restic_cfg,
+            build_cat_config_args(),
+            CAT_CONFIG_PHASE,
+            deadline,
+            slot=slot,
+        )
+    except BackupCanceled:
+        raise
+    except BackupProblem as exc:
+        # 探测超时（含调用方传入的 deadline 已耗尽）按不可达归类：
+        # 探测的职责是给结论而不是中断调用方流程
+        return RepoProbe(
+            RepoProbeStatus.UNREACHABLE,
+            error=tr_error(get_mcdr_language(app_runtime.service.server), exc),
+        )
     if result.return_code == 0:
         config = parse_json_object(result.stdout)
         if config is None:
@@ -120,6 +169,8 @@ def classify_repo_failure(result: ResticCommandResult) -> RepoProbeStatus:
     text = combine_restic_output(result).lower()
     if any(marker in text for marker in AUTH_ERROR_MARKERS):
         return RepoProbeStatus.AUTH
+    if any(marker in text for marker in QUOTA_ERROR_MARKERS):
+        return RepoProbeStatus.QUOTA
     if any(marker in text for marker in MISSING_REPOSITORY_MARKERS):
         return RepoProbeStatus.MISSING
     return RepoProbeStatus.UNREACHABLE
@@ -172,7 +223,12 @@ def ensure_local_repository(  # noqa: PLR0913 仓库准备需要完整上下文
         )
 
     remote_cfg = build_remote_restic_config(restic_cfg)
-    remote_probe = probe_repository(app_runtime, remote_cfg, slot=slot)
+    remote_probe = probe_repository(
+        app_runtime,
+        remote_cfg,
+        slot=slot,
+        deadline=make_remote_probe_deadline(settings.remote_probe_timeout_seconds),
+    )
     if remote_probe.ok:
         source_password, source_password_file = remote_source_credentials(remote_cfg)
         init_cfg = build_copy_source_config(
@@ -218,11 +274,14 @@ def ensure_remote_repository_for_copy(  # noqa: PLR0913 仓库准备需要完整
     """[beta] 确保远端库存在；返回 (远端配置, 本次是否新建)。"""
 
     remote_cfg = build_remote_restic_config(restic_cfg)
-    probe = probe_repository(app_runtime, remote_cfg, slot=slot)
+    probe_deadline = make_remote_probe_deadline(settings.remote_probe_timeout_seconds)
+    probe = probe_repository(app_runtime, remote_cfg, slot=slot, deadline=probe_deadline)
     if probe.ok:
         return remote_cfg, False
     if probe.status == RepoProbeStatus.AUTH:
         raise BackupProblem(i18n_key="error.staging.remote_auth", error=probe.error)
+    if probe.status == RepoProbeStatus.QUOTA:
+        raise BackupProblem(i18n_key="error.staging.remote_quota", error=probe.error)
     if probe.status == RepoProbeStatus.UNREACHABLE:
         raise BackupProblem(
             i18n_key="error.staging.remote_unreachable", error=probe.error
@@ -244,7 +303,9 @@ def ensure_remote_repository_for_copy(  # noqa: PLR0913 仓库准备需要完整
         "error.staging.remote_init_failed",
         slot,
     )
-    verify = probe_repository(app_runtime, remote_cfg, slot=slot)
+    verify = probe_repository(
+        app_runtime, remote_cfg, slot=slot, deadline=probe_deadline
+    )
     if not verify.ok:
         raise BackupProblem(
             i18n_key="error.staging.remote_init_failed", error=verify.error
@@ -278,9 +339,15 @@ def assert_matching_chunkers(
     local_cfg: Dict[str, Any],
     remote_cfg: Dict[str, Any],
     slot: Any = None,
+    remote_probe_timeout_seconds: int = 0,
 ) -> str:
     local_probe = probe_repository(app_runtime, local_cfg, slot=slot)
-    remote_probe = probe_repository(app_runtime, remote_cfg, slot=slot)
+    remote_probe = probe_repository(
+        app_runtime,
+        remote_cfg,
+        slot=slot,
+        deadline=make_remote_probe_deadline(remote_probe_timeout_seconds),
+    )
     if not local_probe.ok:
         raise BackupProblem(
             i18n_key="error.staging.local_unavailable", error=local_probe.error

@@ -1,13 +1,24 @@
 # -*- coding: utf-8 -*-
+import time
+
 try:
     from .support import (
+        BackupProblem,
         ResticCommandResult,
         create_runtime,
         mock,
         unittest,
     )
 except ImportError:
-    from support import ResticCommandResult, create_runtime, mock, unittest
+    from support import (
+        BackupProblem,
+        ResticCommandResult,
+        create_runtime,
+        mock,
+        unittest,
+    )
+
+from mcdr2restic.core.models import BackupCanceled
 
 from mcdr2restic.defaults.default_config import build_default_config
 from mcdr2restic.staging import staging_repository
@@ -21,6 +32,7 @@ from mcdr2restic.staging.staging_repository import (
     compare_restic_times,
     cursor_from_snapshots,
     latest_snapshot_time,
+    make_remote_probe_deadline,
     normalize_snapshot,
     parse_restic_time,
     parse_snapshots,
@@ -61,6 +73,73 @@ class RepoProbeTest(unittest.TestCase):
             classify_repo_failure(result(1, stderr="dial tcp: connection refused")),
             RepoProbeStatus.UNREACHABLE,
         )
+
+    def test_s3_auth_errors_are_classified_as_auth(self):
+        # S3 鉴权/签名错误必须停止自动重试，而不是按不可达无限退避（E2E P2-3）
+        samples = (
+            "Fatal: unable to open config file: AccessDenied: Access Denied",
+            "Fatal: unable to open config file: SignatureDoesNotMatch: "
+            "The request signature we calculated does not match the signature you provided",
+            "Fatal: unable to open config file: InvalidAccessKeyId: "
+            "The AWS Access Key Id you provided does not exist in our records",
+            "Fatal: unable to open config file: HEAD returned 403 Forbidden",
+        )
+        for stderr in samples:
+            with self.subTest(stderr=stderr):
+                self.assertEqual(
+                    classify_repo_failure(result(1, stderr=stderr)),
+                    RepoProbeStatus.AUTH,
+                )
+
+    def test_s3_quota_errors_are_classified_as_quota(self):
+        samples = (
+            "Fatal: unable to open config file: QuotaExceeded: quota exceeded for bucket",
+            "Fatal: unable to open config file: EntityTooLarge: Your proposed upload "
+            "exceeds the maximum allowed size",
+            "Fatal: unable to open config file: InsufficientStorage: storage is full",
+        )
+        for stderr in samples:
+            with self.subTest(stderr=stderr):
+                self.assertEqual(
+                    classify_repo_failure(result(1, stderr=stderr)),
+                    RepoProbeStatus.QUOTA,
+                )
+
+    def test_probe_timeout_is_classified_as_unreachable(self):
+        # 探测超时归为不可达而不是把异常抛给调用方（E2E P2-2）
+        runtime = create_runtime()
+        with mock.patch.object(
+            staging_repository,
+            "run_restic_command",
+            side_effect=BackupProblem(
+                i18n_key="error.restic.timeout",
+                phase="staging-cat-config",
+                seconds=30,
+                output="",
+            ),
+        ):
+            probe = probe_repository(
+                runtime, {}, deadline=time.monotonic() + 30
+            )
+
+        self.assertEqual(probe.status, RepoProbeStatus.UNREACHABLE)
+        self.assertIn("restic", probe.error)
+
+    def test_probe_cancel_still_propagates(self):
+        runtime = create_runtime()
+        with (
+            mock.patch.object(
+                staging_repository,
+                "run_restic_command",
+                side_effect=BackupCanceled(i18n_key="error.backup.cancel_requested"),
+            ),
+            self.assertRaises(BackupCanceled),
+        ):
+            probe_repository(runtime, {}, deadline=time.monotonic() + 30)
+
+    def test_remote_probe_deadline_zero_disables_timeout(self):
+        self.assertIsNone(make_remote_probe_deadline(0))
+        self.assertIsNotNone(make_remote_probe_deadline(30))
 
     def test_unreadable_config_is_not_treated_as_ok(self):
         runtime = create_runtime()
@@ -126,6 +205,92 @@ class EnsureLocalRepositoryTest(unittest.TestCase):
             init_cfg["environment"]["RESTIC_FROM_PASSWORD"], "remote-pass"
         )
         self.assertEqual(local_cfg["password"], "staging-pass")
+
+
+class EnsureRemoteRepositoryForCopyTest(unittest.TestCase):
+    def make_context(self):
+        runtime = create_runtime()
+        server = mock.Mock()
+        cfg = build_default_config()
+        cfg["staging"].update(
+            {
+                "enabled": True,
+                "repository": "/data/staging",
+                "password": "staging-pass",
+                "password_file": "",
+                "remote_probe_timeout_seconds": 30,
+            }
+        )
+        cfg["restic"].update(
+            {"repository": "/remote/repo", "password": "remote-pass"}
+        )
+        settings = get_staging_settings(cfg)
+        paths = resolve_staging_paths(settings, cfg["restic"])
+        return runtime, server, cfg, settings, paths
+
+    def run_ensure(self, probe_status, probe_error="boom"):
+        runtime, server, cfg, settings, paths = self.make_context()
+        with mock.patch.object(
+            staging_repository,
+            "probe_repository",
+            return_value=staging_repository.RepoProbe(probe_status, error=probe_error),
+        ) as probe:
+            if probe_status == RepoProbeStatus.OK:
+                result = staging_repository.ensure_remote_repository_for_copy(
+                    runtime, server, cfg["restic"], settings, paths
+                )
+                return result, probe
+            with self.assertRaises(BackupProblem) as ctx:
+                staging_repository.ensure_remote_repository_for_copy(
+                    runtime, server, cfg["restic"], settings, paths
+                )
+            return ctx.exception, probe
+
+    def test_ok_remote_returns_config_without_init(self):
+        runtime, server, cfg, settings, paths = self.make_context()
+        with mock.patch.object(
+            staging_repository,
+            "probe_repository",
+            return_value=staging_repository.RepoProbe(RepoProbeStatus.OK),
+        ):
+            remote_cfg, created = (
+                staging_repository.ensure_remote_repository_for_copy(
+                    runtime, server, cfg["restic"], settings, paths
+                )
+            )
+
+        self.assertEqual(
+            remote_cfg["repository"], cfg["restic"]["repository"]
+        )
+        self.assertFalse(created)
+
+    def test_auth_failure_raises_remote_auth(self):
+        exc, _ = self.run_ensure(RepoProbeStatus.AUTH)
+        self.assertEqual(exc.i18n_key, "error.staging.remote_auth")
+
+    def test_quota_failure_raises_remote_quota(self):
+        # 配额错误与鉴权错误一样必须停止自动重试（E2E P2-3）
+        exc, _ = self.run_ensure(RepoProbeStatus.QUOTA)
+        self.assertEqual(exc.i18n_key, "error.staging.remote_quota")
+
+    def test_unreachable_failure_raises_remote_unreachable(self):
+        exc, _ = self.run_ensure(RepoProbeStatus.UNREACHABLE)
+        self.assertEqual(exc.i18n_key, "error.staging.remote_unreachable")
+
+    def test_probe_receives_short_deadline(self):
+        runtime, server, cfg, settings, paths = self.make_context()
+        with mock.patch.object(
+            staging_repository,
+            "probe_repository",
+            return_value=staging_repository.RepoProbe(RepoProbeStatus.OK),
+        ) as probe:
+            staging_repository.ensure_remote_repository_for_copy(
+                runtime, server, cfg["restic"], settings, paths
+            )
+
+        deadline = probe.call_args.kwargs["deadline"]
+        self.assertIsNotNone(deadline)
+        self.assertLessEqual(deadline - time.monotonic(), 30.0)
 
 
 class SnapshotParsingTest(unittest.TestCase):

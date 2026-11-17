@@ -30,6 +30,7 @@ from mcdr2restic.staging.staging_config import (
 )
 from mcdr2restic.staging.staging_repository import (
     COPY_PHASE,
+    RepoProbeStatus,
     assert_matching_chunkers,
     cursor_from_snapshots,
     ensure_remote_repository_for_copy,
@@ -43,6 +44,7 @@ from mcdr2restic.staging.staging_state import (
     STAGING_COPY_STATUS_FAILED,
     STAGING_COPY_STATUS_PERMANENT,
     STAGING_COPY_STATUS_RUNNING,
+    STAGING_COPY_STATUS_SKIPPED,
     STAGING_COPY_STATUS_SUCCESS,
     staging_runtime_state,
     update_staging_runtime,
@@ -107,6 +109,10 @@ def run_copy_cycle(  # noqa: PLR0913,PLR0911 复制周期需要完整上下文�
     try:
         local_probe = probe_repository(app_runtime, local_cfg, slot=slot)
         if not local_probe.ok:
+            if local_probe.status == RepoProbeStatus.MISSING and not cursor_time:
+                # 刚启用、首备未跑：本地库还不存在是预期状态，静默等待而非
+                # 连环告警，避免用户误以为启用失败
+                return _record_wait_first_backup(app_runtime, server)
             return _record_failure(
                 app_runtime,
                 server,
@@ -116,7 +122,7 @@ def run_copy_cycle(  # noqa: PLR0913,PLR0911 复制周期需要完整上下文�
             app_runtime, server, restic_cfg, settings, paths, slot=slot
         )
         chunker_result = _check_chunkers(
-            app_runtime, server, local_cfg, remote_cfg, slot
+            app_runtime, server, local_cfg, remote_cfg, slot, settings
         )
         if chunker_result is not None:
             return chunker_result
@@ -240,15 +246,22 @@ def copy_pending_snapshots(  # noqa: PLR0913 复制参数集中在一个内部�
     )
 
 
-def _check_chunkers(
+def _check_chunkers(  # noqa: PLR0913 chunker 校验需要完整上下文
     app_runtime: PluginRuntime,
     server: PluginServerInterface,
     local_cfg: Dict[str, Any],
     remote_cfg: Dict[str, Any],
     slot: Any,
+    settings: StagingSettings,
 ) -> Optional[CopyCycleResult]:
     try:
-        assert_matching_chunkers(app_runtime, local_cfg, remote_cfg, slot=slot)
+        assert_matching_chunkers(
+            app_runtime,
+            local_cfg,
+            remote_cfg,
+            slot=slot,
+            remote_probe_timeout_seconds=settings.remote_probe_timeout_seconds,
+        )
     except BackupProblem as exc:
         if exc.i18n_key != "error.staging.chunker_mismatch":
             raise
@@ -313,6 +326,27 @@ def _local_missing_result(
     )
     return CopyCycleResult(
         STAGING_COPY_STATUS_FAILED,
+        message=message,
+        retryable=True,
+    )
+
+
+def _record_wait_first_backup(
+    app_runtime: PluginRuntime,
+    server: PluginServerInterface,
+) -> CopyCycleResult:
+    message = tr(
+        get_mcdr_language(server), "info.staging.copy_waiting_first_backup"
+    )
+    update_staging_runtime(
+        app_runtime,
+        server,
+        staging_last_copy_status=STAGING_COPY_STATUS_SKIPPED,
+        staging_last_copy_message=message,
+    )
+    server.logger.info(message)
+    return CopyCycleResult(
+        STAGING_COPY_STATUS_SKIPPED,
         message=message,
         retryable=True,
     )

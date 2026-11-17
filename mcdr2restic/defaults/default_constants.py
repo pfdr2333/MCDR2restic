@@ -16,7 +16,7 @@ SNAPSHOT_DB_NAME: Final[str] = "snapshots.sqlite3"
 
 LEGACY_CONFIG_NAME: Final[str] = "config.json"
 
-CONFIG_VERSION: Final[int] = 12
+CONFIG_VERSION: Final[int] = 13
 
 DEFAULT_MAINTENANCE_CRON: Final[str] = "0 0 3 * * *"
 

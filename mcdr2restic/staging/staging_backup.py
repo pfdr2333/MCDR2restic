@@ -60,6 +60,7 @@ from mcdr2restic.staging.staging_repository import (
     PRUNE_PHASE,
     assert_matching_chunkers,
     ensure_local_repository,
+    make_remote_probe_deadline,
     probe_repository,
 )
 from mcdr2restic.staging.staging_state import record_local_snapshot_time
@@ -97,7 +98,7 @@ def run_staging_backup_body(
     local_cfg = ensure_local_repository(
         app_runtime, server, restic_cfg, settings, paths
     )
-    preflight_chunker_parameters(app_runtime, local_cfg, restic_cfg)
+    preflight_chunker_parameters(app_runtime, local_cfg, restic_cfg, settings)
     estimated_bytes = run_disk_preflight(
         app_runtime, server, cfg, local_cfg, paths, deadline
     )
@@ -129,13 +130,23 @@ def preflight_chunker_parameters(
     app_runtime: PluginRuntime,
     local_cfg: Dict[str, Any],
     restic_cfg: Dict[str, Any],
+    settings: StagingSettings,
 ):
     """[beta] 远端可达时比对 chunker；不可达留到 copy 阶段软失败。"""
 
     remote_cfg = build_remote_restic_config(restic_cfg)
-    probe = probe_repository(app_runtime, remote_cfg)
+    probe = probe_repository(
+        app_runtime,
+        remote_cfg,
+        deadline=make_remote_probe_deadline(settings.remote_probe_timeout_seconds),
+    )
     if probe.ok:
-        assert_matching_chunkers(app_runtime, local_cfg, remote_cfg)
+        assert_matching_chunkers(
+            app_runtime,
+            local_cfg,
+            remote_cfg,
+            remote_probe_timeout_seconds=settings.remote_probe_timeout_seconds,
+        )
     # 远端缺失、鉴权或网络问题都留到 copy 阶段：缺失会由 worker 初始化，
     # 其余按软失败重试，不阻断本地备份。
 

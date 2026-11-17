@@ -79,6 +79,7 @@
   "template.comment.staging.password_file": "# 中转库密码文件，仅在 password 为空时使用；必须在 backup 源之外。",
   "template.comment.staging.prune_max_repack_size": "# 单次 prune 的最大重打包量，限制内存与磁盘峰值。",
   "template.comment.staging.prune_max_unused": "# 日常 prune 允许的未使用数据比例，默认 5%。",
+  "template.comment.staging.remote_probe_timeout_seconds": "# 远端探测（cat-config）的最长等待时间（秒），0 = 不限制；到期终止进程并按不可达处理。",
   "template.comment.staging.remote_stale_warning_hours": "# 远端落后超过该小时数时告警（0 = 关闭）。",
   "template.comment.staging.repository": "# [beta] 中转库路径（本地文件系统），必须在所有 backup 源之外；相对路径基于 restic.working_directory（默认 MCDR 根目录）。",
   "template.comment.update_check.api_url": "# GitHub latest release API。网络不佳时会按 proxy_prefixes 尝试代理。",

@@ -180,6 +180,8 @@ staging:
   remote_stale_warning_hours: 24
   # 备份中磁盘写满时，应急 prune 的最长执行时间（秒）。
   emergency_prune_timeout_seconds: 120
+  # 远端探测（cat-config）的最长等待时间（秒），0 = 不限制；到期终止进程并按不可达处理。
+  remote_probe_timeout_seconds: 30
 
 onebot:
   # OneBot v11 通知。填好 admin_qqs 后把 enabled 改为 true。
@@ -285,4 +287,4 @@ messages:
     __MCDR2RESTIC_MESSAGE_staging_remote_stale__
 
 __MCDR2RESTIC_CONFIG_VERSION_MARKER_COMMENT__
-config_version: 12
+config_version: 13

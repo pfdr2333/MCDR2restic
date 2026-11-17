@@ -6,7 +6,7 @@
     "permission_level": 3,
     "root": "!!restic"
   },
-  "config_version": 12,
+  "config_version": 13,
   "custom_webhook": {
     "enabled": false,
     "headers": {},
@@ -171,6 +171,7 @@
     "prune_max_repack_size": "20G",
     "prune_max_unused": "5%",
     "remote_stale_warning_hours": 24,
+    "remote_probe_timeout_seconds": 30,
     "repository": ""
   },
   "update_check": {

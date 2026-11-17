@@ -35,6 +35,7 @@ from mcdr2restic.staging.staging_purge import purge_staging_remote
 from mcdr2restic.staging.staging_repository import (
     chunker_polynomial,
     latest_snapshot_time,
+    make_remote_probe_deadline,
     probe_repository,
     read_snapshots,
 )
@@ -137,7 +138,7 @@ class StagingCommands:
         )
         lines.append(self.format_last_copy(language, runtime_state))
         lines.append(
-            self.format_chunker_status(language, local_cfg, remote_cfg, slot)
+            self.format_chunker_status(language, local_cfg, remote_cfg, slot, settings)
         )
         return lines
 
@@ -198,9 +199,15 @@ class StagingCommands:
         local_cfg: Dict[str, Any],
         remote_cfg: Dict[str, Any],
         slot: Any,
+        settings: StagingSettings,
     ) -> str:
         local_probe = probe_repository(self.context.app_runtime, local_cfg, slot=slot)
-        remote_probe = probe_repository(self.context.app_runtime, remote_cfg, slot=slot)
+        remote_probe = probe_repository(
+            self.context.app_runtime,
+            remote_cfg,
+            slot=slot,
+            deadline=make_remote_probe_deadline(settings.remote_probe_timeout_seconds),
+        )
         if not local_probe.ok:
             return tr(language, "status.staging.chunker.unknown")
         if remote_probe.missing:
