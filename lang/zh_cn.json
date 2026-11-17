@@ -397,6 +397,7 @@
   "mcdr2restic.status.staging.prune.deep": "深度",
   "mcdr2restic.status.staging.query_busy": "快照查询正在运行，稍后重试。",
   "mcdr2restic.status.staging.remote_latest": "远端最新快照：{value}",
+  "mcdr2restic.status.staging.remote_latest.cached": "远端最新快照：{value}（上次已知，当前读取失败）",
   "mcdr2restic.status.staging.repository": "中转库：{path}",
   "mcdr2restic.status.staging.title": "[beta] 中转库状态",
   "mcdr2restic.status.title": "MCDR2Restic 状态",

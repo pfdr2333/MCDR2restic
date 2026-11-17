@@ -91,6 +91,21 @@ class RepoProbeTest(unittest.TestCase):
                     RepoProbeStatus.AUTH,
                 )
 
+    def test_bare_numbers_are_not_auth_markers(self):
+        # 裸数字 401/403 已移除：子串匹配会命中输出中的随机数字
+        # （退避时长、传输字节数），导致归类漂移甚至假阳性停止重试（E2E NEW-P2）
+        samples = (
+            "restic retried 2.640454019s before giving up",
+            "saving repository took 403.5 MiB of memory",
+            "dial tcp 192.168.1.118:9000: connect: connection refused",
+        )
+        for stderr in samples:
+            with self.subTest(stderr=stderr):
+                self.assertEqual(
+                    classify_repo_failure(result(1, stderr=stderr)),
+                    RepoProbeStatus.UNREACHABLE,
+                )
+
     def test_s3_quota_errors_are_classified_as_quota(self):
         samples = (
             "Fatal: unable to open config file: QuotaExceeded: quota exceeded for bucket",

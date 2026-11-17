@@ -35,6 +35,7 @@ from mcdr2restic.staging.staging_repository import (
     cursor_from_snapshots,
     ensure_remote_repository_for_copy,
     latest_snapshot_time,
+    make_remote_probe_deadline,
     probe_repository,
     read_snapshots,
     select_pending_snapshots,
@@ -58,8 +59,7 @@ AUTH_ERROR_MARKERS = (
     "authentication",
     "unauthorized",
     "access denied",
-    "401",
-    "403",
+    "forbidden",
 )
 QUOTA_ERROR_MARKERS = (
     "quota",
@@ -138,7 +138,11 @@ def run_copy_cycle(  # noqa: PLR0913,PLR0911 复制周期需要完整上下文�
         )
         if not pending:
             remote_latest = probe_remote_latest(
-                app_runtime, server, remote_cfg, slot
+                app_runtime,
+                server,
+                remote_cfg,
+                slot,
+                settings.remote_probe_timeout_seconds,
             )
             message = tr(language, "info.staging.copy_nothing", count=len(snapshots))
             _record_success(
@@ -198,7 +202,9 @@ def run_copy_cycle(  # noqa: PLR0913,PLR0911 复制周期需要完整上下文�
         )
 
     latest_time, latest_ids = cursor_from_snapshots(pending)
-    remote_latest = probe_remote_latest(app_runtime, server, remote_cfg, slot)
+    remote_latest = probe_remote_latest(
+        app_runtime, server, remote_cfg, slot, settings.remote_probe_timeout_seconds
+    )
     message = tr(language, "info.staging.copy_completed", count=len(pending))
     _record_success(
         app_runtime,
@@ -436,10 +442,18 @@ def probe_remote_latest(
     server: PluginServerInterface,
     remote_cfg: Dict[str, Any],
     slot: Any,
+    remote_probe_timeout_seconds: int = 0,
 ) -> Optional[str]:
     try:
         snapshots = read_snapshots(
-            app_runtime, server, remote_cfg, slot=slot, latest_only=True
+            app_runtime,
+            server,
+            remote_cfg,
+            slot=slot,
+            latest_only=True,
+            # 远端 snapshots 与探测一样受 restic 内部分钟级重试拖累；
+            # 复制周期不能被它挂住（E2E NEW-P3）
+            deadline=make_remote_probe_deadline(remote_probe_timeout_seconds),
         )
     except Exception:
         return None

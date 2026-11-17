@@ -140,6 +140,9 @@ def purge_staging_remote(  # noqa: C901,PLR0912,PLR0915 回滚分支与路径校
                 server,
                 build_remote_restic_config(restic_cfg),
                 slot=slot,
+                deadline=make_remote_probe_deadline(
+                    settings.remote_probe_timeout_seconds
+                ),
             )
         )
         validate_purge_direction(local_latest, remote_latest, force)

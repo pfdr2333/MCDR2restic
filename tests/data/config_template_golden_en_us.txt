@@ -180,7 +180,7 @@ staging:
   remote_stale_warning_hours: 24
   # Maximum time for the emergency prune when the disk fills during backup, in seconds.
   emergency_prune_timeout_seconds: 120
-  # Maximum wait (seconds) for remote repository probes (cat-config); 0 = unlimited. On timeout the process is terminated and treated as unreachable.
+  # Maximum wait (seconds) for remote repository probes (cat-config) and remote snapshot reads; 0 = unlimited. On timeout the process is terminated and treated as unreachable.
   remote_probe_timeout_seconds: 30
 
 onebot:

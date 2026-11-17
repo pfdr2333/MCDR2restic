@@ -79,7 +79,7 @@
   "template.comment.staging.password_file": "# 中轉庫密碼檔案，僅在 password 為空時使用；必須在 backup 源之外。",
   "template.comment.staging.prune_max_repack_size": "# 單次 prune 的最大重打包量，限制記憶體與磁碟峰值。",
   "template.comment.staging.prune_max_unused": "# 日常 prune 允許的未使用資料比例，預設 5%。",
-  "template.comment.staging.remote_probe_timeout_seconds": "# 遠端探測（cat-config）的最長等待時間（秒），0 = 不限制；到期終止程序並按不可達處理。",
+  "template.comment.staging.remote_probe_timeout_seconds": "# 遠端探測（cat-config）與遠端快照讀取的最長等待時間（秒），0 = 不限制；到期終止程序並按不可達處理。",
   "template.comment.staging.remote_stale_warning_hours": "# 遠端落後超過該小時數時告警（0 = 關閉）。",
   "template.comment.staging.repository": "# [beta] 中轉庫路徑（本地檔案系統），必須在所有 backup 源之外；相對路徑基於 restic.working_directory（預設 MCDR 根目錄）。",
   "template.comment.update_check.api_url": "# GitHub latest release API。網路不佳時會按 proxy_prefixes 嘗試代理。",

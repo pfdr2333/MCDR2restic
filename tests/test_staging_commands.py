@@ -1,6 +1,9 @@
 # -*- coding: utf-8 -*-
+import time
+
 try:
     from .support import (
+        BackupProblem,
         FakePluginServer,
         PermissiveCommandSource,
         SimpleNamespace,
@@ -11,6 +14,7 @@ try:
     )
 except ImportError:
     from support import (
+        BackupProblem,
         FakePluginServer,
         PermissiveCommandSource,
         SimpleNamespace,
@@ -23,6 +27,7 @@ except ImportError:
 from mcdr2restic.commands.command_context import CommandContext
 from mcdr2restic.commands.restic_commands import ResticCommands
 from mcdr2restic.commands.staging_commands import StagingCommands
+from mcdr2restic.defaults.runtime_defaults import build_default_runtime
 from mcdr2restic.staging.staging_config import (
     get_staging_settings,
     resolve_staging_paths,
@@ -150,6 +155,53 @@ class StagingCommandTest(unittest.TestCase):
         self.assertIn("远端最新快照", output)
         self.assertIn("磁盘剩余", output)
         self.assertIn("chunker 参数：一致", output)
+
+    def test_status_remote_read_fails_fast_and_falls_back_to_cache(self):
+        # 远端 snapshots 读取必须带短超时并回退上次已知值，
+        # 否则不可达远端会把 TaskExecutor 挂住数分钟（E2E NEW-P3）
+        cfg = staging_config()
+        cfg["runtime"] = build_default_runtime()
+        cfg["runtime"]["staging_remote_latest_time"] = "2026-01-02T00:00:00Z"
+        self.runtime.config_state.config = cfg
+        settings = get_staging_settings(cfg)
+        paths = resolve_staging_paths(settings, cfg["restic"])
+        probes = RepoProbe(RepoProbeStatus.OK, {"chunker_polynomial": "poly"})
+        snapshots = [
+            {"id": "a" * 64, "short_id": "a" * 8, "time": "2026-01-01T00:00:00Z"}
+        ]
+        timeout_problem = BackupProblem(
+            i18n_key="error.restic.timeout",
+            phase="staging-snapshots",
+            seconds=30,
+            output="",
+        )
+
+        with (
+            mock.patch(
+                "mcdr2restic.commands.staging_commands.validate_staging_settings",
+                return_value=paths,
+            ),
+            mock.patch(
+                "mcdr2restic.commands.staging_commands.read_snapshots",
+                side_effect=[snapshots, timeout_problem],
+            ) as read_snapshots_mock,
+            mock.patch(
+                "mcdr2restic.commands.staging_commands.probe_repository",
+                return_value=probes,
+            ),
+            mock.patch(
+                "mcdr2restic.commands.staging_commands.shutil.disk_usage",
+                return_value=SimpleNamespace(total=1000, free=500),
+            ),
+        ):
+            self.commands.command_status(self.source)
+
+        output = self.source.replies[0]
+        self.assertIn("上次已知", output)
+        self.assertIn("2026-01-02T00:00:00Z", output)
+        remote_deadline = read_snapshots_mock.call_args_list[1].kwargs["deadline"]
+        self.assertIsNotNone(remote_deadline)
+        self.assertLessEqual(remote_deadline - time.monotonic(), 30.0)
 
 
 class ManualResticStagingLockTest(unittest.TestCase):

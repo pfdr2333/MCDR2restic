@@ -150,7 +150,7 @@ staging:
 | `staging.copy_limit_upload_kib` | `0` | 复制到远端的上传限速（KiB/s），0 不限制 |
 | `staging.remote_stale_warning_hours` | `24` | 远端落后告警阈值（小时），0 关闭 |
 | `staging.emergency_prune_timeout_seconds` | `120` | 盘满应急 prune 的超时 |
-| `staging.remote_probe_timeout_seconds` | `30` | 远端探测（cat-config）最长等待（秒），0 不限制；到期终止进程并按不可达处理 |
+| `staging.remote_probe_timeout_seconds` | `30` | 远端探测（cat-config）与远端快照读取的最长等待（秒），0 不限制；到期终止进程并按不可达处理，状态页回退上次已知值 |
 
 ## beta 退出条件
 

@@ -79,7 +79,7 @@
   "template.comment.staging.password_file": "# Staging repository password file, used only when password is empty. Must be outside backup sources.",
   "template.comment.staging.prune_max_repack_size": "# Maximum data repacked by one prune, limiting memory and disk peaks.",
   "template.comment.staging.prune_max_unused": "# Unused data allowed by the daily prune, 5% by default.",
-  "template.comment.staging.remote_probe_timeout_seconds": "# Maximum wait (seconds) for remote repository probes (cat-config); 0 = unlimited. On timeout the process is terminated and treated as unreachable.",
+  "template.comment.staging.remote_probe_timeout_seconds": "# Maximum wait (seconds) for remote repository probes (cat-config) and remote snapshot reads; 0 = unlimited. On timeout the process is terminated and treated as unreachable.",
   "template.comment.staging.remote_stale_warning_hours": "# Warn when the remote copy lags behind by more than this many hours (0 = disabled).",
   "template.comment.staging.repository": "# [beta] Staging repository path (local filesystem), outside all backup sources. Relative paths resolve against restic.working_directory (MCDR root by default).",
   "template.comment.update_check.api_url": "# GitHub latest release API. When the network is slow or blocked, proxy_prefixes are tried in order.",

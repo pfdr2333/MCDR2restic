@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import contextlib
 import shutil
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from mcdreforged.api.all import CommandSource, PluginServerInterface
 
@@ -108,9 +108,17 @@ class StagingCommands:
         local_cfg = build_local_restic_config(restic_cfg, settings, paths)
         remote_cfg = build_remote_restic_config(restic_cfg)
         slot = ResticExecutionSlot()
+        runtime_state = get_config_section(cfg, "runtime")
+        # status 在 MCDR TaskExecutor 线程同步执行：远端读取必须带短超时，
+        # 否则不可达远端的 restic 内部重试会阻塞整个执行器数分钟（E2E NEW-P3）
+        remote_probe_deadline = make_remote_probe_deadline(
+            settings.remote_probe_timeout_seconds
+        )
         lines: List[str] = []
         local_latest = self.read_latest(server, local_cfg, slot)
-        remote_latest = self.read_latest(server, remote_cfg, slot)
+        remote_latest = self.read_latest(
+            server, remote_cfg, slot, deadline=remote_probe_deadline
+        )
         lines.append(
             tr(
                 language,
@@ -118,15 +126,36 @@ class StagingCommands:
                 value=local_latest or tr(language, "status.never"),
             )
         )
-        lines.append(
-            tr(
-                language,
-                "status.staging.remote_latest",
-                value=remote_latest or tr(language, "status.never"),
+        if remote_latest is None:
+            # 读取失败（含超时）时回退上次已知值，并如实标注不是实时数据
+            cached = str(
+                runtime_state.get("staging_remote_latest_time") or ""
+            ).strip()
+            if cached:
+                lines.append(
+                    tr(
+                        language,
+                        "status.staging.remote_latest.cached",
+                        value=cached,
+                    )
+                )
+            else:
+                lines.append(
+                    tr(
+                        language,
+                        "status.staging.remote_latest",
+                        value=tr(language, "status.never"),
+                    )
+                )
+        else:
+            lines.append(
+                tr(
+                    language,
+                    "status.staging.remote_latest",
+                    value=remote_latest,
+                )
             )
-        )
         lines.append(self.format_disk_free(language, paths.repository_path))
-        runtime_state = get_config_section(cfg, "runtime")
         lines.append(
             tr(
                 language,
@@ -147,6 +176,7 @@ class StagingCommands:
         server: PluginServerInterface,
         restic_cfg: Dict[str, Any],
         slot: Any,
+        deadline: Optional[float] = None,
     ):
         try:
             return latest_snapshot_time(
@@ -156,6 +186,7 @@ class StagingCommands:
                     restic_cfg,
                     slot=slot,
                     latest_only=True,
+                    deadline=deadline,
                 )
             )
         except Exception:

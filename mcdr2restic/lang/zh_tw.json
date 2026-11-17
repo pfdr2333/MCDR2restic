@@ -397,6 +397,7 @@
   "status.staging.prune.deep": "深度",
   "status.staging.query_busy": "快照查詢正在執行，稍後重試。",
   "status.staging.remote_latest": "遠端最新快照：{value}",
+  "status.staging.remote_latest.cached": "遠端最新快照：{value}（上次已知，當前讀取失敗）",
   "status.staging.repository": "中轉庫：{path}",
   "status.staging.title": "[beta] 中轉庫狀態",
   "status.title": "MCDR2Restic 狀態",

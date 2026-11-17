@@ -197,6 +197,30 @@ class CopyCycleTest(unittest.TestCase):
         self.assertTrue(cycle.quota_error)
         self.assertFalse(cycle.retryable)
 
+    def test_numbers_in_output_are_not_auth_errors(self):
+        # 裸数字 401/403 标记会命中输出里的随机数字（退避时长等），
+        # 把网络故障误判成鉴权失败停止重试（E2E NEW-P2）
+        local = [snapshot("a" * 64, "2026-01-01T00:00:00Z")]
+        cycle = self.run_cycle(
+            read_snapshots=mock.Mock(side_effect=[local, local]),
+            run_restic_command=mock.Mock(
+                return_value=result(1, stderr="retried 2.640454019s")
+            ),
+            assert_restic_success=mock.Mock(
+                side_effect=BackupProblem(
+                    i18n_key="error.restic.return_code",
+                    phase="staging-copy",
+                    return_code=1,
+                    duration_seconds=1,
+                    output="retried 2.640454019s",
+                )
+            ),
+        )
+
+        self.assertFalse(cycle.auth_error)
+        self.assertFalse(cycle.quota_error)
+        self.assertTrue(cycle.retryable)
+
     def test_canceled_copy_is_retryable_and_not_a_failure(self):
         local = [snapshot("a" * 64, "2026-01-01T00:00:00Z")]
         cycle = self.run_cycle(

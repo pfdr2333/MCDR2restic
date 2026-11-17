@@ -61,15 +61,16 @@ AUTH_ERROR_MARKERS = (
     "invalid password",
     # S3 鉴权信号（MinIO/AWS 等对象存储）：不归类会导致复制按 UNREACHABLE
     # 无限退避重试，违背 staging.md「鉴权失败停止自动重试」的承诺。
-    # 错误码（如 SignatureDoesNotMatch）小写后无空格，需要专门变体
+    # 错误码（如 SignatureDoesNotMatch）小写后无空格，需要专门变体。
+    # 不用裸数字状态码：子串匹配会命中输出里的随机数字（退避时长、
+    # 传输字节数等），归类漂移甚至把网络故障误判成鉴权失败停止重试
     "access denied",
     "request signature",
     "signaturedoesnotmatch",
     "invalidaccesskeyid",
     "invalid token",
     "unauthorized",
-    "401",
-    "403",
+    "forbidden",
 )
 QUOTA_ERROR_MARKERS = (
     "quota",
@@ -371,19 +372,20 @@ def chunker_polynomial(config: Dict[str, Any]) -> str:
     return str(config.get("chunker_polynomial") or "").strip()
 
 
-def read_snapshots(
+def read_snapshots(  # noqa: PLR0913 快照读取需要完整的执行上下文
     app_runtime: PluginRuntime,
     server: PluginServerInterface,
     restic_cfg: Dict[str, Any],
     slot: Any = None,
     latest_only: bool = False,
+    deadline: Optional[float] = None,
 ) -> List[Dict[str, str]]:
     result = run_restic_command(
         app_runtime,
         restic_cfg,
         build_snapshots_args(latest_only=latest_only),
         SNAPSHOTS_PHASE,
-        None,
+        deadline,
         slot=slot,
     )
     assert_restic_success(restic_cfg, result, logger=getattr(server, "logger", None))

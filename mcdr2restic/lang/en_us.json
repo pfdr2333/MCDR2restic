@@ -397,6 +397,7 @@
   "status.staging.prune.deep": "deep",
   "status.staging.query_busy": "A snapshot query is already running; try again later.",
   "status.staging.remote_latest": "Remote latest snapshot: {value}",
+  "status.staging.remote_latest.cached": "Remote latest snapshot: {value} (last known; current read failed)",
   "status.staging.repository": "Staging repository: {path}",
   "status.staging.title": "[beta] Staging status",
   "status.title": "MCDR2Restic Status",
