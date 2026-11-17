@@ -60,6 +60,7 @@ from mcdr2restic.staging.staging_repository import (
     probe_repository,
 )
 from mcdr2restic.staging.staging_state import record_local_snapshot_time
+from mcdr2restic.staging.staging_worker import request_copy
 
 
 DISK_PREFLIGHT_PHASE = "staging-dry-run"
@@ -115,6 +116,7 @@ def run_staging_backup_body(
         if monitor is not None:
             monitor.stop()
     record_local_latest_snapshot(app_runtime, server, local_cfg)
+    request_copy(app_runtime)
     return snapshot_id
 
 
