@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import time
 from typing import Any, Optional
 
 from mcdreforged.api.all import PluginServerInterface
@@ -29,6 +30,7 @@ STAGING_COPY_STATUS_BACKLOG = "backlog"
 STAGING_COPY_STATUS_PERMANENT = "permanent"
 STAGING_COPY_STATUS_CANCELED = "canceled"
 STAGING_COPY_STATUS_SKIPPED = "skipped"
+STAGING_IO_LOCK_WAIT_SLICE_SECONDS = 0.5
 
 
 def update_staging_runtime(
@@ -80,3 +82,28 @@ def record_local_snapshot_time(
     update_staging_runtime(
         app_runtime, server, staging_local_latest_time=snapshot_time
     )
+
+
+def acquire_staging_io_lock(
+    app_runtime: PluginRuntime, timeout_seconds: Optional[float] = None
+) -> bool:
+    """[beta] 获取中转库 IO 锁；插件停止时立即放弃。"""
+
+    lock = app_runtime.staging.io_lock
+    deadline = (
+        None
+        if timeout_seconds is None
+        else time.monotonic() + max(0.0, timeout_seconds)
+    )
+    while not app_runtime.service.stopping.is_set():
+        if lock.acquire(timeout=STAGING_IO_LOCK_WAIT_SLICE_SECONDS):
+            return True
+        if deadline is not None and time.monotonic() >= deadline:
+            return False
+    return False
+
+
+def release_staging_io_lock(app_runtime: PluginRuntime):
+    lock = app_runtime.staging.io_lock
+    if lock.locked():
+        lock.release()

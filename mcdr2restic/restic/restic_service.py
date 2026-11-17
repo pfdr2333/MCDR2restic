@@ -112,6 +112,14 @@ def run_maintenance_body(
     cfg: Dict[str, Any],
     invalidate_snapshot_cache_func: SnapshotCacheInvalidator,
 ) -> MaintenanceOutcome:
+    if staging_enabled(cfg):
+        from mcdr2restic.staging.staging_maintenance import (
+            run_staging_maintenance_body,
+        )
+
+        return run_staging_maintenance_body(
+            app_runtime, server, cfg, invalidate_snapshot_cache_func
+        )
     restic_cfg = get_config_section(cfg, "restic")
     ctx = ResticOperationContext(
         app_runtime=app_runtime,

@@ -23,6 +23,7 @@ from mcdr2restic.restic.restic_guidance import restic_management_command
 from mcdr2restic.restic.restic_result import assert_restic_success
 from mcdr2restic.restic.restic_runner import run_restic_command
 from mcdr2restic.restic.restic_service import make_restic_deadline
+from mcdr2restic.staging.staging_config import staging_enabled
 
 # 透传命令的内部 phase 标签：不能与 backup/restore/rollback 重名，
 # 否则会触发 prepare_restic_args_for_phase 的 --json 自动注入
@@ -82,6 +83,10 @@ class ResticCommands:
         restic_cfg = get_config_section(cfg, "restic")
         if self.reject_manual_restic_command(source):
             return
+        staging_held = self.try_acquire_staging_io(source)
+        if staging_held is None:
+            self.context.app_runtime.release_backup_slot()
+            return
 
         self.context.app_runtime.backup.label = "manual-{}".format(command)
         self.context.app_runtime.backup.cancel.clear()
@@ -112,6 +117,8 @@ class ResticCommands:
                 )
             return
         finally:
+            if staging_held:
+                self.release_staging_io()
             self.context.app_runtime.release_backup_slot()
 
         self.handle_manual_restic_success(
@@ -127,6 +134,30 @@ class ResticCommands:
             return False
         reply_tr(source, server, "error.restic.manual.backup_running")
         return True
+
+    def try_acquire_staging_io(self, source: CommandSource) -> Optional[bool]:
+        """[beta] 中转库启用时手管 restic 与复制/维护/purge 互斥。
+
+        返回 None 表示被占用；False 表示中转库未启用（无需释放）；
+        True 表示已持有 io_lock，调用方必须在 finally 释放。
+        """
+
+        cfg = get_config_snapshot(self.context.app_runtime)
+        if not staging_enabled(cfg):
+            return False
+        if self.context.app_runtime.staging.io_lock.acquire(blocking=False):
+            return True
+        reply_tr(
+            source,
+            self.context.server_from_source(source),
+            "error.staging.busy",
+        )
+        return None
+
+    def release_staging_io(self):
+        lock = self.context.app_runtime.staging.io_lock
+        if lock.locked():
+            lock.release()
 
     def command_exec_usage(self, source: CommandSource):
         if not self.context.check_command_permission(source):
@@ -146,6 +177,10 @@ class ResticCommands:
         cfg = get_config_snapshot(self.context.app_runtime)
         restic_cfg = get_config_section(cfg, "restic")
         if self.reject_manual_restic_command(source):
+            return
+        staging_held = self.try_acquire_staging_io(source)
+        if staging_held is None:
+            self.context.app_runtime.release_backup_slot()
             return
 
         self.context.app_runtime.backup.label = "exec-{}".format(request.restic_args[0])
@@ -174,6 +209,8 @@ class ResticCommands:
             source.reply(source_error_text(source, server, exc))
             return
         finally:
+            if staging_held:
+                self.release_staging_io()
             self.context.app_runtime.release_backup_slot()
 
         for line in pipeline.flush():
