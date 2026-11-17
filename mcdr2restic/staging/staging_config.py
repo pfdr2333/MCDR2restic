@@ -12,7 +12,7 @@ import copy
 import math
 import os
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Collection, Dict, List, Optional, Sequence, Tuple
 
 from mcdr2restic.core.models import BackupProblem
 from mcdr2restic.core.utils import get_config_section, non_negative_int, safe_int
@@ -425,7 +425,7 @@ def with_limit_upload(args: Sequence[str], limit_upload_kib: int) -> List[str]:
     )
 
 
-def remove_option(args: List[str], names: Sequence[str]) -> List[str]:
+def remove_option(args: List[str], names: Collection[str]) -> List[str]:
     names_set = set(names)
     cleaned: List[str] = []
     index = 0

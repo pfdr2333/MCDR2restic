@@ -1,9 +1,11 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+import atexit
 import io
 import json
 import os
+import shutil
 import sys
 import tempfile
 import threading
@@ -12,6 +14,14 @@ import unittest
 
 
 SimpleNamespace = types.SimpleNamespace
+_TEST_DATA_ROOT = tempfile.mkdtemp(prefix="m2r_test_data_")
+atexit.register(shutil.rmtree, _TEST_DATA_ROOT, True)
+
+
+def new_test_data_folder() -> str:
+    return tempfile.mkdtemp(dir=_TEST_DATA_ROOT)
+
+
 import zipfile
 from contextlib import closing, nullcontext
 from datetime import datetime
@@ -264,12 +274,13 @@ class FakePluginServer:
     def __init__(self, language="zh_cn"):
         self.logger = FakeLogger()
         self.language = language
+        self._data_folder = new_test_data_folder()
 
     def get_mcdr_language(self):
         return self.language
 
     def get_data_folder(self):
-        return ""
+        return self._data_folder
 
 
 class FakeCommandSource:

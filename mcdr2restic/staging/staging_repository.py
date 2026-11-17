@@ -409,7 +409,7 @@ def cursor_from_snapshots(
     ids = [
         str(snapshot["id"])
         for snapshot in snapshots
-        if str(snapshot.get("time") or "") == latest
+        if compare_restic_times(str(snapshot.get("time") or ""), latest) == 0
     ]
     return latest, ids
 

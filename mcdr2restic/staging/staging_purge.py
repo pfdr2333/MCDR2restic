@@ -21,8 +21,10 @@ from mcdr2restic.core.runtime import PluginRuntime
 from mcdr2restic.core.utils import get_config_section
 from mcdr2restic.restic.restic_config import (
     find_repository_source_conflicts,
+    get_backup_source_paths,
     get_effective_restic_repository,
     is_local_restic_repository,
+    path_contains_or_equals,
     resolve_restic_repository_path,
 )
 from mcdr2restic.restic.restic_download import (
@@ -40,6 +42,7 @@ from mcdr2restic.staging.staging_config import (
 )
 from mcdr2restic.staging.staging_repository import (
     INIT_REMOTE_PHASE,
+    RepoProbeStatus,
     compare_restic_times,
     latest_snapshot_time,
     probe_repository,
@@ -56,7 +59,7 @@ from mcdr2restic.staging.staging_worker import request_copy
 PURGE_BACKUP_SUFFIX = ".purged-"
 
 
-def purge_staging_remote(  # noqa: C901 回滚分支与路径校验集中在一个入口
+def purge_staging_remote(  # noqa: C901,PLR0912,PLR0915 回滚分支与路径校验集中在一个入口
     app_runtime: PluginRuntime,
     server: PluginServerInterface,
     cfg: Dict[str, Any],
@@ -82,6 +85,21 @@ def purge_staging_remote(  # noqa: C901 回滚分支与路径校验集中在一�
             repository_path=remote_path,
             conflicts=", ".join(conflicts),
         )
+    if path_contains_or_equals(
+        paths.repository_path, remote_path
+    ) or path_contains_or_equals(remote_path, paths.repository_path):
+        raise BackupProblem(
+            i18n_key="error.staging.purge_path_overlap",
+            local_path=paths.repository_path,
+            remote_path=remote_path,
+        )
+    for source_path in get_backup_source_paths(restic_cfg):
+        if path_contains_or_equals(remote_path, source_path):
+            raise BackupProblem(
+                i18n_key="error.staging.purge_remote_contains_sources",
+                remote_path=remote_path,
+                source_path=source_path,
+            )
 
     slot = app_runtime.staging.copy_slot
     slot.cancel.clear()
@@ -99,6 +117,17 @@ def purge_staging_remote(  # noqa: C901 回滚分支与路径校验集中在一�
     remote_probe = probe_repository(
         app_runtime, build_remote_restic_config(restic_cfg), slot=slot
     )
+    if (
+        remote_probe.status
+        in (RepoProbeStatus.AUTH, RepoProbeStatus.UNREACHABLE)
+        and os.path.exists(remote_path)
+        and not force
+    ):
+        raise BackupProblem(
+            i18n_key="error.staging.purge_remote_unreadable",
+            remote_path=remote_path,
+            error=remote_probe.error,
+        )
     remote_latest = None
     if remote_probe.ok:
         remote_latest = latest_snapshot_time(

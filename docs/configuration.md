@@ -28,6 +28,7 @@ maintenance_schedule: {}
 update_check: {}
 minecraft: {}
 restic: {}
+staging: {}
 onebot: {}
 discord: {}
 custom_webhook: {}
@@ -35,7 +36,7 @@ notification: {}
 snapshot_cache: {}
 restore: {}
 messages: {}
-config_version: 10
+config_version: 12
 ```
 
 ## 1. 总开关和命令入口

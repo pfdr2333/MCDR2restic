@@ -22,7 +22,9 @@ except ImportError:
         unittest,
     )
 
+from mcdr2restic.core.models import RestorePhase, RestoreSession
 from mcdr2restic.restic import restic_service
+from mcdr2restic.restore import restore_workflow
 from mcdr2restic.staging import staging_backup
 from mcdr2restic.staging.staging_config import (
     get_staging_settings,
@@ -203,6 +205,107 @@ class StagingBackupPreflightTest(unittest.TestCase):
             staging_backup.run_staging_backup_body(runtime, server, cfg)
 
         prepare_minecraft.assert_not_called()
+
+    def test_remote_repository_inside_backup_source_fails_before_save_off(self):
+        import os
+        import tempfile
+
+        runtime = create_runtime()
+        server = FakePluginServer()
+        with tempfile.TemporaryDirectory() as root:
+            source = os.path.join(root, "world")
+            os.makedirs(source)
+            cfg = build_default_config()
+            cfg["staging"].update(
+                {"enabled": True, "repository": os.path.join(root, "staging")}
+            )
+            cfg["restic"]["backup_command"] = ["backup", source]
+            cfg["restic"]["repository"] = os.path.join(source, "remote-repo")
+
+            with (
+                mock.patch.object(staging_backup, "is_mc_ready", return_value=True),
+                mock.patch.object(
+                    staging_backup,
+                    "validate_staging_settings",
+                    return_value=SimpleNamespace(repository_path="/data/staging"),
+                ),
+                mock.patch.object(
+                    staging_backup, "ensure_default_restic_executable_available"
+                ),
+                mock.patch.object(
+                    staging_backup, "prepare_minecraft_for_backup"
+                ) as prepare_minecraft,
+                self.assertRaises(BackupProblem) as raised,
+            ):
+                staging_backup.run_staging_backup_body(runtime, server, cfg)
+
+        self.assertEqual(
+            raised.exception.i18n_key,
+            "error.restic.repository_inside_backup_sources",
+        )
+        prepare_minecraft.assert_not_called()
+
+    def test_chunker_mismatch_fails_before_save_off(self):
+        runtime = create_runtime()
+        server = FakePluginServer()
+        cfg = build_default_config()
+        cfg["staging"].update({"enabled": True, "repository": "/data/staging"})
+
+        with (
+            mock.patch.object(staging_backup, "is_mc_ready", return_value=True),
+            mock.patch.object(
+                staging_backup,
+                "validate_staging_settings",
+                return_value=SimpleNamespace(repository_path="/data/staging"),
+            ),
+            mock.patch.object(
+                staging_backup, "ensure_default_restic_executable_available"
+            ),
+            mock.patch.object(
+                staging_backup, "ensure_local_repository", return_value={}
+            ),
+            mock.patch.object(
+                staging_backup,
+                "preflight_chunker_parameters",
+                side_effect=BackupProblem(
+                    i18n_key="error.staging.chunker_mismatch",
+                    local_chunker="a",
+                    remote_chunker="b",
+                ),
+            ),
+            mock.patch.object(
+                staging_backup, "prepare_minecraft_for_backup"
+            ) as prepare_minecraft,
+            self.assertRaises(BackupProblem),
+        ):
+            staging_backup.run_staging_backup_body(runtime, server, cfg)
+
+        prepare_minecraft.assert_not_called()
+
+
+class RestoreSafetyBypassTest(unittest.TestCase):
+    def test_restore_safety_snapshot_bypasses_staging(self):
+        runtime = create_runtime()
+        server = FakePluginServer()
+        cfg = build_default_config()
+        session = RestoreSession(
+            tasks=[],
+            cfg=cfg,
+            snapshot_cfg={},
+            cache_key="key",
+            language="zh_cn",
+            phase=RestorePhase.PRE_BACKUP,
+        )
+
+        with mock.patch.object(
+            restore_workflow, "run_backup_body", return_value="snap123"
+        ) as run_body:
+            safety_id = restore_workflow.create_restore_safety_snapshot(
+                runtime, server, session, mock.Mock()
+            )
+
+        self.assertEqual(safety_id, "snap123")
+        self.assertEqual(run_body.call_args.kwargs["use_staging"], False)
 
 
 class BackupBodyBranchTest(unittest.TestCase):

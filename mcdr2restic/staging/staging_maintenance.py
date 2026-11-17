@@ -12,7 +12,7 @@ from typing import Any, Dict, Optional
 
 from mcdreforged.api.all import PluginServerInterface
 
-from mcdr2restic.core.i18n import config_language, tr
+from mcdr2restic.core.i18n import config_language, server_tr, tr
 from mcdr2restic.core.language import get_mcdr_language
 from mcdr2restic.core.models import MaintenanceOutcome, MaintenanceRunStatus
 from mcdr2restic.core.runtime import PluginRuntime
@@ -60,7 +60,7 @@ def run_staging_maintenance_body(
     app_runtime: PluginRuntime,
     server: PluginServerInterface,
     cfg: Dict[str, Any],
-    _invalidate_snapshot_cache_func: Any = None,
+    invalidate_snapshot_cache_func: Any = None,
 ) -> MaintenanceOutcome:
     restic_cfg = get_config_section(cfg, "restic")
     settings = get_staging_settings(cfg)
@@ -78,7 +78,13 @@ def run_staging_maintenance_body(
         )
     try:
         return run_maintenance_locked(
-            app_runtime, server, cfg, restic_cfg, settings, paths
+            app_runtime,
+            server,
+            cfg,
+            restic_cfg,
+            settings,
+            paths,
+            invalidate_snapshot_cache_func,
         )
     finally:
         release_staging_io_lock(app_runtime)
@@ -91,8 +97,11 @@ def run_maintenance_locked(  # noqa: PLR0913 维护上下文集中在一个内�
     restic_cfg: Dict[str, Any],
     settings: StagingSettings,
     paths: StagingPaths,
+    invalidate_snapshot_cache_func: Any = None,
 ) -> MaintenanceOutcome:
     language = config_language(cfg, get_mcdr_language(server))
+    # 复制槽位可能在 worker 停止/恢复让位时残留 cancel；维护复用该槽位前必须复位
+    app_runtime.staging.copy_slot.cancel.clear()
     copy_result = run_copy_cycle(
         app_runtime, server, cfg, settings, paths, slot=app_runtime.staging.copy_slot
     )
@@ -123,13 +132,19 @@ def run_maintenance_locked(  # noqa: PLR0913 维护上下文集中在一个内�
     deep = should_deep_prune(app_runtime, settings)
     run_local_prune(local_ctx, settings, paths, deep)
     cleanup_restic_cache(app_runtime, server, local_cfg, paths)
+    invalidate_remote_cache(
+        server, restic_cfg, invalidate_snapshot_cache_func
+    )
     return MaintenanceOutcome(
         MaintenanceRunStatus.SUCCESS,
         tr(
             language,
             "info.staging.maintenance_completed",
             keep_last=settings.keep_last,
-            prune="deep" if deep else "daily",
+            prune=tr(
+                language,
+                "status.staging.prune.deep" if deep else "status.staging.prune.daily",
+            ),
         ),
     )
 
@@ -212,6 +227,25 @@ def cleanup_restic_cache(
                 "warn.staging.maintenance_cache_cleanup_failed",
                 error=exc,
             )
+        )
+
+
+def invalidate_remote_cache(
+    server: PluginServerInterface,
+    restic_cfg: Dict[str, Any],
+    invalidate_snapshot_cache_func: Any,
+):
+    if invalidate_snapshot_cache_func is None:
+        return
+    try:
+        invalidate_snapshot_cache_func(
+            server,
+            restic_cfg,
+            server_tr(server, "snapshot.cache.reason.maintenance_finished"),
+        )
+    except Exception as exc:
+        server.logger.debug(
+            server_tr(server, "debug.staging.cache_invalidation_failed", error=exc)
         )
 
 

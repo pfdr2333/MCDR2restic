@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import shutil
 from typing import Any, Dict, List
 
@@ -14,7 +15,7 @@ from mcdreforged.api.all import CommandSource, PluginServerInterface
 
 from mcdr2restic.commands.command_context import CommandContext
 from mcdr2restic.config.state_store import get_config_snapshot
-from mcdr2restic.core.i18n import config_language, reply_tr, tr, tr_error
+from mcdr2restic.core.i18n import config_language, reply_tr, server_tr, tr, tr_error
 from mcdr2restic.core.language import get_mcdr_language, get_source_language
 from mcdr2restic.core.models import BackupProblem
 from mcdr2restic.core.runtime import ResticExecutionSlot
@@ -264,6 +265,12 @@ class StagingCommands:
         finally:
             if io_lock.locked():
                 io_lock.release()
+        with contextlib.suppress(Exception):
+            self.context.snapshot_invalidator(
+                server,
+                get_config_section(cfg, "restic"),
+                server_tr(server, "snapshot.cache.reason.staging_purge"),
+            )
         source.reply(message)
 
 

@@ -22,7 +22,10 @@ from mcdr2restic.minecraft.minecraft_service import is_mc_ready
 from mcdr2restic.minecraft.player_gate_service import (
     start_backup_player_gate_monitor,
 )
-from mcdr2restic.restic.restic_config import nearest_existing_directory
+from mcdr2restic.restic.restic_config import (
+    assert_backup_sources_do_not_contain_repository,
+    nearest_existing_directory,
+)
 from mcdr2restic.restic.restic_constants import (
     RESTIC_COMMAND_BACKUP,
     RESTIC_OPTION_JSON,
@@ -86,6 +89,8 @@ def run_staging_backup_body(
         raise BackupProblem(i18n_key="error.staging.disabled")
     if not is_mc_ready(app_runtime, server):
         raise BackupProblem(i18n_key="error.backup.minecraft_not_ready")
+    # 中转库不改变远端仓库的隔离要求：远端不能位于任何 backup 源内
+    assert_backup_sources_do_not_contain_repository(restic_cfg)
 
     deadline = make_restic_deadline(restic_cfg)
     ensure_default_restic_executable_available(server, restic_cfg)

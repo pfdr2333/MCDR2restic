@@ -9,7 +9,12 @@ try:
 except ImportError:
     from support import ResticCommandResult, create_runtime, mock, unittest
 
+from mcdr2restic.defaults.default_config import build_default_config
 from mcdr2restic.staging import staging_repository
+from mcdr2restic.staging.staging_config import (
+    get_staging_settings,
+    resolve_staging_paths,
+)
 from mcdr2restic.staging.staging_repository import (
     RepoProbeStatus,
     classify_repo_failure,
@@ -65,6 +70,62 @@ class RepoProbeTest(unittest.TestCase):
             probe = probe_repository(runtime, {})
 
         self.assertEqual(probe.status, RepoProbeStatus.UNREACHABLE)
+
+
+class EnsureLocalRepositoryTest(unittest.TestCase):
+    def test_local_missing_remote_exists_initializes_with_chunker_params(self):
+        runtime = create_runtime()
+        server = mock.Mock()
+        cfg = build_default_config()
+        cfg["staging"].update(
+            {
+                "enabled": True,
+                "repository": "/data/staging",
+                "password": "staging-pass",
+                "password_file": "",
+            }
+        )
+        cfg["restic"].update(
+            {"repository": "/remote/repo", "password": "remote-pass"}
+        )
+        settings = get_staging_settings(cfg)
+        paths = resolve_staging_paths(settings, cfg["restic"])
+        probes = [
+            staging_repository.RepoProbe(staging_repository.RepoProbeStatus.MISSING),
+            staging_repository.RepoProbe(
+                staging_repository.RepoProbeStatus.OK,
+                {"chunker_polynomial": "poly"},
+            ),
+            staging_repository.RepoProbe(
+                staging_repository.RepoProbeStatus.OK,
+                {"chunker_polynomial": "poly"},
+            ),
+        ]
+
+        with (
+            mock.patch.object(
+                staging_repository, "probe_repository", side_effect=probes
+            ),
+            mock.patch.object(
+                staging_repository, "run_initialization"
+            ) as initialize,
+        ):
+            local_cfg = staging_repository.ensure_local_repository(
+                runtime, server, cfg["restic"], settings, paths
+            )
+
+        initialize.assert_called_once()
+        init_cfg = initialize.call_args.args[2]
+        init_args = initialize.call_args.args[3]
+        self.assertEqual(
+            init_args,
+            ["init", "--from-repo", "/remote/repo", "--copy-chunker-params"],
+        )
+        self.assertEqual(init_cfg["password"], "staging-pass")
+        self.assertEqual(
+            init_cfg["environment"]["RESTIC_FROM_PASSWORD"], "remote-pass"
+        )
+        self.assertEqual(local_cfg["password"], "staging-pass")
 
 
 class SnapshotParsingTest(unittest.TestCase):

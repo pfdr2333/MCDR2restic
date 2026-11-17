@@ -11,12 +11,13 @@ from __future__ import annotations
 import contextlib
 import threading
 import time
+import traceback
 from typing import Any, Callable, Optional
 
 from mcdreforged.api.all import PluginServerInterface
 
 from mcdr2restic.config.state_store import get_config_snapshot
-from mcdr2restic.core.i18n import config_language, server_tr, tr
+from mcdr2restic.core.i18n import config_language, server_tr, tr, tr_error
 from mcdr2restic.core.language import get_mcdr_language
 from mcdr2restic.core.models import BackupProblem
 from mcdr2restic.core.runtime import PluginRuntime
@@ -105,7 +106,15 @@ class StagingCopyWorker:
             if self._manual_requested:
                 self._attempt = 0
                 self._manual_requested = False
-            result = self._run_once()
+            try:
+                result = self._run_once()
+            except Exception as exc:
+                self._report_worker_failure(exc)
+                result = CopyCycleResult(
+                    STAGING_COPY_STATUS_FAILED,
+                    message=str(exc),
+                    retryable=True,
+                )
             self._next_wait_seconds = self._plan_next_wait(result)
 
     def _plan_next_wait(  # noqa: PLR0911 结果分类多，集中在一个入口
@@ -177,7 +186,7 @@ class StagingCopyWorker:
         try:
             paths = validate_staging_settings(settings, restic_cfg)
         except BackupProblem as exc:
-            message = str(exc)
+            message = tr_error(get_mcdr_language(server), exc)
             server.logger.warning(
                 tr(
                     get_mcdr_language(server),
@@ -282,6 +291,21 @@ class StagingCopyWorker:
             return get_staging_settings(get_config_snapshot(self.app_runtime))
         except Exception:
             return None
+
+    def _report_worker_failure(self, exc: Exception):
+        server = self.app_runtime.service.server
+        if server is None:
+            return
+        server.logger.error(
+            "{}\n{}".format(
+                tr(
+                    get_mcdr_language(server),
+                    "error.staging.worker_failed",
+                    error=exc,
+                ),
+                traceback.format_exc(),
+            )
+        )
 
     def _log_restore_yield(self, server: PluginServerInterface):
         language = config_language(

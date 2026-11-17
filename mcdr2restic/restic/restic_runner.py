@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+import contextlib
 import os
 import queue
 import subprocess
@@ -296,6 +297,15 @@ def read_restic_process_output(  # noqa: PLR0913 与 run_restic_command 同签�
         )
     finally:
         join_restic_reader_threads(reader_threads)
+        close_restic_process_streams(process)
+
+
+def close_restic_process_streams(process: subprocess.Popen):
+    for stream in (process.stdout, process.stderr):
+        if stream is None:
+            continue
+        with contextlib.suppress(Exception):
+            stream.close()
 
 
 def consume_restic_output(

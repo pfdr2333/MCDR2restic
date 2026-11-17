@@ -206,6 +206,86 @@ class PurgeTest(unittest.TestCase):
             raised.exception.i18n_key, "error.staging.purge_requires_filesystem"
         )
 
+    def test_purge_rejects_overlapping_local_and_remote_paths(self):
+        with tempfile.TemporaryDirectory() as root:
+            local_repo = os.path.join(root, "staging-repo")
+            os.makedirs(local_repo)
+            cfg = staging_config(local_repo, root)
+
+            with mock.patch.object(
+                staging_purge, "ensure_default_restic_executable_available"
+            ), self.assertRaises(BackupProblem) as raised:
+                staging_purge.purge_staging_remote(
+                    self.runtime, self.server, cfg, force=True
+                )
+
+            self.assertEqual(
+                raised.exception.i18n_key, "error.staging.purge_path_overlap"
+            )
+
+    def test_purge_rejects_remote_that_contains_backup_sources(self):
+        with tempfile.TemporaryDirectory() as root:
+            local_repo = os.path.join(root, "staging-repo")
+            remote_repo = os.path.join(root, "remote-repo")
+            source = os.path.join(remote_repo, "world")
+            os.makedirs(local_repo)
+            os.makedirs(source)
+            cfg = staging_config(local_repo, remote_repo)
+            cfg["restic"]["backup_command"] = ["backup", source]
+
+            with mock.patch.object(
+                staging_purge, "ensure_default_restic_executable_available"
+            ), self.assertRaises(BackupProblem) as raised:
+                staging_purge.purge_staging_remote(
+                    self.runtime, self.server, cfg, force=True
+                )
+
+            self.assertEqual(
+                raised.exception.i18n_key,
+                "error.staging.purge_remote_contains_sources",
+            )
+
+    def test_purge_requires_force_when_existing_remote_is_unreadable(self):
+        with tempfile.TemporaryDirectory() as root:
+            local_repo = os.path.join(root, "staging-repo")
+            remote_repo = os.path.join(root, "remote-repo")
+            os.makedirs(local_repo)
+            os.makedirs(remote_repo)
+            cfg = staging_config(local_repo, remote_repo)
+            probes = [
+                mock.Mock(ok=True, missing=False, error="", config={}),
+                mock.Mock(
+                    ok=False,
+                    missing=False,
+                    status="auth",
+                    error="wrong password",
+                ),
+            ]
+
+            with (
+                mock.patch.object(
+                    staging_purge, "ensure_default_restic_executable_available"
+                ),
+                mock.patch.object(
+                    staging_purge, "probe_repository", side_effect=probes
+                ),
+                mock.patch.object(
+                    staging_purge,
+                    "read_snapshots",
+                    return_value=[
+                        snapshot("a" * 64, "2026-01-02T00:00:00Z")
+                    ],
+                ),self.assertRaises(BackupProblem) as raised
+            ):
+                staging_purge.purge_staging_remote(
+                    self.runtime, self.server, cfg, force=False
+                )
+
+            self.assertEqual(
+                raised.exception.i18n_key,
+                "error.staging.purge_remote_unreadable",
+            )
+
     def test_purge_renames_remote_initializes_from_local_and_resets_cursor(self):
         with tempfile.TemporaryDirectory() as root:
             local_repo = os.path.join(root, "staging-repo")
