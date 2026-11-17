@@ -23,6 +23,7 @@ from mcdr2restic.config.schema.sections_notify import (
 )
 from mcdr2restic.config.schema.sections_restic import RESTIC
 from mcdr2restic.config.schema.sections_service import RESTORE, SNAPSHOT_CACHE
+from mcdr2restic.config.schema.sections_staging import STAGING
 from mcdr2restic.defaults.message_defaults import build_default_messages
 from mcdr2restic.defaults.default_constants import CONFIG_VERSION
 
@@ -48,6 +49,7 @@ SECTIONS: Tuple[Section, ...] = (
     UPDATE_CHECK,
     MINECRAFT,
     RESTIC,
+    STAGING,
     ONEBOT,
     DISCORD,
     CUSTOM_WEBHOOK,

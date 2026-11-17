@@ -92,6 +92,7 @@ def build_status_view(
     running = providers.backup_running()
     activity = build_player_activity_view(get_config_section(cfg, "runtime"), translate)
     schedules = build_schedule_status_view(cfg, translate, ctx.language)
+    staging = build_staging_status_view(cfg, translate)
     last_backup_status_raw = activity.pop("last_backup_status_raw")
     return {
         "enabled": localized_bool(bool(cfg.get("enabled", True)), translate),
@@ -100,11 +101,36 @@ def build_status_view(
         "mc_ready": localized_bool(providers.mc_ready(ctx.server), translate),
         **activity,
         **schedules,
+        **staging,
         "last_backup_status": localized_backup_status(
             last_backup_status_raw, translate
         ),
         "pending_backup": format_pending_backup(
             providers.pending_backup(), translate
+        ),
+    }
+
+
+def build_staging_status_view(
+    cfg: Dict[str, Any], translate: Callable[..., str]
+) -> Dict[str, str]:
+    staging_cfg = get_config_section(cfg, "staging")
+    runtime_state = get_config_section(cfg, "runtime")
+    if not bool(staging_cfg.get("enabled", False)):
+        return {
+            "staging_mode": translate("status.staging.mode.direct"),
+            "staging_local_latest": translate("status.staging.not_applicable"),
+            "staging_remote_latest": translate("status.staging.not_applicable"),
+        }
+    return {
+        "staging_mode": translate("status.staging.mode.staging"),
+        "staging_local_latest": str(
+            runtime_state.get("staging_local_latest_time")
+            or translate("status.never")
+        ),
+        "staging_remote_latest": str(
+            runtime_state.get("staging_remote_latest_time")
+            or translate("status.never")
         ),
     }
 
@@ -226,6 +252,15 @@ def format_status_view(
         translate("status.last_maintenance", value=status_view["last_maintenance"]),
         translate("status.last_skip", value=status_view["last_skip"]),
         translate("status.pending_backup", value=status_view["pending_backup"]),
+        translate("status.staging.mode", value=status_view["staging_mode"]),
+        translate(
+            "status.staging.local_latest",
+            value=status_view["staging_local_latest"],
+        ),
+        translate(
+            "status.staging.remote_latest",
+            value=status_view["staging_remote_latest"],
+        ),
     ]
 
 

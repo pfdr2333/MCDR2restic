@@ -28,6 +28,7 @@ maintenance_schedule: {}
 update_check: {}
 minecraft: {}
 restic: {}
+staging: {}
 onebot: {}
 discord: {}
 custom_webhook: {}
@@ -35,7 +36,7 @@ notification: {}
 snapshot_cache: {}
 restore: {}
 messages: {}
-config_version: 10
+config_version: 12
 ```
 
 ## 1. 总开关和命令入口
@@ -520,6 +521,35 @@ max_output_chars_in_notification: 1800
 - 你需要对某些特殊输出重新判定成功或失败
 
 普通用户建议保持默认。
+
+## 6.5 中转库（beta，默认关闭）
+
+> **beta 功能：默认关闭。** 接口与行为可能变化，不建议作为唯一备份手段。完整说明、首次启用、磁盘自救与回退步骤见[中转库文档](staging.md)。
+
+中转库先写本地库、再异步复制到远端，用本地磁盘换取更短的 `save-off` 冻结窗口。关闭时插件完全走现有直传流程，不创建目录、不启动复制线程、不修改 cache 与备份命令。
+
+最小配置：
+
+```yaml
+staging:
+  enabled: true
+  repository: "./staging-repo"       # 必须在所有备份源之外
+  password: "换成强密码"              # 与 password_file 二选一，password 优先
+  password_file: ""
+  min_free_percent_after: 15         # 备份后剩余空间下限（占磁盘总容量）
+```
+
+关键规则：
+
+- 中转库、`cache_dir`、`password_file` 都必须位于任何备份源之外，否则备份在 `save-off` 前硬失败；
+- 已有直传远端首次启用时，本地库从远端复制 chunker 参数，首次复制只传增量；
+- 远端可达时插件会自行比对 `chunker_polynomial`，不一致明确报错，不依赖 restic 报错；
+- 复制、维护、purge 与手管 restic 命令由 `staging.io_lock` 串行；备份不占该锁；
+- 有复制 backlog 时维护整轮跳过，避免本地 prune 删除尚未复制的快照；
+- 恢复前的保护快照始终直传远端，不走中转库；
+- `staging purge` 仅支持文件系统型远端，远端比本地新时需要 `--force`。
+
+其余键（`keep_last`、`prune_max_unused`、`deep_prune_interval_days`、`copy_retry_max`、`copy_retry_backoff_seconds`、`copy_limit_upload_kib`、`remote_stale_warning_hours`、`emergency_prune_timeout_seconds`）见[中转库文档](staging.md)的配置表。
 
 ## 7. 通知配置
 

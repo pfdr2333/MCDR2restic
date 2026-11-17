@@ -56,6 +56,7 @@ from mcdr2restic.config.config_migration import (
 )
 from mcdr2restic.config.config_paths import ensure_config_file_exists
 from mcdr2restic.config.state_store import merge_defaults, save_text_file_atomically
+from mcdr2restic.defaults.default_constants import CONFIG_VERSION
 from mcdr2restic.defaults.message_defaults import build_default_messages
 
 
@@ -202,7 +203,7 @@ class ConfigurationTests(unittest.TestCase):
         self.assertIn("maintenance_schedule:", migrated)
         self.assertNotIn("  require_player_joined_in_wait_period:", migrated)
         self.assertNotIn("  online_check_interval_seconds:", migrated)
-        self.assertIn("config_version: 11", migrated)
+        self.assertIn("config_version: {}".format(CONFIG_VERSION), migrated)
 
     def test_apply_config_file_migrations_removes_deprecated_restore_key(self):
         lines = [
@@ -424,7 +425,7 @@ class ConfigurationTests(unittest.TestCase):
         migrated = apply_config_file_migrations(lines, "en_us", cfg)
 
         self.assertIn("  timeout_seconds: 60" + crlf, migrated)
-        self.assertEqual(migrated[-1], "config_version: 11" + crlf)
+        self.assertEqual(migrated[-1], "config_version: {}".format(CONFIG_VERSION) + crlf)
         self.assertTrue(migrated[-2].endswith(crlf))
 
     def test_apply_config_file_migrations_inserts_all_registered_top_level_blocks(
@@ -586,7 +587,7 @@ class ConfigurationTests(unittest.TestCase):
                 backup = file.read()
 
             self.assertEqual(backup, original)
-            self.assertEqual(yaml.safe_load(migrated)["config_version"], 11)
+            self.assertEqual(yaml.safe_load(migrated)["config_version"], CONFIG_VERSION)
             self.assertFalse(os.path.exists(config_path + ".temp"))
 
     def test_migration_backup_rotates_when_same_version_backup_exists(self):
@@ -695,7 +696,7 @@ class ConfigurationTests(unittest.TestCase):
             self.assertEqual(events, ["migrate_finished", "flip_finished"])
             with open(config_path, "r", encoding="utf8") as file:
                 final = yaml.safe_load(file.read())
-            self.assertEqual(final["config_version"], 11)
+            self.assertEqual(final["config_version"], CONFIG_VERSION)
             self.assertFalse(final["enabled"])
 
     @mock.patch("mcdr2restic.core.i18n._ACTIVE_LANGUAGE", "")

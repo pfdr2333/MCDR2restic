@@ -324,7 +324,7 @@ def create_restore_safety_snapshot(
         server_tr(server, "log.restore.pre_backup_started", count=len(session.tasks))
     )
     safety_snapshot_id = run_backup_body(
-        app_runtime, server, cfg, invalidate_snapshot_cache_func
+        app_runtime, server, cfg, invalidate_snapshot_cache_func, use_staging=False
     )
     if safety_snapshot_id:
         mark_restore_safety_snapshot(app_runtime, safety_snapshot_id)

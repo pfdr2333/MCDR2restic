@@ -63,6 +63,18 @@ class PendingBackupState:
 
 
 @dataclass
+class ResticExecutionSlot:
+    """一次 restic 进程执行的独立取消与进程槽位。
+
+    备份使用 ``BackupRuntimeState`` 本身；中转库复制等并行任务必须使用
+    独立实例，避免共用一个 cancel 事件时互相误杀。
+    """
+
+    cancel: threading.Event = field(default_factory=threading.Event)
+    current_process: Optional[subprocess.Popen] = None
+
+
+@dataclass
 class BackupRuntimeState:
     lock: threading.Lock = field(default_factory=threading.Lock)
     cancel: threading.Event = field(default_factory=threading.Event)
@@ -82,11 +94,27 @@ class RestoreRuntimeState:
 
 
 @dataclass
+class StagingRuntimeState:
+    """[beta] 中转库复制 worker 的锁、触发与独立进程槽位。
+
+    复制与维护/purge/手管 restic 由 ``io_lock`` 串行；复制进程使用
+    独立 ``copy_slot``，不复用备份的 cancel，避免互相误杀。
+    """
+
+    io_lock: threading.Lock = field(default_factory=threading.Lock)
+    copy_slot: ResticExecutionSlot = field(default_factory=ResticExecutionSlot)
+    copy_trigger: threading.Event = field(default_factory=threading.Event)
+    stop_event: threading.Event = field(default_factory=threading.Event)
+    worker: Optional[Any] = None
+
+
+@dataclass
 class PluginRuntime:
     config_state: ConfigRuntimeState = field(default_factory=ConfigRuntimeState)
     service: ServiceRuntimeState = field(default_factory=ServiceRuntimeState)
     backup: BackupRuntimeState = field(default_factory=BackupRuntimeState)
     restore: RestoreRuntimeState = field(default_factory=RestoreRuntimeState)
+    staging: StagingRuntimeState = field(default_factory=StagingRuntimeState)
 
     def release_backup_slot(self):
         """备份槽位的唯一释放路径：清空状态标记并释放锁（若仍持有）。"""

@@ -61,6 +61,7 @@ class NotificationDispatcher:
         values: Optional[Dict[str, Any]] = None,
         cfg: Optional[Dict[str, Any]] = None,
         failure: bool = False,
+        log: bool = True,
     ):
         cfg = cfg or self.config_provider()
         language = self._language()
@@ -70,7 +71,8 @@ class NotificationDispatcher:
             cfg,
             MessageRenderOptions(logger=self._logger(), language=language),
         )
-        self._log(log_text, failure)
+        if log:
+            self._log(log_text, failure)
         for spec in self._channel_specs():
             self._notify_channel(spec, template_key, values, cfg, language)
 

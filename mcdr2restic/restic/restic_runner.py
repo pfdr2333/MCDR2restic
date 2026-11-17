@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+import contextlib
 import os
 import queue
 import subprocess
@@ -89,6 +90,9 @@ class ResticStreamSession:
     deadline: Optional[float]
     output_queue: "queue.Queue[Tuple[str, Optional[str]]]"
     line_sink: Optional[Callable[[str, str], None]] = None
+    # 独立执行槽：备份与中转库复制各有自己的取消事件/当前进程，
+    # 不能共用 app_runtime.backup，否则会互相误杀
+    slot: Any = None
 
 
 def resolve_popen_executable(
@@ -117,6 +121,7 @@ def run_restic_command(  # noqa: PLR0913 透传命令的流式输出槽位，6 �
     phase: str,
     deadline: Optional[float],
     line_sink: Optional[Callable[[str, str], None]] = None,
+    slot: Any = None,
 ) -> ResticCommandResult:
     args = normalize_restic_phase_args(configured_args, phase)
     # executable 已并入 command[0]；launch 路径不再单独取用
@@ -128,15 +133,24 @@ def run_restic_command(  # noqa: PLR0913 透传命令的流式输出槽位，6 �
         phase, get_mcdr_language(app_runtime.service.server), started
     )
     progress_interval = get_restic_progress_interval(restic_cfg)
-    app_runtime.backup.current_process = process
+    execution_slot = slot or app_runtime.backup
+    execution_slot.current_process = process
     try:
         outcome = read_restic_process_output(
-            app_runtime, process, progress, progress_interval, deadline, line_sink
+            app_runtime,
+            process,
+            progress,
+            progress_interval,
+            deadline,
+            line_sink,
+            execution_slot,
         )
     finally:
-        app_runtime.backup.current_process = None
+        execution_slot.current_process = None
 
-    assert_restic_process_completed(app_runtime, restic_cfg, phase, started, outcome)
+    assert_restic_process_completed(
+        app_runtime, restic_cfg, phase, started, outcome, execution_slot
+    )
     # 非 JSON 阶段（init/unlock/maintenance）没有 summary/status，
     # 强推进度只会把已结束的命令说成"仍在执行"（P3-3）
     if progress.summary or progress.status:
@@ -146,14 +160,15 @@ def run_restic_command(  # noqa: PLR0913 透传命令的流式输出槽位，6 �
     return build_restic_command_result(phase, args, outcome, started, progress)
 
 
-def assert_restic_process_completed(
+def assert_restic_process_completed(  # noqa: PLR0913 执行槽位与命令上下文需一并传入
     app_runtime: PluginRuntime,
     restic_cfg: Dict[str, Any],
     phase: str,
     started: float,
     outcome: ResticProcessOutcome,
+    slot: Any = None,
 ):
-    canceled = app_runtime.backup.cancel.is_set()
+    canceled = (slot or app_runtime.backup).cancel.is_set()
     # restic 已成功收尾（退出码 0）时取消请求才刚到达，快照实际已落库，
     # 仍标 canceled 会与仓库真实状态矛盾，只有被打断的进程才按取消处理（P5-1）
     if canceled and (outcome.timed_out or outcome.return_code != 0):
@@ -257,6 +272,7 @@ def read_restic_process_output(  # noqa: PLR0913 与 run_restic_command 同签�
     progress_interval: float,
     deadline: Optional[float],
     line_sink: Optional[Callable[[str, str], None]] = None,
+    slot: Any = None,
 ) -> ResticProcessOutcome:
     output_queue: "queue.Queue[Tuple[str, Optional[str]]]" = queue.Queue()
     reader_threads = start_restic_reader_threads(process, output_queue)
@@ -268,6 +284,7 @@ def read_restic_process_output(  # noqa: PLR0913 与 run_restic_command 同签�
         deadline=deadline,
         output_queue=output_queue,
         line_sink=line_sink,
+        slot=slot or app_runtime.backup,
     )
     try:
         buffers, timed_out = consume_restic_output(session, len(reader_threads))
@@ -280,6 +297,15 @@ def read_restic_process_output(  # noqa: PLR0913 与 run_restic_command 同签�
         )
     finally:
         join_restic_reader_threads(reader_threads)
+        close_restic_process_streams(process)
+
+
+def close_restic_process_streams(process: subprocess.Popen):
+    for stream in (process.stdout, process.stderr):
+        if stream is None:
+            continue
+        with contextlib.suppress(Exception):
+            stream.close()
 
 
 def consume_restic_output(
@@ -290,7 +316,7 @@ def consume_restic_output(
     timed_out = False
     while active_streams > 0:
         timed_out = ensure_restic_process_can_continue(
-            session.app_runtime, session.process, session.deadline
+            session.app_runtime, session.process, session.deadline, session.slot
         )
         if timed_out:
             break
@@ -302,9 +328,10 @@ def ensure_restic_process_can_continue(
     app_runtime: PluginRuntime,
     process: subprocess.Popen,
     deadline: Optional[float],
+    slot: Any = None,
 ) -> bool:
     language = get_runtime_language(app_runtime)
-    if app_runtime.backup.cancel.is_set():
+    if (slot or app_runtime.backup).cancel.is_set():
         result = terminate_process(process)
         warn_if_termination_failed(
             get_runtime_logger(app_runtime),

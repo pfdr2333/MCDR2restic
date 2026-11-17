@@ -56,6 +56,8 @@ from mcdr2restic.restore.restore_task_repository import clear_restore_tasks
 from mcdr2restic.snapshots.snapshot_cache import (
     invalidate_snapshot_cache as invalidate_snapshot_cache_impl,
 )
+from mcdr2restic.staging.staging_config import staging_enabled
+from mcdr2restic.staging.staging_worker import StagingCopyWorker
 from mcdr2restic.update.update_check import UpdateChecker
 from mcdr2restic.core.utils import get_config_section, now_text
 
@@ -78,6 +80,7 @@ class PluginEntrypoint:
         self.restart_discord(server)
         self.restart_custom_webhook(server)
         self.start_scheduler(server)
+        self.start_staging_worker(server)
         self.restart_update_checker(server, startup_check=True)
         server.logger.info(server_tr(server, "log.plugin.loaded"))
 
@@ -186,6 +189,7 @@ class PluginEntrypoint:
         self.runtime.service.stopping.set()
         stop_server_running_clock(self.runtime, server)
         self.cancel_pending_backup()
+        self.stop_staging_worker()
         self.stop_update_checker()
         self.stop_scheduler()
         self.cancel_running_backup(reason)
@@ -213,6 +217,28 @@ class PluginEntrypoint:
             return
         self.runtime.service.scheduler.stop()
         self.runtime.service.scheduler = None
+
+    def start_staging_worker(self, server: PluginServerInterface):
+        """[beta] 仅在中转库开启时启动复制线程；关闭时保持零副作用。"""
+
+        self.stop_staging_worker()
+        if not staging_enabled(get_config_snapshot(self.runtime)):
+            return
+        worker = StagingCopyWorker(
+            self.runtime,
+            is_restore_running,
+            self.create_notification_dispatcher().notify_admins,
+            self.invalidate_snapshot_cache,
+        )
+        self.runtime.staging.worker = worker
+        worker.start()
+
+    def stop_staging_worker(self):
+        worker = self.runtime.staging.worker
+        if worker is None:
+            return
+        worker.stop()
+        self.runtime.staging.worker = None
 
     def cancel_running_backup(self, reason: str):
         if not is_backup_running(self.runtime):
@@ -265,6 +291,7 @@ class PluginEntrypoint:
         self.restart_discord(server)
         self.restart_custom_webhook(server)
         self.restart_update_checker(server, startup_check=False)
+        self.start_staging_worker(server)
         self.wake_scheduler()
 
     def invalidate_snapshot_cache(

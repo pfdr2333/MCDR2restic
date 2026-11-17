@@ -99,6 +99,10 @@ def build_default_snapshot_cache_config() -> ConfigDict:
     return section_defaults("snapshot_cache")
 
 
+def build_default_staging_config() -> ConfigDict:
+    return section_defaults("staging")
+
+
 def build_default_restore_config() -> ConfigDict:
     return section_defaults("restore")
 

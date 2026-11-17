@@ -48,16 +48,17 @@ def run_restic_command_with_lock_recovery(
     ctx: ResticOperationContext,
     configured_args: Any,
     phase: str,
+    slot: Any = None,
 ) -> ResticCommandResult:
     """Run a restic command and retry once after unlocking a stale local lock."""
 
     result = run_restic_command(
-        ctx.app_runtime, ctx.restic_cfg, configured_args, phase, ctx.deadline
+        ctx.app_runtime, ctx.restic_cfg, configured_args, phase, ctx.deadline, slot=slot
     )
     lock_info = recoverable_stale_lock_info(result)
     if lock_info is None:
         return result
-    if ctx.app_runtime.backup.cancel.is_set():
+    if (slot or ctx.app_runtime.backup).cancel.is_set():
         return result
 
     log_server_message(
@@ -74,6 +75,7 @@ def run_restic_command_with_lock_recovery(
         [RESTIC_COMMAND_UNLOCK],
         RESTIC_COMMAND_UNLOCK,
         ctx.deadline,
+        slot=slot,
     )
     try:
         assert_restic_success(ctx.restic_cfg, unlock_result, logger=ctx.server.logger)
@@ -94,7 +96,7 @@ def run_restic_command_with_lock_recovery(
         phase=phase,
     )
     return run_restic_command(
-        ctx.app_runtime, ctx.restic_cfg, configured_args, phase, ctx.deadline
+        ctx.app_runtime, ctx.restic_cfg, configured_args, phase, ctx.deadline, slot=slot
     )
 
 

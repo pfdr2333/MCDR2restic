@@ -17,6 +17,7 @@ MCDReforged 插件：调用 [restic](https://restic.readthedocs.io/en/stable/) �
 - 快照恢复：整份快照、单文件、文件夹，支持恢复到指定目录
 - 恢复前自动创建保护快照，失败自动回滚
 - 仓库维护：`forget`/`prune` 等命令按计划独立执行
+- 中转库（beta，默认关闭）：先写本地库再异步复制远端，缩短 `save-off` 冻结窗口；详见 [docs/staging.md](docs/staging.md)
 - 通知：OneBot QQ、Discord 与自定义 Webhook，可同时启用
 - 中英双语消息与配置注释，跟随 MCDR 语言
 - 配置安全检查：restic 仓库不得位于备份源目录内
@@ -76,6 +77,9 @@ MCDReforged 插件：调用 [restic](https://restic.readthedocs.io/en/stable/) �
 | `!!m2r unlock` | 解锁仓库 |
 | `!!m2r maintenance` | 手动执行仓库维护 |
 | `!!m2r exec <restic 参数...> [\| 过滤阶段]` | 透传执行任意 restic 命令并注入仓库环境（高级用法） |
+| `!!m2r staging status` | 查看中转库（beta）状态 |
+| `!!m2r staging copy` | 手动补齐中转库到远端 |
+| `!!m2r staging purge [--force]` | 重建中转库远端（仅文件系统型远端） |
 | `!!m2r restore <快照>` | 添加整份快照恢复任务 |
 | `!!m2r restore <快照> file <路径>` | 添加单文件恢复任务 |
 | `!!m2r restore <快照> folder <路径>` | 添加文件夹恢复任务 |
@@ -104,6 +108,7 @@ MCDReforged 插件：调用 [restic](https://restic.readthedocs.io/en/stable/) �
 - [命令说明](docs/commands.md)
 - [透传与 restic](docs/exec.md)
 - [配置说明](docs/configuration.md)
+- [中转库（beta）](docs/staging.md)
 - [状态与恢复](docs/restore.md)
 - [常见问题](docs/faq.md)
 

@@ -17,6 +17,7 @@ from mcdr2restic.commands.command_context import CommandContext
 from mcdr2restic.commands.notify_commands import NotifyCommands
 from mcdr2restic.commands.restore_commands import RestoreCommands
 from mcdr2restic.commands.restic_commands import ResticCommands
+from mcdr2restic.commands.staging_commands import StagingCommands
 from mcdr2restic.core.i18n import server_rtr, server_tr
 from mcdr2restic.core.utils import get_config_section
 from mcdr2restic.config.state_store import get_config_snapshot
@@ -31,6 +32,7 @@ class CommandHandlers:
         self.backup = BackupCommands(self.context)
         self.restore = RestoreCommands(self.context)
         self.restic = ResticCommands(self.context)
+        self.staging = StagingCommands(self.context)
         self.notify = NotifyCommands(self.context)
 
     def register_commands(self, server: PluginServerInterface):
@@ -94,6 +96,21 @@ class CommandHandlers:
                 Literal("exec")
                 .runs(self.restic.command_exec_usage)
                 .then(GreedyText("args").runs(self.restic.command_exec))
+            )
+            .then(
+                Literal("staging")
+                .runs(self.staging.command_status)
+                .then(Literal("status").runs(self.staging.command_status))
+                .then(Literal("copy").runs(self.staging.command_copy))
+                .then(
+                    Literal("purge")
+                    .runs(self.staging.command_purge)
+                    .then(
+                        Literal("--force").runs(
+                            self.staging.command_purge_force
+                        )
+                    )
+                )
             )
             .then(self.build_restore_command_tree())
             .then(

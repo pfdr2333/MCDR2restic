@@ -38,6 +38,7 @@ from mcdr2restic.minecraft.player_gate_service import (
     wait_for_player_gate,
 )
 from mcdr2restic.restic.restic_service import run_backup_body
+from mcdr2restic.staging.staging_hint import maybe_show_staging_hint
 from mcdr2restic.core.runtime import PendingBackupState, PluginRuntime
 from mcdr2restic.core.utils import get_config_section, now_text
 
@@ -271,7 +272,23 @@ class BackupRunner:
             self._skip_scheduled(
                 server, occurrence, "deadline", "warn.backup.defer_deadline_reached"
             )
+            self._maybe_hint_staging(server)
         # STOPPING：卸载流程已在收尾，只记日志
+
+    def _maybe_hint_staging(self, server: PluginServerInterface):
+        """[beta] 门控等待超时跳过备份时，唯一一次主动提示中转库方案。"""
+
+        try:
+            maybe_show_staging_hint(
+                self.app_runtime,
+                server,
+                get_config_snapshot(self.app_runtime),
+                self.admin_notifier,
+            )
+        except Exception as exc:
+            server.logger.warning(
+                tr(self._language(server), "warn.staging.hint_failed", error=exc)
+            )
 
     def _skip_for_min_gap(
         self, server: PluginServerInterface, occurrence: ScheduledOccurrence

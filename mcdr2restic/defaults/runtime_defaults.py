@@ -38,6 +38,21 @@ _DEFAULT_RUNTIME: Dict[str, Any] = {
     "last_maintenance_end_time": None,
     "last_maintenance_status": MaintenanceRunStatus.NEVER.value,
     "last_maintenance_message": "",
+    # [beta] 中转库：游标只认已成功复制到远端的本地快照；状态页只读这些缓存值，
+    # 避免每次渲染状态都去探测本地/远端仓库。
+    "staging_cursor_time": None,
+    "staging_cursor_ids": [],
+    "staging_last_copy_time": None,
+    "staging_last_copy_success_time": None,
+    "staging_last_copy_status": "never",
+    "staging_last_copy_message": "",
+    "staging_copy_backlog": 0,
+    "staging_local_latest_time": None,
+    "staging_remote_latest_time": None,
+    "staging_last_deep_prune_time": None,
+    "staging_chunker_mismatch": False,
+    "staging_remote_stale_warned_at": None,
+    "staging_hint_last_at": None,
 }
 
 
