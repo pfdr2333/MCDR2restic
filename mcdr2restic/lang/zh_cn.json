@@ -22,6 +22,7 @@
   "debug.snapshot.invalidate_failed": "标记 restic 快照缓存失效失败：{error}",
   "debug.staging.cache_invalidation_failed": "[beta] 中转库维护后失效快照缓存失败：{error}",
   "debug.staging.local_snapshot_probe_failed": "[beta] 读取本地快照时间失败，使用当前时间兜底：{error}",
+  "debug.staging.stale_warning_failed": "[beta] 永久失败挂起期间检查远端落后告警失败：{error}",
   "debug.update.next_wait": "下次版本更新检查等待 {seconds} 秒（{due_text}）",
   "detail.restore.restore_error": "restore 阶段错误：{error}",
   "detail.restore.rollback_error": "保护快照回滚错误：{error}",

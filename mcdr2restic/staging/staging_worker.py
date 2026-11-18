@@ -41,6 +41,9 @@ RESTORE_CHECK_SECONDS = 2.0
 BUSY_RETRY_SECONDS = 30
 RESTORE_RETRY_SECONDS = 120
 WAIT_SLICE_SECONDS = 0.5
+# 永久失败（鉴权/配额/chunker）后不再重试复制，但仍需低频检查远端落后，
+# 否则之后没有新备份时远端缺口再也不会告警（P2-8）
+PERMANENT_RECHECK_SECONDS = 3600
 
 RestoreRunningProvider = Callable[[PluginRuntime], bool]
 SnapshotInvalidator = Callable[[PluginServerInterface, Any, str], None]
@@ -73,6 +76,7 @@ class StagingCopyWorker:
         self._attempt = 0
         self._manual_requested = False
         self._next_wait_seconds: Optional[float] = None
+        self._permanent_hold = False
 
     def start(self):
         state = self.app_runtime.staging
@@ -130,6 +134,8 @@ class StagingCopyWorker:
             if self._manual_requested:
                 self._attempt = 0
                 self._manual_requested = False
+                # 手动触发视为用户已处理永久失败原因，允许立即重试
+                self._permanent_hold = False
             try:
                 result = self._run_once()
             except Exception as exc:
@@ -145,9 +151,11 @@ class StagingCopyWorker:
         self, result: Optional[CopyCycleResult]
     ) -> Optional[float]:
         if result is None:
-            return None
+            # 永久失败后的低频巡检轮：只查远端落后，不重试复制
+            return float(PERMANENT_RECHECK_SECONDS) if self._permanent_hold else None
         if result.success:
             self._attempt = 0
+            self._permanent_hold = False
             return None
         if result.status == STAGING_COPY_STATUS_SKIPPED:
             return float(BUSY_RETRY_SECONDS if not result.canceled else RESTORE_RETRY_SECONDS)
@@ -156,7 +164,10 @@ class StagingCopyWorker:
             return float(RESTORE_RETRY_SECONDS)
         if result.permanent or result.auth_error or result.quota_error:
             self._attempt = 0
-            return None
+            # 不再重试复制，但保留小时级远端落后检查，缺口不会因"没有新备份"而沉默
+            self._permanent_hold = True
+            return float(PERMANENT_RECHECK_SECONDS)
+        self._permanent_hold = False
         if not result.retryable:
             return None
         settings = self._current_settings()
@@ -169,7 +180,7 @@ class StagingCopyWorker:
         self._attempt += 1
         return float(delay)
 
-    def _run_once(self) -> Optional[CopyCycleResult]:
+    def _run_once(self) -> Optional[CopyCycleResult]:  # noqa: PLR0911 前置条件多，逐个早退
         state = self.app_runtime.staging
         if not self._running():
             return None
@@ -178,6 +189,10 @@ class StagingCopyWorker:
             return None
         cfg = get_config_snapshot(self.app_runtime)
         if not staging_enabled(cfg):
+            return None
+        if self._permanent_hold:
+            # 永久失败挂起期间不再尝试复制，只保留远端落后检查
+            self._warn_remote_stale_only(server, cfg)
             return None
         if self.restore_running_provider(self.app_runtime):
             self._log_restore_yield(server)
@@ -282,6 +297,25 @@ class StagingCopyWorker:
             settings,
             self.admin_notifier,
         )
+
+    def _warn_remote_stale_only(self, server: PluginServerInterface, cfg: dict):
+        try:
+            settings = get_staging_settings(cfg)
+            maybe_warn_remote_stale(
+                self.app_runtime,
+                server,
+                cfg,
+                settings,
+                self.admin_notifier,
+            )
+        except Exception as exc:
+            server.logger.debug(
+                tr(
+                    get_mcdr_language(server),
+                    "debug.staging.stale_warning_failed",
+                    error=exc,
+                )
+            )
 
     def _invalidate_snapshot_cache(
         self, server: PluginServerInterface, restic_cfg: dict

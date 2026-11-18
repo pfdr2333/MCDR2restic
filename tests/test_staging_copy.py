@@ -370,6 +370,24 @@ class CopyCycleTest(unittest.TestCase):
         self.assertEqual(cycle.status, STAGING_COPY_STATUS_FAILED)
         self.assertTrue(self.server.logger.warning_messages)
 
+    def test_first_backup_wait_writes_state_and_info_only_once(self):
+        # 首备被推迟数天时不重复写 state.yml、不重复打 info（P2-9）
+        update = mock.Mock(
+            side_effect=lambda runtime, server=None, **values: runtime.config_state.config[
+                "runtime"
+            ].update(values)
+        )
+        with mock.patch.object(staging_copy, "update_staging_runtime", update):
+            staging_copy._record_wait_first_backup(self.runtime, self.server)
+            infos_after_first = len(self.server.logger.info_messages)
+            staging_copy._record_wait_first_backup(self.runtime, self.server)
+
+        self.assertEqual(update.call_count, 1)
+        self.assertEqual(
+            len(self.server.logger.info_messages), infos_after_first
+        )
+        self.assertTrue(self.server.logger.debug_messages)
+
 
 class WorkerTest(unittest.TestCase):
     def make_worker(self, cfg=None):
@@ -431,7 +449,61 @@ class WorkerTest(unittest.TestCase):
         worker._stop.set()
         self.assertFalse(worker._wait_for_next_round(None))
 
-    def test_stop_only_signals_its_own_events(self):
+    def test_permanent_failure_keeps_hourly_stale_check(self):
+        # 鉴权/配额永久失败后停止重试复制，但远端落后告警仍需继续（P2-8）
+        _, worker = self.make_worker()
+        failure = CopyCycleResult(
+            STAGING_COPY_STATUS_FAILED,
+            pending_count=2,
+            retryable=False,
+            auth_error=True,
+        )
+
+        delay = worker._plan_next_wait(failure)
+
+        self.assertEqual(
+            delay, float(staging_worker.PERMANENT_RECHECK_SECONDS)
+        )
+        self.assertTrue(worker._permanent_hold)
+        self.assertEqual(
+            worker._plan_next_wait(None),
+            float(staging_worker.PERMANENT_RECHECK_SECONDS),
+        )
+
+    def test_hold_mode_only_checks_stale_warning(self):
+        runtime, worker = self.make_worker()
+        runtime.service.server = FakePluginServer()
+        worker._permanent_hold = True
+
+        with (
+            mock.patch.object(
+                staging_worker, "maybe_warn_remote_stale"
+            ) as warn,
+            mock.patch.object(staging_worker, "run_copy_cycle") as copy,
+        ):
+            result = worker._run_once()
+
+        self.assertIsNone(result)
+        warn.assert_called_once()
+        copy.assert_not_called()
+        self.assertFalse(runtime.staging.io_lock.locked())
+
+    def test_manual_request_clears_permanent_hold(self):
+        _, worker = self.make_worker()
+        worker._permanent_hold = True
+        worker.trigger(manual=True)
+
+        seen = {}
+
+        def fake_run_once():
+            seen["hold"] = worker._permanent_hold
+            worker._stop.set()
+
+        with mock.patch.object(worker, "_run_once", fake_run_once):
+            worker._run()
+
+        self.assertFalse(seen["hold"])
+
         # stop() 不再清理/置位共享事件，否则新实例的取消信号会被旧线程抹掉（P2-4）
         runtime, worker = self.make_worker()
 

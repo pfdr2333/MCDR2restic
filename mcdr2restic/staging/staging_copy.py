@@ -384,6 +384,20 @@ def _record_wait_first_backup(
     message = tr(
         get_mcdr_language(server), "info.staging.copy_waiting_first_backup"
     )
+    runtime_state = staging_runtime_state(app_runtime)
+    already_waiting = (
+        str(runtime_state.get("staging_last_copy_status") or "")
+        == STAGING_COPY_STATUS_SKIPPED
+        and str(runtime_state.get("staging_last_copy_message") or "") == message
+    )
+    if already_waiting:
+        # 首备被门控推迟数天时，每 30 秒重写 state.yml 并打 info 只会刷屏（P2-9）
+        server.logger.debug(message)
+        return CopyCycleResult(
+            STAGING_COPY_STATUS_SKIPPED,
+            message=message,
+            retryable=True,
+        )
     update_staging_runtime(
         app_runtime,
         server,
