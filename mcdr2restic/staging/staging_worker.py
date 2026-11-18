@@ -208,14 +208,22 @@ class StagingCopyWorker:
                 retryable=True,
             )
         try:
-            return self._run_locked(server, cfg)
+            # 先登记本轮的取消槽位再复核代际：stop() 无论发生在 acquire
+            # 之前还是之后都能看到它，不会出现"已停止却仍跑完整轮复制"
+            slot = ResticExecutionSlot()
+            self._active_slot = slot
+            if not self._running():
+                return None
+            return self._run_locked(server, cfg, slot)
         finally:
+            self._active_slot = None
             state.io_lock.release()
 
     def _run_locked(
         self,
         server: PluginServerInterface,
         cfg: dict,
+        slot: ResticExecutionSlot,
     ) -> Optional[CopyCycleResult]:
         restic_cfg = get_config_section(cfg, "restic")
         settings = get_staging_settings(cfg)
@@ -244,10 +252,6 @@ class StagingCopyWorker:
         if paths is None:
             return None
 
-        # 每次复制使用 run-local 槽位：stop()/重载只打断自己这一轮，
-        # 不会清掉其他实例（purge/维护）共用的取消信号
-        slot = ResticExecutionSlot()
-        self._active_slot = slot
         monitor_stop = threading.Event()
         monitor = threading.Thread(
             target=self._watch_restore,
@@ -266,7 +270,6 @@ class StagingCopyWorker:
                 slot=slot,
             )
         finally:
-            self._active_slot = None
             monitor_stop.set()
             monitor.join(timeout=RESTORE_CHECK_SECONDS + 1.0)
 

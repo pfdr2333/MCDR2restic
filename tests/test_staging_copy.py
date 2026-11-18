@@ -553,6 +553,20 @@ class WorkerTest(unittest.TestCase):
 
         self.assertTrue(slot.cancel.is_set())
 
+    def test_stop_after_lock_prevents_copy_and_releases_lock(self):
+        # stop() 落在 acquire 与复制启动之间：登记槽位后的代际复核必须拦住本轮
+        runtime, worker = self.make_worker()
+        with (
+            mock.patch.object(worker, "_running", side_effect=[True, False]),
+            mock.patch.object(worker, "_run_locked") as run_locked,
+        ):
+            result = worker._run_once()
+
+        self.assertIsNone(result)
+        run_locked.assert_not_called()
+        self.assertFalse(runtime.staging.io_lock.locked())
+        self.assertIsNone(worker._active_slot)
+
     def test_new_worker_retires_previous_generation(self):
         runtime, old = self.make_worker()
 
