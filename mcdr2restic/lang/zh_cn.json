@@ -184,6 +184,7 @@
   "info.backup.pending_canceled": "已取消推迟中的定时备份（原计划 {scheduled_time}）",
   "info.backup.player_gate_back_in_limit": "在线人数降回阈值内（{current}/{max_online}），取消中断计时",
   "info.backup.player_gate_released": "在线人数已降回阈值内（{current}/{max_online}），开始执行推迟的定时备份（原计划 {scheduled_time}）",
+  "info.backup.player_gate_requeued": "[备份] 等待备份槽位期间在线人数达到门控阈值（{current}/{max_online}），已归还槽位并继续等待。",
   "info.backup.player_gate_still_waiting": "备份仍在推迟：在线 {current} 人 ≥ 门控阈值 {max_online} 人（原计划 {scheduled_time}）",
   "info.backup.player_gate_waiting": "当前在线 {current} 人，达到门控阈值 {max_online} 人，备份推迟（原计划 {scheduled_time}），人数降回阈值内自动开始",
   "info.backup.skip_min_gap": "距上次备份结束不足 {min_gap_seconds} 秒，跳过本次定时备份（原计划 {scheduled_time}；上次结束 {last_end_time}）",

@@ -184,6 +184,7 @@
   "info.backup.pending_canceled": "Deferred scheduled backup canceled (scheduled for {scheduled_time})",
   "info.backup.player_gate_back_in_limit": "Players back below the threshold ({current}/{max_online}); interruption timer reset",
   "info.backup.player_gate_released": "Player count dropped below the threshold ({current}/{max_online}); starting the deferred scheduled backup (scheduled for {scheduled_time})",
+  "info.backup.player_gate_requeued": "[Backup] Online players reached the gate threshold ({current}/{max_online}) while waiting for the backup slot; the slot was released and the backup keeps waiting.",
   "info.backup.player_gate_still_waiting": "Backup still postponed: {current} players online ≥ gate threshold {max_online} (scheduled for {scheduled_time})",
   "info.backup.player_gate_waiting": "{current} players online have reached the gate threshold of {max_online}; backup postponed (scheduled for {scheduled_time}) until the count drops",
   "info.backup.skip_min_gap": "The previous backup ended less than {min_gap_seconds}s ago; skipping this scheduled backup (scheduled for {scheduled_time}; last end {last_end_time})",

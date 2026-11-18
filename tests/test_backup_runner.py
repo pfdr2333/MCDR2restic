@@ -291,6 +291,65 @@ class BackupRunnerTests(unittest.TestCase):
             any("onebot broken" in m for m in server.logger.warning_messages)
         )
 
+    def test_scheduled_start_requeues_when_gate_reopens_after_slot_wait(self):
+        # 等槽位期间人数回升：不得直接进入 save-off，而是归还槽位回到门控等待（P2-1）
+        runtime, runner = self.make_runner()
+        server = FakePluginServer()
+        occurrence = mock.Mock(scheduled_at="2026-01-01 00:00:00")
+        pending = runtime.register_pending_backup(occurrence.scheduled_at, None)
+
+        with (
+            mock.patch.object(
+                runner, "_prepare_scheduled_start", side_effect=[True, False]
+            ) as prepare,
+            mock.patch.object(runner, "_wait_for_backup_slot", return_value=None),
+            mock.patch.object(runner, "_player_gate_reopened", return_value=True),
+            mock.patch.object(runner, "_run_with_acquired_lock") as run,
+        ):
+            self.assertFalse(
+                runner._await_slot_with_gate(server, occurrence, pending)
+            )
+
+        self.assertEqual(prepare.call_count, 2)
+        run.assert_not_called()
+
+    def test_scheduled_start_proceeds_when_gate_still_open(self):
+        runtime, runner = self.make_runner()
+        server = FakePluginServer()
+        occurrence = mock.Mock(scheduled_at="2026-01-01 00:00:00")
+        pending = runtime.register_pending_backup(occurrence.scheduled_at, None)
+
+        with (
+            mock.patch.object(runner, "_prepare_scheduled_start", return_value=True),
+            mock.patch.object(runner, "_wait_for_backup_slot", return_value=None),
+            mock.patch.object(runner, "_player_gate_reopened", return_value=False),
+            mock.patch.object(runner, "_scheduled_start_allowed", return_value=True),
+        ):
+            self.assertTrue(
+                runner._await_slot_with_gate(server, occurrence, pending)
+            )
+
+    def test_player_gate_reopened_compares_current_count(self):
+        from mcdr2restic.backup import backup_runner
+
+        runtime, runner = self.make_runner()
+        runtime.config_state.config = {
+            "schedule": {"backup_player_gate_max_online": 5}
+        }
+        server = FakePluginServer()
+
+        with mock.patch.object(
+            backup_runner, "resolve_online_player_count", return_value=3
+        ):
+            self.assertFalse(runner._player_gate_reopened(server))
+        with mock.patch.object(
+            backup_runner, "resolve_online_player_count", return_value=5
+        ):
+            self.assertTrue(runner._player_gate_reopened(server))
+        self.assertTrue(
+            any("门控阈值" in message for message in server.logger.info_messages)
+        )
+
     def test_success_records_success_anchor_and_resets_gate_warning(self):
         runtime, runner = self.make_runner()
         runtime.config_state.config = {

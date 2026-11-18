@@ -35,6 +35,8 @@ from mcdr2restic.core.presentation import localized_backup_status
 from mcdr2restic.minecraft.minecraft_service import try_force_save_on
 from mcdr2restic.minecraft.player_gate_service import (
     GateWaitStatus,
+    player_gate_settings,
+    resolve_online_player_count,
     wait_for_player_gate,
 )
 from mcdr2restic.restic.restic_service import run_backup_body
@@ -138,20 +140,8 @@ class BackupRunner:
         pending: PendingBackupState,
     ):
         try:
-            if not self._prepare_scheduled_start(server, occurrence, pending):
+            if not self._await_slot_with_gate(server, occurrence, pending):
                 return
-            reason = self._wait_for_backup_slot(server, pending)
-            if reason is not None:
-                self._handle_slot_wait_abort(server, occurrence, pending, reason)
-                return
-            try:
-                if not self._scheduled_start_allowed(server, occurrence):
-                    self.app_runtime.release_backup_slot()
-                    return
-            except Exception:
-                # 拿锁后的检查自身异常也必须归还槽位，否则后续备份永久卡死
-                self.app_runtime.release_backup_slot()
-                raise
             self.app_runtime.clear_pending_backup(pending)
             self._run_with_acquired_lock(server, BackupTrigger.SCHEDULED.value, occurrence)
         except Exception as exc:
@@ -168,6 +158,58 @@ class BackupRunner:
             )
         finally:
             self.app_runtime.clear_pending_backup(pending)
+
+    def _await_slot_with_gate(
+        self,
+        server: PluginServerInterface,
+        occurrence: ScheduledOccurrence,
+        pending: PendingBackupState,
+    ) -> bool:
+        """门控 → 备份槽位 → 门控复检；复检不过就归还槽位回到门控等待。
+
+        槽位可能被上一次备份长时间占用，等槽位期间人数会重新超过阈值。此时
+        直接进入 save-off 会在十分钟后被运行中监控中断，形成"启动→中断→
+        失败通知"的循环（P2-1）。复检用当前采样，不再叠加采样等待。
+        """
+
+        while True:
+            if not self._prepare_scheduled_start(server, occurrence, pending):
+                return False
+            reason = self._wait_for_backup_slot(server, pending)
+            if reason is not None:
+                self._handle_slot_wait_abort(server, occurrence, pending, reason)
+                return False
+            if not self._player_gate_reopened(server):
+                break
+            self.app_runtime.release_backup_slot()
+        try:
+            if not self._scheduled_start_allowed(server, occurrence):
+                self.app_runtime.release_backup_slot()
+                return False
+        except Exception:
+            self.app_runtime.release_backup_slot()
+            raise
+        return True
+
+    def _player_gate_reopened(self, server: PluginServerInterface) -> bool:
+        """等槽位后人数是否仍超阈；true 表示需要回到门控等待。"""
+
+        cfg = get_config_snapshot(self.app_runtime)
+        max_online, _ = player_gate_settings(cfg)
+        if max_online <= 0:
+            return False
+        count = resolve_online_player_count(self.app_runtime, server, cfg)
+        if count is None or count < max_online:
+            return False
+        server.logger.info(
+            tr(
+                self._language(server),
+                "info.backup.player_gate_requeued",
+                current=count,
+                max_online=max_online,
+            )
+        )
+        return True
 
     def _prepare_scheduled_start(
         self,
