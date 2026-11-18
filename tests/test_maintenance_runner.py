@@ -3,7 +3,6 @@ try:
 except ImportError:
     from support import FakePluginServer, create_runtime, mock, unittest
 
-import threading
 
 from mcdr2restic.core.models import (
     BackupCanceled,
@@ -73,38 +72,23 @@ class MaintenanceRunnerTests(unittest.TestCase):
         self.assertIsNone(runtime.backup.thread)
         self.assertIsNone(runtime.backup.label)
 
-    def test_run_waiting_executes_and_releases_slot(self):
+    def test_locked_run_executes_and_releases_slot(self):
         runtime, runner = self.make_runner()
         runtime.config_state.config = {"language": "en_us"}
         server = FakePluginServer(language="en_us")
+        runtime.backup.lock.acquire()
 
         with mock.patch(
             "mcdr2restic.restic.maintenance_runner.run_maintenance_body",
             return_value=MaintenanceOutcome(MaintenanceRunStatus.SUCCESS, "ok"),
         ) as run_body:
-            result = runner.run_waiting(server)
+            result = runner._run_with_acquired_lock(server)
 
         self.assertTrue(result)
         run_body.assert_called_once()
         self.assertFalse(runtime.backup.lock.locked())
         self.assertIsNone(runtime.backup.thread)
         self.assertEqual(runtime.backup.label, None)
-
-    def test_run_waiting_gives_up_when_plugin_stopping(self):
-        runtime, runner = self.make_runner()
-        runtime.config_state.config = {"language": "en_us"}
-        server = FakePluginServer(language="en_us")
-        runtime.backup.lock.acquire()
-        runtime.service.stopping.set()
-        try:
-            with mock.patch(
-                "mcdr2restic.restic.maintenance_runner.run_maintenance_body"
-            ) as run_body:
-                self.assertFalse(runner.run_waiting(server))
-            run_body.assert_not_called()
-        finally:
-            runtime.backup.lock.release()
-        self.assertTrue(any("stopping" in m for m in server.logger.info_messages))
 
     def test_entry_does_not_erase_cancel_arrived_before_thread_start(self):
         # 线程入口 clear 不得抹掉拿锁与线程启动之间到达的取消请求（P1-7）
@@ -171,6 +155,7 @@ class MaintenanceRunnerTests(unittest.TestCase):
             labels_at_snapshot.append(app_runtime.backup.label)
             return {"language": "en_us"}
 
+        runtime.backup.lock.acquire()
         with mock.patch(
             "mcdr2restic.restic.maintenance_runner.get_config_snapshot",
             side_effect=fake_snapshot,
@@ -178,38 +163,10 @@ class MaintenanceRunnerTests(unittest.TestCase):
             "mcdr2restic.restic.maintenance_runner.run_maintenance_body",
             return_value=MaintenanceOutcome(MaintenanceRunStatus.SUCCESS, "ok"),
         ):
-            self.assertTrue(runner.run_waiting(server))
+            self.assertTrue(runner._run_with_acquired_lock(server))
 
-        # 首次快照发生在拿锁前（run_waiting 读语言），拿锁后的快照必须已带标记
+        # 取配置快照时 maintenance 标记必须已就位
         self.assertEqual(labels_at_snapshot[-1], "maintenance")
-
-    def test_waiting_maintenance_thread_never_runs_after_stop(self):
-        runtime, runner = self.make_runner()
-        runtime.config_state.config = {"language": "en_us"}
-        server = FakePluginServer(language="en_us")
-        # 模拟长备份占用槽位，卸载发生在维护线程等待期间
-        runtime.backup.lock.acquire()
-        result = {}
-
-        def waiting():
-            with mock.patch(
-                "mcdr2restic.restic.maintenance_runner.run_maintenance_body",
-                return_value=MaintenanceOutcome(MaintenanceRunStatus.SUCCESS, "ok"),
-            ) as run_body:
-                result["value"] = runner.run_waiting(server)
-                result["body_calls"] = run_body.call_count
-
-        worker = threading.Thread(target=waiting, daemon=True)
-        worker.start()
-        runtime.service.stopping.set()
-        worker.join(timeout=5)
-
-        self.assertFalse(worker.is_alive())
-        self.assertEqual(result["value"], False)
-        self.assertEqual(result["body_calls"], 0)
-        # 锁始终未被维护线程抢走
-        self.assertTrue(runtime.backup.lock.locked())
-        runtime.backup.lock.release()
 
     def test_run_scheduled_skips_without_blocking_when_slot_busy(self):
         runtime, runner = self.make_runner()

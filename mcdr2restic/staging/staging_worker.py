@@ -21,7 +21,7 @@ from mcdr2restic.core.i18n import config_language, server_tr, tr, tr_error
 from mcdr2restic.core.language import get_mcdr_language
 from mcdr2restic.core.models import BackupProblem
 from mcdr2restic.core.runtime import PluginRuntime, ResticExecutionSlot
-from mcdr2restic.core.utils import get_config_section, non_negative_int
+from mcdr2restic.core.utils import get_config_section
 from mcdr2restic.staging.staging_config import (
     StagingSettings,
     get_staging_settings,
@@ -386,16 +386,7 @@ def request_copy(app_runtime: PluginRuntime, manual: bool = False) -> bool:
     return True
 
 
-def copy_backlog(app_runtime: PluginRuntime) -> int:
-    return non_negative_int(
-        get_config_snapshot(app_runtime)
-        .get("runtime", {})
-        .get("staging_copy_backlog", 0)
-    )
-
-
 __all__ = [
     "StagingCopyWorker",
-    "copy_backlog",
     "request_copy",
 ]

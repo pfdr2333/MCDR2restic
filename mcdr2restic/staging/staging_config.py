@@ -317,10 +317,6 @@ def build_remote_restic_config(restic_cfg: Dict[str, Any]) -> Dict[str, Any]:
     return copy.deepcopy(restic_cfg)
 
 
-def remote_repository_value(restic_cfg: Dict[str, Any]) -> str:
-    return get_effective_restic_repository(restic_cfg)
-
-
 def build_copy_source_config(
     dest_restic_cfg: Dict[str, Any],
     source_password: str,

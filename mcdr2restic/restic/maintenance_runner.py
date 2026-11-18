@@ -112,25 +112,6 @@ class MaintenanceRunner:
             raise
         return True
 
-    def run_waiting(self, server: PluginServerInterface) -> bool:
-        """手动维护：等待槽位后执行；插件停止时放弃。"""
-
-        language = get_mcdr_language(server)
-        try:
-            cfg = get_config_snapshot(self.app_runtime)
-            language = config_language(cfg, get_mcdr_language(server))
-        except Exception as exc:
-            self._log_failure(server, language, exc)
-            return False
-        if self.restore_running_provider(self.app_runtime):
-            server.logger.warning(tr(language, "warn.maintenance.restore_running"))
-            return False
-        if not self.app_runtime.acquire_backup_slot_waiting():
-            # 仅在插件停止时走到这里，避免卸载后僵尸线程抢到锁执行 prune
-            server.logger.info(tr(language, "info.maintenance.skipped_on_plugin_stop"))
-            return False
-        return self._run_with_acquired_lock(server)
-
     def _run_with_acquired_lock(
         self, server: PluginServerInterface, scheduled_at: str = ""
     ) -> bool:
