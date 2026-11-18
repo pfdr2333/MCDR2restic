@@ -44,6 +44,7 @@ from mcdr2restic.staging.staging_config import (
     local_source_credentials,
     remote_source_credentials,
 )
+from mcdr2restic.staging.staging_failure import classify_failure
 
 
 CAT_CONFIG_PHASE = "staging-cat-config"
@@ -53,41 +54,6 @@ INIT_REMOTE_PHASE = "staging-init-remote"
 COPY_PHASE = "staging-copy"
 PRUNE_PHASE = "staging-prune"
 CACHE_CLEANUP_PHASE = "staging-cache-cleanup"
-
-AUTH_ERROR_MARKERS = (
-    "wrong password",
-    "password is incorrect",
-    "no key found",
-    "invalid password",
-    # S3 鉴权信号（MinIO/AWS 等对象存储）：不归类会导致复制按 UNREACHABLE
-    # 无限退避重试，违背 staging.md「鉴权失败停止自动重试」的承诺。
-    # 错误码（如 SignatureDoesNotMatch）小写后无空格，需要专门变体。
-    # 不用裸数字状态码：子串匹配会命中输出里的随机数字（退避时长、
-    # 传输字节数等），归类漂移甚至把网络故障误判成鉴权失败停止重试
-    "access denied",
-    "request signature",
-    "signaturedoesnotmatch",
-    "invalidaccesskeyid",
-    "invalid token",
-    "unauthorized",
-    "forbidden",
-)
-QUOTA_ERROR_MARKERS = (
-    "quota",
-    "entity too large",
-    "entitytoolarge",
-    "insufficient storage",
-    "insufficientstorage",
-    "storage limit",
-    "out of space",
-)
-MISSING_REPOSITORY_MARKERS = (
-    "repository does not exist",
-    "no such file or directory",
-    "unable to open config file",
-    "is there a repository at the following location",
-    "does not exist",
-)
 
 RESTIC_TIME_PATTERN = re.compile(
     r"^(?P<base>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})"
@@ -185,14 +151,9 @@ def probe_repository(
 
 
 def classify_repo_failure(result: ResticCommandResult) -> RepoProbeStatus:
-    text = combine_restic_output(result).lower()
-    if any(marker in text for marker in AUTH_ERROR_MARKERS):
-        return RepoProbeStatus.AUTH
-    if any(marker in text for marker in QUOTA_ERROR_MARKERS):
-        return RepoProbeStatus.QUOTA
-    if any(marker in text for marker in MISSING_REPOSITORY_MARKERS):
-        return RepoProbeStatus.MISSING
-    return RepoProbeStatus.UNREACHABLE
+    """[beta] 仓库探测失败归类；判定逻辑与复制侧共用 staging_failure。"""
+
+    return RepoProbeStatus(classify_failure(result).value)
 
 
 def parse_json_object(text: str) -> Optional[Dict[str, Any]]:

@@ -28,6 +28,7 @@ from mcdr2restic.staging.staging_config import (
     build_local_restic_config,
     local_source_credentials,
 )
+from mcdr2restic.staging.staging_failure import FailureKind, classify_failure
 from mcdr2restic.staging.staging_repository import (
     COPY_PHASE,
     CursorCoverage,
@@ -54,23 +55,6 @@ from mcdr2restic.staging.staging_state import (
 )
 
 
-AUTH_ERROR_MARKERS = (
-    "wrong password",
-    "password is incorrect",
-    "no key found",
-    "authentication",
-    "unauthorized",
-    "access denied",
-    "forbidden",
-)
-QUOTA_ERROR_MARKERS = (
-    "quota",
-    "insufficient storage",
-    "storage limit",
-    "no space left",
-    "exceeded",
-    "out of space",
-)
 # 游标不可信时无法断言还有多少本地快照未复制；状态页与告警都按"未知"处理
 BACKLOG_UNKNOWN = -1
 
@@ -348,12 +332,12 @@ def _classify_copy_problem(
     pending: Sequence[Dict[str, str]],
     backlog_unknown: bool = False,
 ) -> CopyCycleResult:
+    # 只按 i18n_key 与 restic 原始输出分类：对译文做英文子串匹配会让
+    # 中文环境下"超时"与"配额"互相误判（P1-2）
     language = get_mcdr_language(server)
     message = tr_error(language, exc)
-    text = message.lower()
-    if exc.i18n_key == "error.staging.remote_auth" or any(
-        marker in text for marker in AUTH_ERROR_MARKERS
-    ):
+    kind = classify_failure(exc)
+    if kind == FailureKind.AUTH:
         return CopyCycleResult(
             STAGING_COPY_STATUS_FAILED,
             message=message,
@@ -362,7 +346,7 @@ def _classify_copy_problem(
             auth_error=True,
             backlog_unknown=backlog_unknown,
         )
-    if any(marker in text for marker in QUOTA_ERROR_MARKERS):
+    if kind == FailureKind.QUOTA:
         return CopyCycleResult(
             STAGING_COPY_STATUS_FAILED,
             message=message,
