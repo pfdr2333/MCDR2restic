@@ -20,7 +20,7 @@ import os
 import tempfile
 from datetime import datetime
 
-from mcdr2restic.core.models import BackupProblem, MaintenanceRunStatus
+from mcdr2restic.core.models import BackupCanceled, BackupProblem, MaintenanceRunStatus
 from mcdr2restic.defaults.runtime_defaults import build_default_runtime
 from mcdr2restic.restic import restic_service
 from mcdr2restic.staging import staging_maintenance, staging_purge
@@ -410,7 +410,10 @@ class PurgeTest(unittest.TestCase):
                         i18n_key="error.staging.purge_failed", error="boom"
                     ),
                 ),
-                mock.patch.object(staging_purge, "request_copy") as request_copy,self.assertRaises(BackupProblem)
+                mock.patch.object(
+                    staging_purge, "request_copy"
+                ) as request_copy,
+                self.assertRaises(BackupProblem),
             ):
                 staging_purge.purge_staging_remote(
                     self.runtime, self.server, cfg, force=False
@@ -418,6 +421,61 @@ class PurgeTest(unittest.TestCase):
 
             request_copy.assert_not_called()
             self.assertTrue(os.path.exists(remote_repo))
+            with open(
+                os.path.join(remote_repo, "config"), encoding="utf8"
+            ) as file:
+                self.assertEqual(file.read(), "old")
+
+    def test_purge_cancel_between_phases_rolls_back_old_remote(self):
+        with tempfile.TemporaryDirectory() as root:
+            local_repo = os.path.join(root, "staging-repo")
+            remote_repo = os.path.join(root, "remote-repo")
+            os.makedirs(local_repo)
+            os.makedirs(remote_repo)
+            with open(os.path.join(remote_repo, "config"), "w", encoding="utf8") as file:
+                file.write("old")
+
+            cfg = staging_config(local_repo, remote_repo)
+            health = mock.Mock(ok=True, missing=False, error="", config={})
+
+            def initialize_then_cancel(*_args, **_kwargs):
+                # 初始化期间收到取消：下一个阶段检查点应中止并回滚
+                self.runtime.staging.copy_slot.cancel.set()
+
+            with (
+                mock.patch.object(
+                    staging_purge, "ensure_default_restic_executable_available"
+                ),
+                mock.patch.object(
+                    staging_purge, "probe_repository", return_value=health
+                ),
+                mock.patch.object(
+                    staging_purge,
+                    "read_snapshots",
+                    side_effect=[
+                        [snapshot("a" * 64, "2026-01-02T00:00:00Z")],
+                        [snapshot("b" * 64, "2026-01-01T00:00:00Z")],
+                    ],
+                ),
+                mock.patch.object(
+                    staging_purge,
+                    "run_initialization",
+                    side_effect=initialize_then_cancel,
+                ),
+                mock.patch.object(
+                    staging_purge, "request_copy"
+                ) as request_copy,
+                self.assertRaises(BackupCanceled),
+            ):
+                staging_purge.purge_staging_remote(
+                    self.runtime, self.server, cfg, force=True
+                )
+
+            request_copy.assert_not_called()
+            self.assertTrue(os.path.exists(remote_repo))
+            self.assertFalse(
+                any(".purged-" in name for name in os.listdir(root))
+            )
             with open(
                 os.path.join(remote_repo, "config"), encoding="utf8"
             ) as file:

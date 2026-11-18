@@ -1048,5 +1048,57 @@ class RestoreCancelTests(unittest.TestCase):
         run_command.assert_called_once()
 
 
+class RestoreStagingExclusionTests(unittest.TestCase):
+    def make_commands(self, runtime):
+        from mcdr2restic.commands.command_context import CommandContext
+        from mcdr2restic.commands.restore_commands import RestoreCommands
+
+        context = CommandContext(
+            app_runtime=runtime,
+            backup_runner_factory=lambda: None,
+            maintenance_runner_factory=lambda: None,
+            reload_services=mock.Mock(),
+            wake_scheduler=mock.Mock(),
+            snapshot_invalidator=mock.Mock(),
+        )
+        return RestoreCommands(context)
+
+    def test_restore_apply_rejected_while_staging_purge_active(self):
+        # purge 期间远端目录正在改名/重建，恢复读到半成品远端会失败并回滚（P2-3）
+        from mcdr2restic.core.i18n import normalize_translate
+
+        try:
+            from .support import PermissiveCommandSource
+        except ImportError:
+            from support import PermissiveCommandSource
+
+        runtime = create_runtime()
+        server = FakePluginServer()
+        runtime.staging.purge_active = True
+        commands = self.make_commands(runtime)
+        source = PermissiveCommandSource(server)
+
+        with (
+            mock.patch(
+                "mcdr2restic.commands.restore_commands.is_backup_running",
+                return_value=False,
+            ),
+            mock.patch(
+                "mcdr2restic.commands.restore_commands.is_mc_ready",
+                return_value=True,
+            ),
+        ):
+            rejected = commands.reject_restore_apply(
+                source,
+                server,
+                normalize_translate("zh_cn"),
+                [{"type": "snapshot", "snapshot_id": "abc"}],
+            )
+
+        self.assertTrue(rejected)
+        self.assertFalse(runtime.restore.lock.locked())
+        self.assertIn("purge 正在重建", source.replies[-1])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -119,6 +119,42 @@ class StagingCommandTest(unittest.TestCase):
 
         self.assertEqual(self.source.replies[-1], "purged")
 
+    def test_purge_rechecks_restore_after_acquiring_lock(self):
+        # 检查与拿锁之间恢复可能刚好启动；拿锁后必须复检并归还锁（P2-3）
+        self.runtime.config_state.config = staging_config()
+        with (
+            mock.patch(
+                "mcdr2restic.commands.staging_commands.is_restore_running",
+                side_effect=[False, True],
+            ),
+            mock.patch(
+                "mcdr2restic.commands.staging_commands.purge_staging_remote"
+            ) as purge,
+        ):
+            self.commands.command_purge(self.source)
+
+        purge.assert_not_called()
+        self.assertFalse(self.runtime.staging.io_lock.locked())
+        self.assertFalse(self.runtime.staging.purge_active)
+        self.assertIn("恢复流程正在运行", self.source.replies[-1])
+
+    def test_purge_marks_purge_active_while_running(self):
+        self.runtime.config_state.config = staging_config()
+        seen = {}
+
+        def fake_purge(*_args, **_kwargs):
+            seen["active"] = self.runtime.staging.purge_active
+            return "purged"
+
+        with mock.patch(
+            "mcdr2restic.commands.staging_commands.purge_staging_remote",
+            side_effect=fake_purge,
+        ):
+            self.commands.command_purge(self.source)
+
+        self.assertTrue(seen["active"])
+        self.assertFalse(self.runtime.staging.purge_active)
+
     def test_status_renders_mode_snapshots_disk_and_chunker(self):
         cfg = staging_config()
         self.runtime.config_state.config = cfg

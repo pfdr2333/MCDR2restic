@@ -304,14 +304,22 @@ class StagingCommands:
         if not io_lock.acquire(blocking=False):
             reply_tr(source, server, "error.staging.busy")
             return
+        self.context.app_runtime.staging.purge_active = True
         try:
-            message = purge_staging_remote(
-                self.context.app_runtime, server, cfg, force=force
-            )
-        except BackupProblem as exc:
-            source.reply(tr_error(get_source_language(source, server), exc))
-            return
+            # 拿锁后复检：保持锁与 has-restore 的检查顺序，关闭"检查通过后恢复
+            # 才启动"的窗口（P2-3）。恢复入口同时检查 purge_active。
+            if is_restore_running(self.context.app_runtime):
+                reply_tr(source, server, "error.staging.restore_running")
+                return
+            try:
+                message = purge_staging_remote(
+                    self.context.app_runtime, server, cfg, force=force
+                )
+            except BackupProblem as exc:
+                source.reply(tr_error(get_source_language(source, server), exc))
+                return
         finally:
+            self.context.app_runtime.staging.purge_active = False
             if io_lock.locked():
                 io_lock.release()
         with contextlib.suppress(Exception):

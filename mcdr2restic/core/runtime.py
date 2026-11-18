@@ -106,6 +106,8 @@ class StagingRuntimeState:
     copy_trigger: threading.Event = field(default_factory=threading.Event)
     stop_event: threading.Event = field(default_factory=threading.Event)
     worker: Optional[Any] = None
+    # purge 正在改名/重建远端：恢复入口据此拒绝，避免读到半成品远端
+    purge_active: bool = False
 
 
 @dataclass

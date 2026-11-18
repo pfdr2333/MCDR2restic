@@ -16,7 +16,7 @@ from mcdreforged.api.all import PluginServerInterface
 
 from mcdr2restic.core.i18n import config_language, tr
 from mcdr2restic.core.language import get_mcdr_language
-from mcdr2restic.core.models import BackupProblem
+from mcdr2restic.core.models import BackupCanceled, BackupProblem
 from mcdr2restic.core.runtime import PluginRuntime
 from mcdr2restic.core.utils import get_config_section
 from mcdr2restic.restic.restic_config import (
@@ -104,6 +104,7 @@ def purge_staging_remote(  # noqa: C901,PLR0912,PLR0915 回滚分支与路径校
 
     slot = app_runtime.staging.copy_slot
     slot.cancel.clear()
+    check_purge_canceled(app_runtime)
     local_cfg = build_local_restic_config(restic_cfg, settings, paths)
     local_probe = probe_repository(app_runtime, local_cfg, slot=slot)
     if not local_probe.ok:
@@ -148,6 +149,7 @@ def purge_staging_remote(  # noqa: C901,PLR0912,PLR0915 回滚分支与路径校
         validate_purge_direction(local_latest, remote_latest, force)
 
     backup_path = ""
+    check_purge_canceled(app_runtime)
     if os.path.exists(remote_path):
         backup_path = reserve_purge_backup_path(remote_path)
         try:
@@ -163,6 +165,8 @@ def purge_staging_remote(  # noqa: C901,PLR0912,PLR0915 回滚分支与路径校
         remote_cfg, source_password, source_password_file
     )
     try:
+        # 阶段之间响应取消：改名后取消会走回滚，把旧远端目录改回原位
+        check_purge_canceled(app_runtime)
         run_initialization(
             app_runtime,
             server,
@@ -172,6 +176,7 @@ def purge_staging_remote(  # noqa: C901,PLR0912,PLR0915 回滚分支与路径校
             "error.staging.purge_failed",
             slot,
         )
+        check_purge_canceled(app_runtime)
         verify = probe_repository(
             app_runtime,
             remote_cfg,
@@ -207,6 +212,16 @@ def validate_purge_direction(
             local_time=local_latest or "-",
             remote_time=remote_latest,
         )
+
+
+def check_purge_canceled(app_runtime: PluginRuntime):
+    """[beta] purge 的阶段间取消检查：只在 restic 步骤之间响应，避免打断
+    进程后留下半成品目录。"""
+
+    if app_runtime.service.stopping.is_set():
+        raise BackupCanceled(i18n_key="error.backup.cancel_requested")
+    if app_runtime.staging.copy_slot.cancel.is_set():
+        raise BackupCanceled(i18n_key="error.backup.cancel_requested")
 
 
 def reserve_purge_backup_path(remote_path: str) -> str:
@@ -252,6 +267,7 @@ def reset_purge_runtime(
 
 
 __all__ = [
+    "check_purge_canceled",
     "purge_staging_remote",
     "reserve_purge_backup_path",
     "validate_purge_direction",

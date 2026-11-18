@@ -76,6 +76,12 @@ class BackupCommands:
             )
             reply_tr(source, server, "info.restore.cancel_requested")
             return
+        if self.context.app_runtime.staging.purge_active:
+            # purge 的 restic 进程走中转库独立槽位，命令级取消只置位取消事件，
+            # 由 purge 在阶段之间回滚（P2-3）
+            self.context.app_runtime.staging.copy_slot.cancel.set()
+            reply_tr(source, server, "info.staging.purge_cancel_requested")
+            return
         if is_backup_running(self.context.app_runtime):
             request_cancel_current_backup(
                 self.context.app_runtime, server_tr(server, "reason.manual_cancel")

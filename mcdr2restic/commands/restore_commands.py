@@ -363,6 +363,12 @@ class RestoreCommands:
             source.reply(rejection)
             return True
         if self.context.app_runtime.restore.lock.acquire(blocking=False):
+            # 拿到恢复锁后再确认 purge 不在重建远端：两者顺序与之相反，
+            # 任何一方先占位都能被另一方看到（P2-3）
+            if self.context.app_runtime.staging.purge_active:
+                self.context.app_runtime.restore.lock.release()
+                reply_tr(source, server, "error.restore.staging_busy")
+                return True
             return False
         reply_tr(source, server, "error.restore.already_running")
         return True
