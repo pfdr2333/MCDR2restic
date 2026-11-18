@@ -110,14 +110,15 @@ class StagingCommands:
         slot = ResticExecutionSlot()
         runtime_state = get_config_section(cfg, "runtime")
         # status 在 MCDR TaskExecutor 线程同步执行：远端读取必须带短超时，
-        # 否则不可达远端的 restic 内部重试会阻塞整个执行器数分钟（E2E NEW-P3）
-        remote_probe_deadline = make_remote_probe_deadline(
+        # 否则不可达远端的 restic 内部重试会阻塞整个执行器数分钟（E2E NEW-P3）。
+        # 所有远端命令共用同一个 deadline，总耗时不超过一个探测周期（P2-6）。
+        remote_deadline = make_remote_probe_deadline(
             settings.remote_probe_timeout_seconds
         )
         lines: List[str] = []
         local_latest = self.read_latest(server, local_cfg, slot)
         remote_latest = self.read_latest(
-            server, remote_cfg, slot, deadline=remote_probe_deadline
+            server, remote_cfg, slot, deadline=remote_deadline
         )
         lines.append(
             tr(
@@ -160,7 +161,7 @@ class StagingCommands:
         lines.extend(self.format_cursor_anomaly(language, runtime_state))
         lines.append(self.format_last_copy(language, runtime_state))
         lines.append(
-            self.format_chunker_status(language, local_cfg, remote_cfg, slot, settings)
+            self.format_chunker_status(language, local_cfg, remote_cfg, slot, remote_deadline)
         )
         return lines
 
@@ -241,14 +242,15 @@ class StagingCommands:
         local_cfg: Dict[str, Any],
         remote_cfg: Dict[str, Any],
         slot: Any,
-        settings: StagingSettings,
+        remote_deadline: Optional[float],
     ) -> str:
         local_probe = probe_repository(self.context.app_runtime, local_cfg, slot=slot)
+        # 复用外层 deadline：远端黑洞时第二个 cat-config 不再重新计满一分钟
         remote_probe = probe_repository(
             self.context.app_runtime,
             remote_cfg,
             slot=slot,
-            deadline=make_remote_probe_deadline(settings.remote_probe_timeout_seconds),
+            deadline=remote_deadline,
         )
         if not local_probe.ok:
             return tr(language, "status.staging.chunker.unknown")

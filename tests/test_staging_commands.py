@@ -192,6 +192,44 @@ class StagingCommandTest(unittest.TestCase):
         self.assertIn("磁盘剩余", output)
         self.assertIn("chunker 参数：一致", output)
 
+    def test_status_shares_one_remote_deadline_across_remote_calls(self):
+        # 远端黑洞下 status 曾先后两次各等一个探测周期；现在共用同一个 deadline（P2-6）
+        cfg = staging_config()
+        self.runtime.config_state.config = cfg
+        settings = get_staging_settings(cfg)
+        paths = resolve_staging_paths(settings, cfg["restic"])
+        probes = RepoProbe(RepoProbeStatus.OK, {"chunker_polynomial": "poly"})
+        snapshots = [
+            {"id": "a" * 64, "short_id": "a" * 8, "time": "2026-01-01T00:00:00Z"}
+        ]
+
+        with (
+            mock.patch(
+                "mcdr2restic.commands.staging_commands.validate_staging_settings",
+                return_value=paths,
+            ),
+            mock.patch(
+                "mcdr2restic.commands.staging_commands.read_snapshots",
+                return_value=snapshots,
+            ) as read_snapshots_mock,
+            mock.patch(
+                "mcdr2restic.commands.staging_commands.probe_repository",
+                return_value=probes,
+            ) as probe_mock,
+            mock.patch(
+                "mcdr2restic.commands.staging_commands.shutil.disk_usage",
+                return_value=SimpleNamespace(total=1000, free=500),
+            ),
+        ):
+            self.commands.command_status(self.source)
+
+        remote_read_deadline = read_snapshots_mock.call_args_list[1].kwargs[
+            "deadline"
+        ]
+        remote_probe_deadline = probe_mock.call_args_list[1].kwargs["deadline"]
+        self.assertIsNotNone(remote_read_deadline)
+        self.assertEqual(remote_read_deadline, remote_probe_deadline)
+
     def test_status_remote_read_fails_fast_and_falls_back_to_cache(self):
         # 远端 snapshots 读取必须带短超时并回退上次已知值，
         # 否则不可达远端会把 TaskExecutor 挂住数分钟（E2E NEW-P3）
