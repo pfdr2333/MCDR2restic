@@ -20,7 +20,7 @@ from mcdr2restic.config.state_store import get_config_snapshot
 from mcdr2restic.core.i18n import config_language, server_tr, tr, tr_error
 from mcdr2restic.core.language import get_mcdr_language
 from mcdr2restic.core.models import BackupProblem
-from mcdr2restic.core.runtime import PluginRuntime
+from mcdr2restic.core.runtime import PluginRuntime, ResticExecutionSlot
 from mcdr2restic.core.utils import get_config_section, non_negative_int
 from mcdr2restic.staging.staging_config import (
     StagingSettings,
@@ -48,6 +48,13 @@ AdminNotifier = Callable[..., None]
 
 
 class StagingCopyWorker:
+    """[beta] 单实例复制循环。
+
+    停止信号与取消槽位都是实例私有的：``stop()`` 只影响自己，``start()``
+    不会清理共享事件。重载时新实例递增 ``worker_generation``，旧线程在下一
+    个检查点发现代际不符即退出，不会与新循环并存。
+    """
+
     def __init__(
         self,
         app_runtime: PluginRuntime,
@@ -60,14 +67,18 @@ class StagingCopyWorker:
         self.admin_notifier = admin_notifier
         self.snapshot_invalidator = snapshot_invalidator
         self._thread: Optional[threading.Thread] = None
+        self._stop = threading.Event()
+        self._generation = 0
+        self._active_slot: Optional[ResticExecutionSlot] = None
         self._attempt = 0
         self._manual_requested = False
         self._next_wait_seconds: Optional[float] = None
 
     def start(self):
         state = self.app_runtime.staging
-        state.stop_event.clear()
-        state.copy_slot.cancel.clear()
+        state.worker_generation += 1
+        self._generation = state.worker_generation
+        self._stop.clear()
         state.copy_trigger.clear()
         state.worker = self
         thread = threading.Thread(
@@ -79,25 +90,38 @@ class StagingCopyWorker:
         thread.start()
 
     def stop(self):
-        state = self.app_runtime.staging
-        state.stop_event.set()
-        state.copy_slot.cancel.set()
-        state.copy_trigger.set()
+        self._stop.set()
+        # 唤醒等待中的循环；取消槽位让正在跑的 restic 尽快返回
+        self.app_runtime.staging.copy_trigger.set()
+        slot = self._active_slot
+        if slot is not None:
+            slot.cancel.set()
         thread = self._thread
         if thread is not None and thread.is_alive():
             thread.join(timeout=5)
         self._thread = None
-        if state.worker is self:
-            state.worker = None
+        if self.app_runtime.staging.worker is self:
+            self.app_runtime.staging.worker = None
+
+    def is_alive(self) -> bool:
+        thread = self._thread
+        return thread is not None and thread.is_alive()
 
     def trigger(self, manual: bool = False):
         if manual:
             self._manual_requested = True
         self.app_runtime.staging.copy_trigger.set()
 
+    def _running(self) -> bool:
+        """本实例仍是当前代际且未收到停止信号。"""
+
+        if self._stop.is_set():
+            return False
+        return self._generation == self.app_runtime.staging.worker_generation
+
     def _run(self):
         first_round = True
-        while not self.app_runtime.staging.stop_event.is_set():
+        while self._running():
             if not first_round and not self._wait_for_next_round(
                 self._next_wait_seconds
             ):
@@ -147,7 +171,7 @@ class StagingCopyWorker:
 
     def _run_once(self) -> Optional[CopyCycleResult]:
         state = self.app_runtime.staging
-        if state.stop_event.is_set():
+        if not self._running():
             return None
         server = self.app_runtime.service.server
         if server is None:
@@ -170,7 +194,7 @@ class StagingCopyWorker:
                 retryable=True,
             )
         try:
-            return self._run_locked(server, cfg, state)
+            return self._run_locked(server, cfg)
         finally:
             if state.io_lock.locked():
                 state.io_lock.release()
@@ -179,7 +203,6 @@ class StagingCopyWorker:
         self,
         server: PluginServerInterface,
         cfg: dict,
-        state: Any,
     ) -> Optional[CopyCycleResult]:
         restic_cfg = get_config_section(cfg, "restic")
         settings = get_staging_settings(cfg)
@@ -208,11 +231,14 @@ class StagingCopyWorker:
         if paths is None:
             return None
 
-        state.copy_slot.cancel.clear()
+        # 每次复制使用 run-local 槽位：stop()/重载只打断自己这一轮，
+        # 不会清掉其他实例（purge/维护）共用的取消信号
+        slot = ResticExecutionSlot()
+        self._active_slot = slot
         monitor_stop = threading.Event()
         monitor = threading.Thread(
             target=self._watch_restore,
-            args=(monitor_stop, state.copy_slot),
+            args=(monitor_stop, slot),
             name="MCDR2Restic-StagingCopy-RestoreWatch",
             daemon=True,
         )
@@ -224,12 +250,16 @@ class StagingCopyWorker:
                 cfg,
                 settings,
                 paths,
-                slot=state.copy_slot,
+                slot=slot,
             )
         finally:
+            self._active_slot = None
             monitor_stop.set()
             monitor.join(timeout=RESTORE_CHECK_SECONDS + 1.0)
 
+        if not self._running():
+            # 代际已变：本次结果属于被替换的实例，不再触发通知/缓存失效
+            return result
         self._after_cycle(server, cfg, restic_cfg, settings, result)
         return result
 
@@ -267,7 +297,7 @@ class StagingCopyWorker:
 
     def _watch_restore(self, monitor_stop: threading.Event, slot: Any):
         while not monitor_stop.wait(RESTORE_CHECK_SECONDS):
-            if self.app_runtime.staging.stop_event.is_set():
+            if not self._running():
                 return
             if self.restore_running_provider(self.app_runtime):
                 slot.cancel.set()
@@ -276,13 +306,13 @@ class StagingCopyWorker:
     def _wait_for_next_round(self, seconds: Optional[float]) -> bool:
         state = self.app_runtime.staging
         deadline = None if seconds is None else time.monotonic() + max(0.0, seconds)
-        while not state.stop_event.is_set():
+        while self._running():
             if state.copy_trigger.is_set():
                 state.copy_trigger.clear()
                 return True
             if deadline is not None and time.monotonic() >= deadline:
                 return True
-            if state.stop_event.wait(WAIT_SLICE_SECONDS):
+            if self._stop.wait(WAIT_SLICE_SECONDS):
                 return False
         return False
 

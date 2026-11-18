@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+import threading
+
 try:
     from .support import (
         BackupProblem,
@@ -21,6 +23,7 @@ except ImportError:
     )
 
 from mcdr2restic.core.models import BackupCanceled
+from mcdr2restic.core.runtime import ResticExecutionSlot
 from mcdr2restic.defaults.runtime_defaults import build_default_runtime
 from mcdr2restic.staging import staging_copy, staging_repository, staging_warning, staging_worker
 from mcdr2restic.staging.staging_config import (
@@ -425,8 +428,65 @@ class WorkerTest(unittest.TestCase):
         runtime.staging.copy_trigger.set()
         self.assertTrue(worker._wait_for_next_round(None))
 
-        runtime.staging.stop_event.set()
+        worker._stop.set()
         self.assertFalse(worker._wait_for_next_round(None))
+
+    def test_stop_only_signals_its_own_events(self):
+        # stop() 不再清理/置位共享事件，否则新实例的取消信号会被旧线程抹掉（P2-4）
+        runtime, worker = self.make_worker()
+
+        worker.stop()
+
+        self.assertTrue(worker._stop.is_set())
+        self.assertFalse(runtime.staging.copy_slot.cancel.is_set())
+        self.assertIsNone(runtime.staging.worker)
+
+    def test_stop_cancels_active_run_slot(self):
+        _, worker = self.make_worker()
+        slot = ResticExecutionSlot()
+        worker._active_slot = slot
+
+        worker.stop()
+
+        self.assertTrue(slot.cancel.is_set())
+
+    def test_new_worker_retires_previous_generation(self):
+        runtime, old = self.make_worker()
+
+        with mock.patch.object(
+            staging_worker.StagingCopyWorker, "_run", lambda _self: None
+        ):
+            old.start()
+            old_generation = old._generation
+            new = staging_worker.StagingCopyWorker(runtime, lambda _runtime: False)
+            new.start()
+
+        try:
+            self.assertEqual(
+                runtime.staging.worker_generation, old_generation + 1
+            )
+            self.assertFalse(old._running())
+            self.assertTrue(new._running())
+        finally:
+            new.stop()
+
+    def test_start_stop_leaves_no_running_thread(self):
+        _, worker = self.make_worker()
+        started = threading.Event()
+
+        def fake_run(_self):
+            started.set()
+            _self._stop.wait(5)
+
+        with mock.patch.object(
+            staging_worker.StagingCopyWorker, "_run", fake_run
+        ):
+            worker.start()
+            self.assertTrue(started.wait(2))
+            self.assertTrue(worker.is_alive())
+            worker.stop()
+
+        self.assertFalse(worker.is_alive())
 
 
 class RemoteStaleWarningTest(unittest.TestCase):

@@ -104,8 +104,9 @@ class StagingRuntimeState:
     io_lock: threading.Lock = field(default_factory=threading.Lock)
     copy_slot: ResticExecutionSlot = field(default_factory=ResticExecutionSlot)
     copy_trigger: threading.Event = field(default_factory=threading.Event)
-    stop_event: threading.Event = field(default_factory=threading.Event)
     worker: Optional[Any] = None
+    # 每次 start 递增；旧线程发现代际不符即退出，避免重载后出现两个复制循环
+    worker_generation: int = 0
     # purge 正在改名/重建远端：恢复入口据此拒绝，避免读到半成品远端
     purge_active: bool = False
 
