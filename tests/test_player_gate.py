@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 try:
-    from .support import SimpleNamespace, mock, threading, unittest
+    from .support import SimpleNamespace, mock, new_test_data_folder, threading, unittest
 except ImportError:
-    from support import SimpleNamespace, mock, threading, unittest
+    from support import SimpleNamespace, mock, new_test_data_folder, threading, unittest
 
 import time
 
@@ -36,6 +36,8 @@ def make_app_runtime(cfg=None, stopping=None):
 def make_server(rcon_output=None, running=True):
     server = mock.MagicMock()
     server.logger = mock.MagicMock()
+    # 给 mock server 一个真实的临时数据目录：状态落盘不能写到仓库根目录
+    server.get_data_folder.return_value = new_test_data_folder()
     server.get_mcdr_language.return_value = "zh_cn"
     server.is_server_startup.return_value = running
     server.is_server_running.return_value = running
