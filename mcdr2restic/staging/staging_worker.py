@@ -8,7 +8,6 @@
 
 from __future__ import annotations
 
-import contextlib
 import threading
 import time
 import traceback
@@ -321,11 +320,20 @@ class StagingCopyWorker:
     ):
         if self.snapshot_invalidator is None:
             return
-        with contextlib.suppress(Exception):
+        try:
             self.snapshot_invalidator(
                 server,
                 restic_cfg,
                 server_tr(server, "snapshot.cache.reason.staging_copy_finished"),
+            )
+        except Exception as exc:
+            # 缓存失效失败只影响下次状态页多读一次仓库，但不能完全无声
+            server.logger.debug(
+                tr(
+                    get_mcdr_language(server),
+                    "debug.staging.cache_invalidation_failed",
+                    error=exc,
+                )
             )
 
     def _watch_restore(self, monitor_stop: threading.Event, slot: Any):
@@ -352,7 +360,17 @@ class StagingCopyWorker:
     def _current_settings(self) -> Optional[StagingSettings]:
         try:
             return get_staging_settings(get_config_snapshot(self.app_runtime))
-        except Exception:
+        except Exception as exc:
+            # 配置读取失败不能静默：复制会停摆，排查时需要知道原因
+            server = self.app_runtime.service.server
+            if server is not None:
+                server.logger.debug(
+                    tr(
+                        get_mcdr_language(server),
+                        "debug.staging.worker_settings_failed",
+                        error=exc,
+                    )
+                )
             return None
 
     def _report_worker_failure(self, exc: Exception):

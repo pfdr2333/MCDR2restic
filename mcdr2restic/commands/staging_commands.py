@@ -183,7 +183,14 @@ class StagingCommands:
                     deadline=deadline,
                 )
             )
-        except Exception:
+        except Exception as exc:
+            server.logger.debug(
+                tr(
+                    config_language(get_config_snapshot(self.context.app_runtime), get_mcdr_language(server)),
+                    "debug.staging.remote_snapshot_probe_failed",
+                    error=exc,
+                )
+            )
             return None
 
     def format_disk_free(self, language: str, repository_path: str) -> str:

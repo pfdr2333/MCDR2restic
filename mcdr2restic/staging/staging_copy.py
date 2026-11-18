@@ -556,7 +556,14 @@ def probe_remote_latest(
             # 复制周期不能被它挂住（E2E NEW-P3）
             deadline=make_remote_probe_deadline(remote_probe_timeout_seconds),
         )
-    except Exception:
+    except Exception as exc:
+        server.logger.debug(
+            tr(
+                get_mcdr_language(server),
+                "debug.staging.remote_snapshot_probe_failed",
+                error=exc,
+            )
+        )
         return RemoteLatest(ok=False)
     return RemoteLatest(time=latest_snapshot_time(snapshots), ok=True)
 
