@@ -14,7 +14,10 @@ from mcdr2restic.backup.running_time import (
     start_server_running_clock,
     stop_server_running_clock,
 )
-from mcdr2restic.backup.stale_backup_watchdog import StaleBackupWatchdog
+from mcdr2restic.backup.stale_backup_watchdog import (
+    StaleBackupWatchdog,
+    warn_invalid_stale_warning_config,
+)
 from mcdr2restic.commands.command_context import CommandContext
 from mcdr2restic.commands.command_handlers import CommandHandlers
 from mcdr2restic.core.runtime import PluginRuntime, create_runtime
@@ -80,6 +83,9 @@ class PluginEntrypoint:
         if self.runtime.service.server_ready:
             start_server_running_clock(self.runtime, server)
         warn_if_remote_gate_disabled(server, get_config_snapshot(self.runtime))
+        warn_invalid_stale_warning_config(
+            server, get_config_snapshot(self.runtime)
+        )
         self.register_commands(server)
         self.register_help_messages(server)
         self.restart_onebot(server)
@@ -316,6 +322,9 @@ class PluginEntrypoint:
 
     def reload_services(self, server: PluginServerInterface):
         warn_if_remote_gate_disabled(server, get_config_snapshot(self.runtime))
+        warn_invalid_stale_warning_config(
+            server, get_config_snapshot(self.runtime)
+        )
         self.restart_onebot(server)
         self.restart_discord(server)
         self.restart_custom_webhook(server)

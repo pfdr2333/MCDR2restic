@@ -198,6 +198,40 @@ class CancelCommandTests(unittest.TestCase):
         self.assertIn("没有正在运行", source.replies[-1])
 
 
+class BackupToggleCommandTests(unittest.TestCase):
+    @staticmethod
+    def make_commands():
+        from mcdr2restic.commands.backup_commands import BackupCommands
+        from mcdr2restic.commands.command_context import CommandContext
+
+        runtime = create_runtime()
+        context = CommandContext(
+            app_runtime=runtime,
+            backup_runner_factory=lambda: None,
+            maintenance_runner_factory=lambda: None,
+            reload_services=mock.Mock(),
+            wake_scheduler=mock.Mock(),
+            snapshot_invalidator=mock.Mock(),
+        )
+        return BackupCommands(context), runtime
+
+    def test_stop_clears_gate_stall_clock(self):
+        # 停用期间不计停滞时长，避免重新启用后按停用期立刻告警（P3-2）
+        commands, _ = self.make_commands()
+        source = PermissiveCommandSource(FakePluginServer())
+
+        with mock.patch(
+            "mcdr2restic.commands.backup_commands.save_enabled_unlocked"
+        ), mock.patch(
+            "mcdr2restic.commands.backup_commands.save_config_unlocked"
+        ), mock.patch(
+            "mcdr2restic.commands.backup_commands.reset_gate_stall_on_backups_disabled"
+        ) as reset_stall:
+            commands.command_stop(source)
+
+        reset_stall.assert_called_once()
+
+
 class ReloadCommandTests(unittest.TestCase):
     @staticmethod
     def make_commands():

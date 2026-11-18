@@ -15,6 +15,7 @@ from mcdr2restic.config.config_lines import (
     find_nested_key_index,
     get_language_lines,
     get_top_level_block_lines,
+    nested_key_indent,
     template_top_level_keys,
     yaml_scalar,
     TOP_LEVEL_KEY_PATTERN,
@@ -257,6 +258,105 @@ def write_durable_text_file(path: Path, text: str, exclusive: bool):
 # 门控注释在这一版改成"阈值即开关 + 推迟有期限"的语义
 PLAYER_GATE_COMMENT_MIGRATION_VERSION = 13
 
+# 旧版 backup_stale_warning 通知正文：时长是"距上次成功的累计运行"，且没有
+# 首次推迟时间。仅当用户逐字保留了旧默认时才替换，避免覆盖自定义文案（P2-1）。
+STALE_BACKUP_MESSAGE_KEY = "backup_stale_warning"
+LEGACY_STALE_BACKUP_MESSAGE_TEXTS: Dict[str, str] = {
+    "zh_cn": (
+        "{prefix} 服务器已累计运行 {hours} 小时没有成功备份（上次成功：{last_success}）\n"
+        "最近 {skips} 次定时备份因在线人数 {current}/{max_online} 达到门控阈值而推迟\n"
+        "现在直接补备份并不安全：备份全程要保持 save-off，"
+        "高峰期长时间冻结会让未保存的区块堆在 JVM 内存里，可能挤爆服务器\n"
+        "建议等人数降到阈值以下自动开始；也可挑低峰期手动 {root} backup，或用 force_schedule 固定在凌晨兜底\n"
+        "若确认内存余量充足并愿意承担崩服风险，可把 backup_player_gate_max_online 改为 0 关闭门控\n"
+        "说明文档：{doc_url}"
+    ),
+    "en_us": (
+        "{prefix} No successful backup after {hours} hours of server uptime (last success: {last_success})\n"
+        "The last {skips} scheduled backups were deferred because "
+        "{current}/{max_online} players online reached the gate threshold\n"
+        "Running a backup now is unsafe: save-off must stay active for the whole run, "
+        "and a long freeze at peak can pile unsaved chunks up in JVM memory and exhaust the server\n"
+        "Wait for the player count to drop below the threshold, run {root} backup manually "
+        "during off-peak hours, or pin a night-time fallback with force_schedule\n"
+        "If you are sure memory headroom is sufficient and accept the crash risk, "
+        "set backup_player_gate_max_online to 0 to disable the gate\n"
+        "Documentation: {doc_url}"
+    ),
+    "zh_tw": (
+        "{prefix} 伺服器已累計執行 {hours} 小時沒有成功備份（上次成功：{last_success}）\n"
+        "最近 {skips} 次定時備份因線上人數 {current}/{max_online} 達到門控閾值而推遲\n"
+        "現在直接補備份並不安全：備份全程要保持 save-off，"
+        "高峰期長時間凍結會讓未儲存的區塊堆在 JVM 記憶體裡，可能擠爆伺服器\n"
+        "建議等人數降到閾值以下自動開始；也可挑低峰期手動 {root} backup，或用 force_schedule 固定在凌晨兜底\n"
+        "若確認記憶體餘量充足並願意承擔崩服風險，可把 backup_player_gate_max_online 改為 0 關閉門控\n"
+        "說明文件：{doc_url}"
+    ),
+}
+
+
+def migrate_stale_backup_message_lines(
+    lines: List[str], cfg: Dict[str, Any]
+) -> List[str]:
+    """把旧的陈旧备份通知正文换成新模板，并同步内存配置。
+
+    生成配置用的是 ``|-`` 块标量，值横跨多行；只替换该条目的整段行，
+    不触碰相邻条目与注释。用户改过的正文不会命中旧默认，保持原样。
+    """
+
+    messages = cfg.get("messages")
+    if not isinstance(messages, dict):
+        return lines
+    matched_language = legacy_stale_backup_language(
+        messages.get(STALE_BACKUP_MESSAGE_KEY)
+    )
+    if matched_language is None:
+        return lines
+    start, end = find_top_level_block(lines, "messages")
+    if start is None:
+        return lines
+    block = lines[start:end]
+    key_index = find_nested_key_index(block, STALE_BACKUP_MESSAGE_KEY)
+    if key_index is None:
+        return lines
+    entry_end = find_nested_entry_end(block, key_index)
+    key_line = block[key_index]
+    eol = "\r\n" if key_line.endswith("\r\n") else "\n"
+    new_text = config_template_text(
+        matched_language, "template.message.{}".format(STALE_BACKUP_MESSAGE_KEY)
+    )
+    rewritten = (
+        lines[: start + key_index]
+        + stale_message_block_lines(nested_key_indent(key_line), new_text, eol)
+        + lines[start + entry_end :]
+    )
+    # 迁移后的文件要到下次加载才回读：内存值同步替换，本次运行立即生效
+    messages[STALE_BACKUP_MESSAGE_KEY] = new_text
+    return rewritten
+
+
+def legacy_stale_backup_language(value: Any) -> Optional[str]:
+    if not isinstance(value, str):
+        return None
+    normalized = normalize_message_text(value)
+    for language, legacy_text in LEGACY_STALE_BACKUP_MESSAGE_TEXTS.items():
+        if normalized == normalize_message_text(legacy_text):
+            return language
+    return None
+
+
+def normalize_message_text(value: str) -> str:
+    # Windows 下配置文件按 CRLF 落盘，块标量读回的值会带 \r\n
+    return value.replace("\r\n", "\n").replace("\r", "\n").strip()
+
+
+def stale_message_block_lines(indent: str, text: str, eol: str) -> List[str]:
+    content_indent = indent + "  "
+    result = ["{}{}: |-{}".format(indent, STALE_BACKUP_MESSAGE_KEY, eol)]
+    for text_line in text.splitlines() or [""]:
+        result.append("{}{}{}".format(content_indent, text_line, eol))
+    return result
+
 
 def config_version_in_lines(lines: List[str]) -> int:
     """从原始配置行读取版本号；迁移是否执行以文件里的版本为准。"""
@@ -274,6 +374,7 @@ def apply_config_file_migrations(
     cfg: Dict[str, Any],
 ) -> List[str]:
     lines = ensure_language_line(lines, language, cfg)
+    lines = migrate_stale_backup_message_lines(lines, cfg)
     lines = remove_deprecated_schedule_lines(lines)
     if config_version_in_lines(lines) < PLAYER_GATE_COMMENT_MIGRATION_VERSION:
         # 旧注释措辞随模板文案变化，按中文/英文原文匹配既脆弱又会漏；配置

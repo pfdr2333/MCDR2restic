@@ -12,10 +12,18 @@ from mcdr2restic.backup.gate_stall import (
     clear_gate_stall,
     gate_stall_elapsed_seconds,
     mark_gate_stall_started,
+    reset_gate_stall_on_disabled,
 )
 from mcdr2restic.backup.stale_backup_watchdog import (
     StaleBackupWatchdog,
     maybe_warn_stale_backup,
+    parse_stale_warning_hours,
+    warn_invalid_stale_warning_config,
+)
+from mcdr2restic.defaults.default_config import build_default_config
+from mcdr2restic.notifications.message_templates import (
+    MessageRenderOptions,
+    render_message,
 )
 
 
@@ -201,6 +209,91 @@ class StaleBackupWarningTests(unittest.TestCase):
         self.assertFalse(warned)
         notifier.assert_not_called()
 
+    def test_notification_body_uses_new_stall_semantics(self):
+        # 通知正文曾停留在旧模板：缺首次推迟时间，且把停滞时长写成累计运行（P2-1）
+        cfg = make_cfg()
+        cfg["messages"] = build_default_config("zh_cn")["messages"]
+
+        warned, notifier, cfg, _ = self.call(cfg)
+        values = notifier.call_args.args[1]
+        body = render_message(
+            "backup_stale_warning",
+            values,
+            cfg,
+            MessageRenderOptions(language="zh_cn"),
+        )
+
+        self.assertTrue(warned)
+        self.assertIn("2026-01-01 00:00:00", body)
+        self.assertIn("已等待 25 小时", body)
+        self.assertNotIn("已累计运行", body)
+
+    def test_notification_is_not_logged_twice(self):
+        # 控制台已输出新版文案，通知渠道不再重复打一条旧正文（P3-1）
+        _, notifier, _, _ = self.call(make_cfg())
+
+        self.assertFalse(notifier.call_args.kwargs["log"])
+
+    def test_future_cooldown_timestamp_does_not_suppress_warning(self):
+        cfg = make_cfg(
+            warned_at=format_time(datetime.now() + timedelta(hours=2))
+        )
+
+        warned, notifier, _, server = self.call(cfg)
+
+        self.assertTrue(warned)
+        notifier.assert_called_once()
+        self.assertTrue(
+            any(
+                "晚于当前时间" in message
+                for message in server.logger.warning_messages
+            )
+        )
+
+    def test_zero_deferral_count_is_reported_as_zero(self):
+        # 手工改状态时计数可能为 0，不得虚报成“推迟 1 次”（P3-6）
+        cfg = make_cfg(gate_count=0)
+
+        warned, notifier, _, _ = self.call(cfg)
+
+        self.assertTrue(warned)
+        self.assertEqual(notifier.call_args.args[1]["skips"], 0)
+
+
+class StaleWarningThresholdTests(unittest.TestCase):
+    def test_valid_threshold_is_used_as_is(self):
+        self.assertEqual(parse_stale_warning_hours(30), (30, False))
+        self.assertEqual(parse_stale_warning_hours(0), (0, False))
+
+    def test_missing_threshold_falls_back_silently(self):
+        self.assertEqual(parse_stale_warning_hours(None), (24, False))
+
+    def test_non_numeric_threshold_falls_back_and_flags(self):
+        self.assertEqual(parse_stale_warning_hours("abc"), (24, True))
+
+    def test_negative_threshold_disables_and_flags(self):
+        self.assertEqual(parse_stale_warning_hours(-1), (0, True))
+
+    def test_invalid_threshold_warns_on_load(self):
+        server = FakePluginServer()
+        cfg = make_cfg(threshold="abc")
+
+        warn_invalid_stale_warning_config(server, cfg)
+
+        self.assertTrue(
+            any(
+                "stale_backup_warning_hours" in message
+                for message in server.logger.warning_messages
+            )
+        )
+
+    def test_valid_threshold_does_not_warn_on_load(self):
+        server = FakePluginServer()
+
+        warn_invalid_stale_warning_config(server, make_cfg(threshold=12))
+
+        self.assertFalse(server.logger.warning_messages)
+
 
 class GateStallStateTests(unittest.TestCase):
     def test_mark_records_baseline_only_once(self):
@@ -241,6 +334,29 @@ class GateStallStateTests(unittest.TestCase):
 
         self.assertIsNone(state["gate_stall_baseline_seconds"])
         self.assertIsNone(state["gate_stall_started_at"])
+
+    def test_disable_drops_stall_clock_and_cooldown(self):
+        # 停用期间继续计时会让重新启用后立刻按停用期告警（P3-2）
+        state = {
+            "gate_stall_baseline_seconds": 100,
+            "gate_stall_started_at": "2026-01-01 00:00:00",
+            "stale_backup_warned_at": "2026-01-01 01:00:00",
+        }
+
+        self.assertTrue(reset_gate_stall_on_disabled(state))
+
+        self.assertIsNone(state["gate_stall_baseline_seconds"])
+        self.assertIsNone(state["gate_stall_started_at"])
+        self.assertIsNone(state["stale_backup_warned_at"])
+
+    def test_disable_without_stall_is_noop(self):
+        state = {
+            "gate_stall_baseline_seconds": None,
+            "gate_stall_started_at": None,
+            "stale_backup_warned_at": None,
+        }
+
+        self.assertFalse(reset_gate_stall_on_disabled(state))
 
 
 class StaleWatchdogThreadTests(unittest.TestCase):

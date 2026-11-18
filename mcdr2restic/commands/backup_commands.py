@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from mcdreforged.api.all import CommandSource
 
+from mcdr2restic.backup.gate_stall import reset_gate_stall_on_backups_disabled
 from mcdr2restic.commands.command_context import CommandContext
 from mcdr2restic.config.config_loader import load_config, save_enabled_unlocked
 from mcdr2restic.config.state_store import get_config_snapshot
@@ -40,6 +41,8 @@ class BackupCommands:
         server = self.context.server_from_source(source)
         with self.context.app_runtime.config_state.lock:
             save_enabled_unlocked(self.context.app_runtime, server, False)
+            # 停用期间不计停滞时长，避免重新启用后按停用期立刻告警（P3-2）
+            reset_gate_stall_on_backups_disabled(self.context.app_runtime, server)
             save_config_unlocked(self.context.app_runtime, server)
         pending = self.context.app_runtime.current_pending_backup()
         self.context.app_runtime.cancel_pending_backup()

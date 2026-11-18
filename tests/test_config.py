@@ -52,7 +52,9 @@ except ImportError:
 
 from mcdr2restic.config.config_loader import load_config, save_enabled_unlocked
 from mcdr2restic.config.config_migration import (
+    LEGACY_STALE_BACKUP_MESSAGE_TEXTS,
     atomically_replace_config_with_backup,
+    migrate_stale_backup_message_lines,
 )
 from mcdr2restic.config.config_paths import ensure_config_file_exists
 from mcdr2restic.config.state_store import merge_defaults, save_text_file_atomically
@@ -1033,3 +1035,55 @@ class StateFileDurabilityTests(unittest.TestCase):
 
         self.assertIn("该阈值就是门控唯一的开关", migrated)
         self.assertNotIn("我自己写的备注", migrated)
+
+
+class StaleBackupMessageMigrationTests(unittest.TestCase):
+    """旧版 backup_stale_warning 通知正文只在用户未改动时迁移（P2-1）。"""
+
+    def test_old_default_message_is_replaced_in_file_and_memory(self):
+        legacy = LEGACY_STALE_BACKUP_MESSAGE_TEXTS["zh_cn"]
+        lines = ["enabled: true\n", "messages:\n", "  backup_stale_warning: |-\n"]
+        lines.extend("    {}\n".format(text_line) for text_line in legacy.splitlines())
+        lines.append('  backup_start: "{prefix} 备份开始"\n')
+        cfg = {
+            "messages": {
+                "backup_stale_warning": legacy,
+                "backup_start": "{prefix} 备份开始",
+            }
+        }
+
+        migrated = "".join(migrate_stale_backup_message_lines(lines, cfg))
+        data = yaml.safe_load(migrated)
+
+        new_text = data["messages"]["backup_stale_warning"]
+        self.assertIn("{first_deferral}", new_text)
+        self.assertIn("已等待 {hours} 小时", new_text)
+        self.assertNotIn("已累计运行", new_text)
+        self.assertEqual(data["messages"]["backup_start"], "{prefix} 备份开始")
+        # 内存配置同步替换，本次运行立即生效
+        self.assertEqual(cfg["messages"]["backup_stale_warning"], new_text)
+
+    def test_crlf_legacy_value_is_recognized(self):
+        legacy = LEGACY_STALE_BACKUP_MESSAGE_TEXTS["en_us"].replace("\n", "\r\n")
+        lines = ["enabled: true\r\n", "messages:\r\n", "  backup_stale_warning: |-\r\n"]
+        lines.extend("    {}\r\n".format(text_line) for text_line in legacy.splitlines())
+        cfg = {"messages": {"backup_stale_warning": legacy}}
+
+        migrated = "".join(migrate_stale_backup_message_lines(lines, cfg))
+        data = yaml.safe_load(migrated)
+
+        self.assertNotIn("\r\n", data["messages"]["backup_stale_warning"])
+        self.assertIn("first deferred one at {first_deferral}", data["messages"]["backup_stale_warning"])
+
+    def test_customized_message_is_left_untouched(self):
+        lines = [
+            "enabled: true\n",
+            "messages:\n",
+            '  backup_stale_warning: "{prefix} 自定义正文"\n',
+        ]
+        cfg = {"messages": {"backup_stale_warning": "{prefix} 自定义正文"}}
+
+        self.assertEqual(migrate_stale_backup_message_lines(lines, cfg), lines)
+        self.assertEqual(
+            cfg["messages"]["backup_stale_warning"], "{prefix} 自定义正文"
+        )

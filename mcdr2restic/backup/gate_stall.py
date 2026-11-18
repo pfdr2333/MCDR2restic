@@ -19,6 +19,7 @@ from mcdr2restic.core.utils import now_text
 
 BASELINE_KEY = "gate_stall_baseline_seconds"
 STARTED_AT_KEY = "gate_stall_started_at"
+WARNED_AT_KEY = "stale_backup_warned_at"
 
 
 def mark_gate_stall_started(
@@ -48,6 +49,41 @@ def clear_gate_stall(runtime_state: Dict[str, Any]) -> None:
 
     runtime_state[BASELINE_KEY] = None
     runtime_state[STARTED_AT_KEY] = None
+
+
+def reset_gate_stall_on_disabled(runtime_state: Dict[str, Any]) -> bool:
+    """停用备份时丢弃停滞计时与冷却时间戳；返回是否有改动。
+
+    停用期间不存在“该备份却没备份”的前提，继续计时会让重新启用后立刻按
+    停用期告警（P3-2）。重新启用后由下一次门控推迟重新登记起点。
+    调用方必须已持有 ``config_state.lock``。
+    """
+
+    if all(
+        runtime_state.get(key) is None
+        for key in (BASELINE_KEY, STARTED_AT_KEY, WARNED_AT_KEY)
+    ):
+        return False
+    clear_gate_stall(runtime_state)
+    runtime_state[WARNED_AT_KEY] = None
+    return True
+
+
+def reset_gate_stall_on_backups_disabled(
+    app_runtime: PluginRuntime, server: PluginServerInterface
+) -> bool:
+    """``!!m2r stop`` 等停用入口的落盘版本：释放停滞计时。"""
+
+    with app_runtime.config_state.lock:
+        ensure_runtime(
+            app_runtime.config_state.config,
+            app_runtime.config_state.state,
+        )
+        runtime_state = app_runtime.config_state.config["runtime"]
+        if not reset_gate_stall_on_disabled(runtime_state):
+            return False
+        save_config_unlocked(app_runtime, server)
+        return True
 
 
 def gate_stall_baseline(runtime_state: Dict[str, Any]) -> Optional[int]:

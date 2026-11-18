@@ -7,6 +7,7 @@ from typing import Any, Dict, Optional
 import yaml
 from mcdreforged.api.all import CommandSource, PluginServerInterface
 
+from mcdr2restic.backup.gate_stall import reset_gate_stall_on_disabled
 from mcdr2restic.config.config_migration import (
     migrate_config_file,
     migrate_legacy_config,
@@ -55,6 +56,11 @@ def load_config(
         app_runtime.config_state.language = language
         ensure_runtime(app_runtime.config_state.config, app_runtime.config_state.state)
         reset_stale_backup_running_status(app_runtime, language)
+        if not bool(app_runtime.config_state.config.get("enabled", True)):
+            # 配置里已停用备份：丢弃停滞计时，重新启用后从下一次门控推迟重新开始（P3-2）
+            reset_gate_stall_on_disabled(
+                app_runtime.config_state.config["runtime"]
+            )
         save_config_unlocked(app_runtime, server)
     set_active_language(language)
     if source is not None:

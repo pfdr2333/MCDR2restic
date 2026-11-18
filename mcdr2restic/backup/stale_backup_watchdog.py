@@ -16,7 +16,7 @@ from __future__ import annotations
 import threading
 import time
 from datetime import datetime, timedelta
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, Optional, Tuple
 
 from mcdreforged.api.all import PluginServerInterface
 
@@ -42,10 +42,12 @@ from mcdr2restic.minecraft.minecraft_service import server_is_running
 # 检查节奏：阈值到点后最多晚这么多秒告警，与备份调度周期无关
 STALE_WATCHDOG_POLL_SECONDS = 60.0
 STALE_WARNING_COOLDOWN_HOURS = 24
+DEFAULT_STALE_WARNING_HOURS = 24
+# 冷却时间戳晚于当前时间超过该容差时视为状态损坏/时钟回拨（P3-4）
+FUTURE_TIMESTAMP_TOLERANCE_SECONDS = 300
 
-AdminNotifier = Callable[
-    [str, Optional[Dict[str, Any]], Optional[Dict[str, Any]], bool], None
-]
+# 第四个位置参数是 failure 级别，log 为关键字参数（与 staging 提示一致）
+AdminNotifier = Callable[..., None]
 
 
 class StaleBackupWatchdog:
@@ -150,21 +152,28 @@ def maybe_warn_stale_backup(
         or app_runtime.service.stopping.is_set()
     ):
         return False
-    threshold_hours = non_negative_int(
-        get_config_section(cfg, "notification").get("stale_backup_warning_hours", 24),
-        24,
-    )
+    threshold_hours, _ = resolve_stale_warning_hours(cfg)
     if threshold_hours <= 0:
         return False
     runtime_state = get_config_section(cfg, "runtime")
     elapsed = gate_stall_elapsed_seconds(runtime_state)
     if elapsed is None or elapsed < threshold_hours * 3600:
         return False
-    warned_at = parse_schedule_time(runtime_state.get("stale_backup_warned_at"))
-    if warned_at is not None and datetime.now() - warned_at < timedelta(
-        hours=STALE_WARNING_COOLDOWN_HOURS
-    ):
-        return False
+    warned_at_text = str(runtime_state.get("stale_backup_warned_at") or "").strip()
+    warned_at = parse_schedule_time(warned_at_text)
+    if warned_at is not None:
+        now = datetime.now()
+        if warned_at - now > timedelta(seconds=FUTURE_TIMESTAMP_TOLERANCE_SECONDS):
+            # 时钟回拨或手改状态会让冷却无限后延；按无效处理并借本次告警自愈（P3-4）
+            server.logger.warning(
+                server_tr(
+                    server,
+                    "warn.backup.stale_warning_timestamp_ahead",
+                    timestamp=warned_at_text,
+                )
+            )
+        elif now - warned_at < timedelta(hours=STALE_WARNING_COOLDOWN_HOURS):
+            return False
 
     last_success_text, _ = resolve_last_success_backup(cfg)
     max_online = non_negative_int(
@@ -174,11 +183,9 @@ def maybe_warn_stale_backup(
         "hours": elapsed // 3600,
         "last_success": last_success_text or "-",
         "first_deferral": str(runtime_state.get("gate_stall_started_at") or "-"),
-        "skips": max(
-            1,
-            non_negative_int(
-                runtime_state.get("gate_deferral_count_since_success", 0)
-            ),
+        # 正常流程有基线时计数至少为 1；这里不兜底成 1，手工改出的 0 如实显示（P3-6）
+        "skips": non_negative_int(
+            runtime_state.get("gate_deferral_count_since_success", 0)
         ),
         "current": non_negative_int(
             runtime_state.get("current_online_players", 0)
@@ -200,7 +207,8 @@ def maybe_warn_stale_backup(
             max_online=values["max_online"],
         )
     )
-    admin_notifier("backup_stale_warning", values, cfg, True)
+    # 控制台已输出完整的新版文案，通知渠道不再重复打一条旧正文（P3-1）
+    admin_notifier("backup_stale_warning", values, cfg, True, log=False)
     with app_runtime.config_state.lock:
         ensure_runtime(
             app_runtime.config_state.config,
@@ -211,6 +219,59 @@ def maybe_warn_stale_backup(
         )
         save_config_unlocked(app_runtime, server)
     return True
+
+
+def raw_stale_warning_hours(cfg: Dict[str, Any]) -> Any:
+    return get_config_section(cfg, "notification").get(
+        "stale_backup_warning_hours", DEFAULT_STALE_WARNING_HOURS
+    )
+
+
+def resolve_stale_warning_hours(cfg: Dict[str, Any]) -> Tuple[int, bool]:
+    """读取告警阈值；返回 (小时数, 配置是否非法)。"""
+
+    return parse_stale_warning_hours(raw_stale_warning_hours(cfg))
+
+
+def parse_stale_warning_hours(raw: Any) -> Tuple[int, bool]:
+    """把阈值配置解析成小时数，并标记是否需要提示用户。
+
+    非数字回落默认 24 小时，负数按 0（关闭）处理：两种都算非法，交由
+    配置加载时提示一次，避免用户误以为设置已生效（P3-5）。空值按未配置
+    处理，静默取默认值。
+    """
+
+    if raw is None:
+        return DEFAULT_STALE_WARNING_HOURS, False
+    # bool 是 int 的子类，true 会被解释成"1 小时"，按非法输入处理更安全
+    if isinstance(raw, bool):
+        return DEFAULT_STALE_WARNING_HOURS, True
+    try:
+        hours = int(raw)
+    except (TypeError, ValueError):
+        return DEFAULT_STALE_WARNING_HOURS, True
+    if hours < 0:
+        return 0, True
+    return hours, False
+
+
+def warn_invalid_stale_warning_config(
+    server: PluginServerInterface, cfg: Dict[str, Any]
+) -> None:
+    """配置加载/重载时提示非法的阈值配置；每个加载周期只提示一次。"""
+
+    raw = raw_stale_warning_hours(cfg)
+    hours, invalid = parse_stale_warning_hours(raw)
+    if not invalid:
+        return
+    server.logger.warning(
+        server_tr(
+            server,
+            "warn.config.stale_backup_warning_hours_invalid",
+            value=raw,
+            hours=hours,
+        )
+    )
 
 
 def resolve_last_success_backup(
