@@ -211,8 +211,7 @@ class StagingCopyWorker:
         try:
             return self._run_locked(server, cfg)
         finally:
-            if state.io_lock.locked():
-                state.io_lock.release()
+            state.io_lock.release()
 
     def _run_locked(
         self,

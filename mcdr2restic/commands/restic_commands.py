@@ -155,9 +155,8 @@ class ResticCommands:
         return None
 
     def release_staging_io(self):
-        lock = self.context.app_runtime.staging.io_lock
-        if lock.locked():
-            lock.release()
+        # 只有 try_acquire_staging_io 返回 True 的调用方才会走到这里
+        self.context.app_runtime.staging.io_lock.release()
 
     def command_exec_usage(self, source: CommandSource):
         if not self.context.check_command_permission(source):

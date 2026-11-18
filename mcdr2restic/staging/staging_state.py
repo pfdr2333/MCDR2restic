@@ -104,6 +104,10 @@ def acquire_staging_io_lock(
 
 
 def release_staging_io_lock(app_runtime: PluginRuntime):
-    lock = app_runtime.staging.io_lock
-    if lock.locked():
-        lock.release()
+    """[beta] 释放中转库 IO 锁；调用方必须已持有（acquire 成功的分支）。
+
+    不做 ``locked()`` 兜底：若调用方并未持锁，静默 release 会替其他线程
+    解锁，掩盖真正的所有权错误；直接抛 RuntimeError 更利于定位。
+    """
+
+    app_runtime.staging.io_lock.release()

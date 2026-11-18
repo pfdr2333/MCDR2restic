@@ -322,8 +322,7 @@ class StagingCommands:
                 return
         finally:
             self.context.app_runtime.staging.purge_active = False
-            if io_lock.locked():
-                io_lock.release()
+            io_lock.release()
         with contextlib.suppress(Exception):
             self.context.snapshot_invalidator(
                 server,
