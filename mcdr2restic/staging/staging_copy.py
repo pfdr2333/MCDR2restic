@@ -88,6 +88,8 @@ class CopyCycleResult:
     # 游标与本地快照不一致：本轮不信任游标并全量重放，backlog 无法断言
     cursor_untrusted: bool = False
     backlog_unknown: bool = False
+    # 失败发生在确认远端状态之前（本地/远端探测阶段），远端最新快照不可信
+    remote_state_unknown: bool = False
 
     @property
     def success(self) -> bool:
@@ -110,6 +112,9 @@ def run_copy_cycle(  # noqa: PLR0913,PLR0911 复制周期需要完整上下文�
     pending = []
     remote_initialized = False
     coverage = CursorCoverage(True)
+    # pending 只有在成功读出本地快照后才可知；此前的远端/本地探测失败无法
+    # 断言"已全部复制"，backlog 必须记为未知而不是沿用旧的 0（P2-4）
+    pending_known = False
     language = config_language(cfg, get_mcdr_language(server))
     try:
         local_probe = probe_repository(app_runtime, local_cfg, slot=slot)
@@ -142,6 +147,7 @@ def run_copy_cycle(  # noqa: PLR0913,PLR0911 复制周期需要完整上下文�
             # 复制成功后再用真实快照重建游标。backlog 此时无法断言，记为未知。
             _record_cursor_anomaly(app_runtime, server, language, coverage, cursor_text)
             pending = select_pending_snapshots(snapshots, None, ())
+            pending_known = True
             update_staging_runtime(
                 app_runtime, server, staging_copy_backlog=BACKLOG_UNKNOWN
             )
@@ -151,6 +157,7 @@ def run_copy_cycle(  # noqa: PLR0913,PLR0911 复制周期需要完整上下文�
                 cursor_text,
                 _coerce_ids(cursor_ids),
             )
+            pending_known = True
             update_staging_runtime(
                 app_runtime, server, staging_copy_backlog=len(pending)
             )
@@ -193,10 +200,13 @@ def run_copy_cycle(  # noqa: PLR0913,PLR0911 复制周期需要完整上下文�
         )
     except BackupCanceled as exc:
         message = tr(language, "warn.staging.copy_canceled", error=exc)
+        canceled_backlog_unknown = coverage.untrusted or not pending_known
         _record_canceled(
             app_runtime,
             server,
-            _backlog_value(pending, coverage),
+            _backlog_value(pending, coverage)
+            if not canceled_backlog_unknown
+            else BACKLOG_UNKNOWN,
             message,
         )
         return CopyCycleResult(
@@ -206,14 +216,19 @@ def run_copy_cycle(  # noqa: PLR0913,PLR0911 复制周期需要完整上下文�
             retryable=True,
             canceled=True,
             cursor_untrusted=coverage.untrusted,
-            backlog_unknown=coverage.untrusted,
+            backlog_unknown=canceled_backlog_unknown,
+            remote_state_unknown=not pending_known,
         )
     except BackupProblem as exc:
         return _record_failure(
             app_runtime,
             server,
             _classify_copy_problem(
-                server, exc, pending, backlog_unknown=coverage.untrusted
+                server,
+                exc,
+                pending,
+                backlog_unknown=coverage.untrusted or not pending_known,
+                remote_state_unknown=not pending_known,
             ),
         )
     except Exception as exc:
@@ -226,7 +241,8 @@ def run_copy_cycle(  # noqa: PLR0913,PLR0911 复制周期需要完整上下文�
                 pending_count=len(pending),
                 retryable=True,
                 cursor_untrusted=coverage.untrusted,
-                backlog_unknown=coverage.untrusted,
+                backlog_unknown=coverage.untrusted or not pending_known,
+                remote_state_unknown=not pending_known,
             ),
         )
 
@@ -333,6 +349,7 @@ def _classify_copy_problem(
     exc: BackupProblem,
     pending: Sequence[Dict[str, str]],
     backlog_unknown: bool = False,
+    remote_state_unknown: bool = False,
 ) -> CopyCycleResult:
     # 只按 i18n_key 与 restic 原始输出分类：对译文做英文子串匹配会让
     # 中文环境下"超时"与"配额"互相误判（P1-2）
@@ -347,6 +364,7 @@ def _classify_copy_problem(
             retryable=False,
             auth_error=True,
             backlog_unknown=backlog_unknown,
+            remote_state_unknown=remote_state_unknown,
         )
     if kind == FailureKind.QUOTA:
         return CopyCycleResult(
@@ -356,6 +374,7 @@ def _classify_copy_problem(
             retryable=False,
             quota_error=True,
             backlog_unknown=backlog_unknown,
+            remote_state_unknown=remote_state_unknown,
         )
     return CopyCycleResult(
         STAGING_COPY_STATUS_FAILED,
@@ -363,6 +382,7 @@ def _classify_copy_problem(
         pending_count=len(pending),
         retryable=True,
         backlog_unknown=backlog_unknown,
+        remote_state_unknown=remote_state_unknown,
     )
 
 
@@ -501,7 +521,12 @@ def _record_failure(
         values["staging_copy_backlog"] = BACKLOG_UNKNOWN
     elif result.pending_count > 0:
         values["staging_copy_backlog"] = result.pending_count
-    if result.auth_error or result.quota_error or result.permanent:
+    if (
+        result.auth_error
+        or result.quota_error
+        or result.permanent
+        or result.remote_state_unknown
+    ):
         # 永久失败时远端状态不再可信（可能连快照都没读到）：保留此前的
         # 远端最新时间只代表"上次已知"，不能据此判定已追平而压掉落后告警
         values["staging_remote_probe_failed"] = True

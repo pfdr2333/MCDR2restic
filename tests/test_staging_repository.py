@@ -140,6 +140,28 @@ class RepoProbeTest(unittest.TestCase):
         self.assertEqual(probe.status, RepoProbeStatus.UNREACHABLE)
         self.assertIn("restic", probe.error)
 
+    def test_probe_timeout_with_signature_error_is_classified_as_auth(self):
+        # 截止时间先触发时输出里已有签名错误：必须归为鉴权失败并停止重试（P2-5）
+        runtime = create_runtime()
+        with mock.patch.object(
+            staging_repository,
+            "run_restic_command",
+            side_effect=BackupProblem(
+                i18n_key="error.restic.timeout",
+                phase="staging-cat-config",
+                seconds=30,
+                output=(
+                    "Fatal: The request signature we calculated does not match "
+                    "the signature you provided"
+                ),
+            ),
+        ):
+            probe = probe_repository(
+                runtime, {}, deadline=time.monotonic() + 30
+            )
+
+        self.assertEqual(probe.status, RepoProbeStatus.AUTH)
+
     def test_probe_cancel_still_propagates(self):
         runtime = create_runtime()
         with (

@@ -72,6 +72,17 @@ I18N_FAILURE_KINDS: Dict[str, FailureKind] = {
 }
 
 
+# 这些异常自带原始 restic 输出；输出里已经出现的鉴权/配额/缺失证据比
+# "超时/退出码"更具体，必须优先采信，否则签名错误会被当成网络不可达重试（P2-5）
+OUTPUT_OVERRIDES_I18N = frozenset(
+    {
+        "error.restic.timeout",
+        "error.restic.return_code",
+        "error.restic.process_still_running_after_output",
+    }
+)
+
+
 def classify_failure(error: Any) -> FailureKind:
     """[beta] 把 restic 结果或插件异常归为可重试/不可重试的单一类别。
 
@@ -79,10 +90,13 @@ def classify_failure(error: Any) -> FailureKind:
     UNREACHABLE 处理（可重试），宁可多试一次也不误停自动重试。
     """
 
-    kind = I18N_FAILURE_KINDS.get(_i18n_key(error))
-    if kind is not None:
-        return kind
+    key = _i18n_key(error)
+    kind = I18N_FAILURE_KINDS.get(key)
     text = raw_failure_text(error)
+    if kind is not None:
+        if key in OUTPUT_OVERRIDES_I18N and text:
+            return classify_failure_text(text)
+        return kind
     if text is None:
         return FailureKind.UNREACHABLE
     return classify_failure_text(text)
@@ -123,6 +137,7 @@ __all__ = [
     "AUTH_ERROR_MARKERS",
     "I18N_FAILURE_KINDS",
     "MISSING_REPOSITORY_MARKERS",
+    "OUTPUT_OVERRIDES_I18N",
     "QUOTA_ERROR_MARKERS",
     "FailureKind",
     "classify_failure",

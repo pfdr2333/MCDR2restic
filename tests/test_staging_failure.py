@@ -42,6 +42,26 @@ class ClassifyFailureTest(unittest.TestCase):
 
         self.assertEqual(classify_failure(problem), FailureKind.QUOTA)
 
+    def test_timeout_output_with_signature_error_is_auth(self):
+        # 30 秒截止先触发时，restic 已打印的签名错误必须覆盖"超时=不可达"（P2-5）
+        problem = BackupProblem(
+            i18n_key="error.restic.timeout",
+            seconds=30,
+            output=(
+                "Fatal: The request signature we calculated does not match "
+                "the signature you provided"
+            ),
+        )
+
+        self.assertEqual(classify_failure(problem), FailureKind.AUTH)
+
+    def test_timeout_without_output_stays_unreachable(self):
+        problem = BackupProblem(
+            i18n_key="error.restic.timeout", seconds=30, output=""
+        )
+
+        self.assertEqual(classify_failure(problem), FailureKind.UNREACHABLE)
+
     def test_raw_minio_storage_full_is_quota(self):
         result = restic_result(
             stderr="XMinioStorageFull: storage backend has reached its limit"

@@ -301,6 +301,22 @@ class CopyCycleTest(unittest.TestCase):
         self.assertEqual(runtime["staging_copy_backlog"], -1)
         self.assertEqual(runtime["staging_cursor_anomaly"], "ahead")
 
+    def test_remote_probe_failure_before_pending_count_marks_backlog_unknown(self):
+        # 远端探测在 pending 计算前失败时，沿用旧的 0 等于声称"已全部复制"（P2-4）
+        cycle = self.run_cycle(
+            ensure_remote_repository_for_copy=mock.Mock(
+                side_effect=BackupProblem(
+                    i18n_key="error.staging.remote_unreachable", error="timeout"
+                )
+            ),
+        )
+
+        self.assertEqual(cycle.status, STAGING_COPY_STATUS_FAILED)
+        self.assertTrue(cycle.backlog_unknown)
+        runtime = self.runtime.config_state.config["runtime"]
+        self.assertEqual(runtime["staging_copy_backlog"], -1)
+        self.assertTrue(runtime["staging_remote_probe_failed"])
+
     def test_remote_probe_failure_keeps_last_known_remote_latest(self):
         # 探测失败时用本地时间顶替远端时间，会让"远端落后"被误判为已追平（P1-1）
         local = [snapshot("a" * 64, "2026-01-01T00:00:00Z")]
@@ -390,8 +406,8 @@ class CopyCycleTest(unittest.TestCase):
 
 
     def test_auth_failure_keeps_remote_state_unknown_for_stale_warning(self):
-        # 鉴权失败发生在读取快照前：pending=0 且 backlog 保持 0，若不标记
-        # 远端状态未知，每小时巡检会误判"已追平"而不再告警
+        # 鉴权失败发生在读取快照前：pending 未计算，backlog 必须记为未知；
+        # 若不标记远端状态未知，每小时巡检会误判"已追平"而不再告警（P2-4）
         self.runtime.config_state.config["runtime"].update(
             {
                 "staging_local_latest_time": "2026-01-03 00:00:00",
@@ -407,7 +423,7 @@ class CopyCycleTest(unittest.TestCase):
 
         self.assertTrue(cycle.auth_error)
         runtime = self.runtime.config_state.config["runtime"]
-        self.assertEqual(runtime["staging_copy_backlog"], 0)
+        self.assertEqual(runtime["staging_copy_backlog"], -1)
         self.assertTrue(runtime["staging_remote_probe_failed"])
 
         notifier = mock.Mock()
@@ -438,6 +454,33 @@ class WorkerTest(unittest.TestCase):
         self.assertEqual(worker._plan_next_wait(failure), 300.0)
         self.assertEqual(worker._plan_next_wait(failure), 900.0)
         self.assertIsNone(worker._plan_next_wait(failure))
+
+    def test_retry_exhaustion_records_explicit_stop_message(self):
+        # 最后一条状态不能仍停在"将按退避重试"，否则用户以为还会继续（P3-2）
+        runtime, worker = self.make_worker()
+        runtime.service.server = FakePluginServer()
+        worker._attempt = 3
+        failure = CopyCycleResult(
+            STAGING_COPY_STATUS_FAILED,
+            message="network down",
+            pending_count=1,
+            retryable=True,
+        )
+
+        with mock.patch.object(staging_worker, "update_staging_runtime") as update:
+            self.assertIsNone(worker._plan_next_wait(failure))
+
+        values = update.call_args.kwargs
+        self.assertIn("停止自动重试", values["staging_last_copy_message"])
+        self.assertIn(
+            "network down", values["staging_last_copy_message"]
+        )
+        self.assertTrue(
+            any(
+                "停止自动重试" in text
+                for text in runtime.service.server.logger.warning_messages
+            )
+        )
 
     def test_success_resets_wait_and_attempt(self):
         _, worker = self.make_worker()

@@ -133,10 +133,10 @@ def probe_repository(
     except BackupCanceled:
         raise
     except BackupProblem as exc:
-        # 探测超时（含调用方传入的 deadline 已耗尽）按不可达归类：
-        # 探测的职责是给结论而不是中断调用方流程
+        # 超时/退出码异常也要看已捕获的原始输出：对象存储签名错误常在
+        # 截止时间前就已打印，只按"超时"归类会让鉴权失败被当成网络重试（P2-5）
         return RepoProbe(
-            RepoProbeStatus.UNREACHABLE,
+            RepoProbeStatus(classify_failure(exc).value),
             error=tr_error(get_mcdr_language(app_runtime.service.server), exc),
         )
     if result.return_code == 0:

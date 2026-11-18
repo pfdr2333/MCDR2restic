@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import contextlib
 import shutil
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from mcdreforged.api.all import CommandSource, PluginServerInterface
 
@@ -116,8 +116,8 @@ class StagingCommands:
             settings.remote_probe_timeout_seconds
         )
         lines: List[str] = []
-        local_latest = self.read_latest(server, local_cfg, slot)
-        remote_latest = self.read_latest(
+        _, local_latest = self.read_latest(server, local_cfg, slot)
+        remote_read_ok, remote_latest = self.read_latest(
             server, remote_cfg, slot, deadline=remote_deadline
         )
         lines.append(
@@ -127,7 +127,7 @@ class StagingCommands:
                 value=local_latest or tr(language, "status.never"),
             )
         )
-        if remote_latest is None:
+        if not remote_read_ok:
             # 读取失败（含超时）时回退上次已知值，并如实标注不是实时数据
             cached = str(
                 runtime_state.get("staging_remote_latest_time") or ""
@@ -161,7 +161,9 @@ class StagingCommands:
         lines.extend(self.format_cursor_anomaly(language, runtime_state))
         lines.append(self.format_last_copy(language, runtime_state))
         lines.append(
-            self.format_chunker_status(language, local_cfg, remote_cfg, slot, remote_deadline)
+            self.format_chunker_status(
+                language, local_cfg, remote_cfg, slot, remote_deadline, remote_read_ok
+            )
         )
         return lines
 
@@ -171,9 +173,11 @@ class StagingCommands:
         restic_cfg: Dict[str, Any],
         slot: Any,
         deadline: Optional[float] = None,
-    ):
+    ) -> Tuple[bool, Optional[str]]:
+        """返回 (读取是否成功, 最新快照时间)；空仓库算成功但时间为 None。"""
+
         try:
-            return latest_snapshot_time(
+            return True, latest_snapshot_time(
                 read_snapshots(
                     self.context.app_runtime,
                     server,
@@ -191,7 +195,7 @@ class StagingCommands:
                     error=exc,
                 )
             )
-            return None
+            return False, None
 
     def format_disk_free(self, language: str, repository_path: str) -> str:
         try:
@@ -243,15 +247,22 @@ class StagingCommands:
             message=message,
         )
 
-    def format_chunker_status(
+    def format_chunker_status(  # noqa: PLR0913 远端读取结果决定是否再探测
         self,
         language: str,
         local_cfg: Dict[str, Any],
         remote_cfg: Dict[str, Any],
         slot: Any,
         remote_deadline: Optional[float],
+        remote_read_ok: bool = True,
     ) -> str:
         local_probe = probe_repository(self.context.app_runtime, local_cfg, slot=slot)
+        if not local_probe.ok:
+            return tr(language, "status.staging.chunker.unknown")
+        if not remote_read_ok:
+            # 远端刚超时/不可达：再发一次 cat-config 只会把总耗时翻倍，
+            # 也没有新的信息量；直接给"未知"（P2-3）
+            return tr(language, "status.staging.chunker.unknown")
         # 复用外层 deadline：远端黑洞时第二个 cat-config 不再重新计满一分钟
         remote_probe = probe_repository(
             self.context.app_runtime,
@@ -259,8 +270,6 @@ class StagingCommands:
             slot=slot,
             deadline=remote_deadline,
         )
-        if not local_probe.ok:
-            return tr(language, "status.staging.chunker.unknown")
         if remote_probe.missing:
             return tr(language, "status.staging.chunker.remote_missing")
         if not remote_probe.ok:

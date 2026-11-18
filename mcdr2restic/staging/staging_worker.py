@@ -170,7 +170,13 @@ class StagingCopyWorker:
         if not result.retryable:
             return None
         settings = self._current_settings()
-        if settings is None or self._attempt >= settings.copy_retry_max:
+        if settings is None:
+            self._attempt = 0
+            return None
+        if self._attempt >= settings.copy_retry_max:
+            # 最后一条失败记录仍停在"将按退避重试"，等于告诉用户还会继续；
+            # 必须显式收尾，说明自动重试已经停止（P3-2）
+            self._record_retry_exhausted(settings.copy_retry_max, result.message)
             self._attempt = 0
             return None
         delay = settings.copy_retry_backoff_seconds[
@@ -178,6 +184,23 @@ class StagingCopyWorker:
         ]
         self._attempt += 1
         return float(delay)
+
+    def _record_retry_exhausted(self, attempts: int, last_error: str):
+        server = self.app_runtime.service.server
+        if server is None:
+            return
+        message = tr(
+            get_mcdr_language(server),
+            "warn.staging.copy_retry_exhausted",
+            attempts=attempts,
+            error=last_error or "-",
+        )
+        server.logger.warning(message)
+        update_staging_runtime(
+            self.app_runtime,
+            server,
+            staging_last_copy_message=message,
+        )
 
     def _run_once(self) -> Optional[CopyCycleResult]:  # noqa: PLR0911 前置条件多，逐个早退
         state = self.app_runtime.staging
