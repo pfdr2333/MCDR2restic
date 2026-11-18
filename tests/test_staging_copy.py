@@ -389,6 +389,37 @@ class CopyCycleTest(unittest.TestCase):
         self.assertTrue(self.server.logger.debug_messages)
 
 
+    def test_auth_failure_keeps_remote_state_unknown_for_stale_warning(self):
+        # 鉴权失败发生在读取快照前：pending=0 且 backlog 保持 0，若不标记
+        # 远端状态未知，每小时巡检会误判"已追平"而不再告警
+        self.runtime.config_state.config["runtime"].update(
+            {
+                "staging_local_latest_time": "2026-01-03 00:00:00",
+                "staging_remote_latest_time": "2026-01-01T00:00:00Z",
+                "staging_copy_backlog": 0,
+            }
+        )
+        cycle = self.run_cycle(
+            ensure_remote_repository_for_copy=mock.Mock(
+                side_effect=BackupProblem(i18n_key="error.staging.remote_auth")
+            ),
+        )
+
+        self.assertTrue(cycle.auth_error)
+        runtime = self.runtime.config_state.config["runtime"]
+        self.assertEqual(runtime["staging_copy_backlog"], 0)
+        self.assertTrue(runtime["staging_remote_probe_failed"])
+
+        notifier = mock.Mock()
+        with mock.patch.object(staging_warning, "update_staging_runtime"):
+            warned = staging_warning.maybe_warn_remote_stale(
+                self.runtime, self.server, self.cfg, self.settings, notifier
+            )
+
+        self.assertTrue(warned)
+        notifier.assert_called_once()
+
+
 class WorkerTest(unittest.TestCase):
     def make_worker(self, cfg=None):
         runtime = create_runtime()

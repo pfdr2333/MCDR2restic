@@ -315,6 +315,8 @@ def _check_chunkers(  # noqa: PLR0913 chunker 校验需要完整上下文
             staging_last_copy_time=now_text(),
             staging_last_copy_status=STAGING_COPY_STATUS_PERMANENT,
             staging_last_copy_message=message,
+            # 远端不可用于复制时同样不能断言已追平
+            staging_remote_probe_failed=True,
         )
         server.logger.warning(message)
         return CopyCycleResult(
@@ -499,6 +501,10 @@ def _record_failure(
         values["staging_copy_backlog"] = BACKLOG_UNKNOWN
     elif result.pending_count > 0:
         values["staging_copy_backlog"] = result.pending_count
+    if result.auth_error or result.quota_error or result.permanent:
+        # 永久失败时远端状态不再可信（可能连快照都没读到）：保留此前的
+        # 远端最新时间只代表"上次已知"，不能据此判定已追平而压掉落后告警
+        values["staging_remote_probe_failed"] = True
     update_staging_runtime(app_runtime, server, **values)
     log_copy_failure(server, result)
     return result
