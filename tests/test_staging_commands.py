@@ -230,6 +230,46 @@ class StagingCommandTest(unittest.TestCase):
         self.assertIsNotNone(remote_read_deadline)
         self.assertEqual(remote_read_deadline, remote_probe_deadline)
 
+    def test_status_surfaces_cursor_anomaly_and_unknown_backlog(self):
+        # 游标异常必须可见，否则状态页会显示 backlog=0，等于声称远端已完整（P1-1）
+        cfg = staging_config()
+        cfg["runtime"] = build_default_runtime()
+        cfg["runtime"].update(
+            {"staging_cursor_anomaly": "ahead", "staging_copy_backlog": -1}
+        )
+        self.runtime.config_state.config = cfg
+        settings = get_staging_settings(cfg)
+        paths = resolve_staging_paths(settings, cfg["restic"])
+        probes = RepoProbe(RepoProbeStatus.OK, {"chunker_polynomial": "poly"})
+        snapshots = [
+            {"id": "a" * 64, "short_id": "a" * 8, "time": "2026-01-01T00:00:00Z"}
+        ]
+
+        with (
+            mock.patch(
+                "mcdr2restic.commands.staging_commands.validate_staging_settings",
+                return_value=paths,
+            ),
+            mock.patch(
+                "mcdr2restic.commands.staging_commands.read_snapshots",
+                return_value=snapshots,
+            ),
+            mock.patch(
+                "mcdr2restic.commands.staging_commands.probe_repository",
+                return_value=probes,
+            ),
+            mock.patch(
+                "mcdr2restic.commands.staging_commands.shutil.disk_usage",
+                return_value=SimpleNamespace(total=1000, free=500),
+            ),
+        ):
+            self.commands.command_status(self.source)
+
+        output = self.source.replies[0]
+        self.assertIn("待复制快照：未知", output)
+        self.assertIn("游标状态：异常", output)
+        self.assertIn("游标晚于本地最新快照", output)
+
     def test_status_remote_read_fails_fast_and_falls_back_to_cache(self):
         # 远端 snapshots 读取必须带短超时并回退上次已知值，
         # 否则不可达远端会把 TaskExecutor 挂住数分钟（E2E NEW-P3）
