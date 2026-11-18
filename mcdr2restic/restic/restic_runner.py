@@ -17,10 +17,10 @@ from mcdr2restic.defaults.default_constants import (
 from mcdr2restic.core.i18n import config_language, tr
 from mcdr2restic.core.language import get_mcdr_language
 from mcdr2restic.core.models import (
-    BackupCanceled,
     BackupProblem,
     ResticCommandResult,
     ResticProgressState,
+    build_canceled_error,
 )
 from mcdr2restic.restic.restic_config import (
     build_restic_environment,
@@ -172,7 +172,7 @@ def assert_restic_process_completed(  # noqa: PLR0913 执行槽位与命令上�
     # restic 已成功收尾（退出码 0）时取消请求才刚到达，快照实际已落库，
     # 仍标 canceled 会与仓库真实状态矛盾，只有被打断的进程才按取消处理（P5-1）
     if canceled and (outcome.timed_out or outcome.return_code != 0):
-        raise BackupCanceled(i18n_key="error.backup.cancel_requested")
+        raise build_canceled_error(slot or app_runtime.backup)
     if outcome.timed_out:
         raise_restic_timeout(restic_cfg, phase, started, outcome.stdout, outcome.stderr)
 
@@ -339,7 +339,7 @@ def ensure_restic_process_can_continue(
             result,
             language,
         )
-        raise_backup_canceled_with_termination_result(result, language)
+        raise_backup_canceled_with_termination_result(result, language, slot)
     remaining = get_deadline_remaining(deadline)
     if remaining is None or remaining > 0:
         return False
@@ -539,10 +539,8 @@ def get_runtime_language(app_runtime: PluginRuntime) -> str:
     )
 
 
-def raise_backup_canceled_with_termination_result(result, language: str):
+def raise_backup_canceled_with_termination_result(
+    result, language: str, slot: Any = None
+):
     suffix = termination_failure_suffix(result, language)
-    if suffix:
-        raise BackupCanceled(
-            i18n_key="error.backup.cancel_requested_with_failure", detail=suffix
-        )
-    raise BackupCanceled(i18n_key="error.backup.cancel_requested")
+    raise build_canceled_error(slot, suffix)

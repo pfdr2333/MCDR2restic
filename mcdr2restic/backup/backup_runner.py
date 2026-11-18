@@ -484,6 +484,7 @@ class BackupRunner:
         # 否则 "!!restic stop" 会表现为已请求取消但备份照跑（P1-7）
         if not self.app_runtime.backup.cancel.is_set():
             self.app_runtime.backup.cancel.clear()
+            self.app_runtime.backup.cancel_reason = None
         started = time.monotonic()
         start_time = now_text()
         cfg = get_config_snapshot(self.app_runtime)

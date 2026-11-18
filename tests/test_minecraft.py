@@ -1,5 +1,6 @@
 try:
     from .support import (
+        CommandServer,
         ProbeServer,
         create_runtime,
         has_recent_player_activity,
@@ -13,6 +14,7 @@ try:
     )
 except ImportError:
     from support import (
+        CommandServer,
         ProbeServer,
         create_runtime,
         has_recent_player_activity,
@@ -81,3 +83,17 @@ class MinecraftServiceTests(unittest.TestCase):
 
         # minecraft 段写成标量时按空段处理，走默认命令并在服务端未运行时静默跳过
         try_force_save_on(runtime, server, "test", lambda rt: {"minecraft": True})
+
+    def test_execute_mc_command_logs_actual_command_text(self):
+        # 日志必须打出真实发送的命令，否则配置成 "save-all flush" 时日志
+        # 仍写 "save-all"，排查落盘问题会被误导（P3-8）
+        from mcdr2restic.minecraft.minecraft_service import execute_mc_command
+
+        runtime = create_runtime()
+        runtime.service.server_ready = True
+        server = CommandServer()
+
+        execute_mc_command(runtime, server, "save-all flush", "save-all")
+
+        self.assertEqual(server.commands, ["save-all flush"])
+        self.assertIn("save-all flush", server.logger.info_messages[0])

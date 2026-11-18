@@ -28,10 +28,12 @@ class CustomWebhookClient(WebhookClientBase):
         self, text: str, values: Optional[Dict[str, Any]]
     ) -> Dict[str, Any]:
         data = SafeFormatDict()
-        data["message"] = str(text or "")
         data["plugin"] = "MCDR2Restic"
         for key, value in (values or {}).items():
             data[str(key)] = "" if value is None else str(value)
+        # 正文必须在合并业务字段之后写入：备份结果的 values 也带 ``message``
+        # 短摘要，先写会被覆盖成短摘要，webhook 收不到模板渲染后的完整正文（P2-1）
+        data["message"] = str(text or "")
         return render_payload_leaves(
             self._payload_template(), data, self._log_template_render_error
         )

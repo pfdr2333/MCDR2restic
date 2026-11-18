@@ -111,6 +111,24 @@ class BackupCanceled(BackupProblem):
     """Raised when a running backup is canceled by user or shutdown flow."""
 
 
+def build_canceled_error(slot: Any = None, detail: str = "") -> BackupCanceled:
+    """按取消槽上记录的真实原因构造取消异常。
+
+    门控中断、服务器停止、手动取消等来源都会在置位取消事件前写入
+    ``cancel_reason``；沿用固定的"收到停止请求"会让日志与通知丢失原因，
+    无法判断备份为何被中断（可观测性缺陷）。
+    """
+
+    reason = str(getattr(slot, "cancel_reason", "") or "").strip()
+    if reason:
+        return BackupCanceled(message=reason + detail)
+    if detail:
+        return BackupCanceled(
+            i18n_key="error.backup.cancel_requested_with_failure", detail=detail
+        )
+    return BackupCanceled(i18n_key="error.backup.cancel_requested")
+
+
 class LocalizedValueError(ValueError):
     """Raised when a pure validation path needs a translatable error."""
 

@@ -72,6 +72,7 @@ class ResticExecutionSlot:
 
     cancel: threading.Event = field(default_factory=threading.Event)
     current_process: Optional[subprocess.Popen] = None
+    cancel_reason: Optional[str] = None
 
 
 @dataclass
@@ -79,6 +80,7 @@ class BackupRuntimeState:
     lock: threading.Lock = field(default_factory=threading.Lock)
     cancel: threading.Event = field(default_factory=threading.Event)
     current_process: Optional[subprocess.Popen] = None
+    cancel_reason: Optional[str] = None
     thread: Optional[threading.Thread] = None
     label: Optional[str] = None
     pending: Optional[PendingBackupState] = None
@@ -124,6 +126,7 @@ class PluginRuntime:
         self.backup.label = None
         self.backup.thread = None
         self.backup.cancel.clear()
+        self.backup.cancel_reason = None
         if self.backup.lock.locked():
             self.backup.lock.release()
 

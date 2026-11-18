@@ -29,6 +29,19 @@ from mcdr2restic.staging.staging_config import staging_enabled
 # 否则会触发 prepare_restic_args_for_phase 的 --json 自动注入
 EXEC_PHASE = "exec"
 
+# restic 对已存在的仓库重复 init 时的稳定措辞（0.16 起 config file already exists）
+ALREADY_INITIALIZED_MARKERS = (
+    "config file already exists",
+    "repository master key and config already initialized",
+)
+
+
+def is_already_initialized(result: ResticCommandResult) -> bool:
+    if result.return_code == 0:
+        return False
+    text = "{}\n{}".format(result.stdout or "", result.stderr or "").lower()
+    return any(marker in text for marker in ALREADY_INITIALIZED_MARKERS)
+
 
 class ResticCommands:
     def __init__(self, context: CommandContext):
@@ -101,6 +114,11 @@ class ResticCommands:
                 command,
                 make_restic_deadline(restic_cfg),
             )
+            if command == RESTIC_COMMAND_INIT and is_already_initialized(result):
+                # 对已初始化仓库重复 init 只是预期内的无操作，不该把 restic
+                # 的 "Fatal: ... config file already exists" 原样丢给用户（P3-4）
+                reply_tr(source, server, "info.restic.init.already_initialized")
+                return
             assert_restic_success(
                 restic_cfg, result, self.context.get_command_root(), server.logger
             )

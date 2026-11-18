@@ -11,8 +11,12 @@ from mcdr2restic.core.models import (
     BackupProblem,
     BackupRunOutcome,
     BackupRunStatus,
+    build_canceled_error,
 )
-from mcdr2restic.minecraft.minecraft_service import request_cancel_current_backup
+from mcdr2restic.minecraft.minecraft_service import (
+    check_canceled,
+    request_cancel_current_backup,
+)
 
 
 class BackupRunnerTests(unittest.TestCase):
@@ -437,4 +441,61 @@ class BackupRunnerTests(unittest.TestCase):
         self.assertEqual(runtime_state["last_backup_status"], "success")
         self.assertEqual(runtime_state["last_skip_scheduled_time"], "2026-01-02 03:00:00")
         self.assertEqual(runtime_state["last_skip_reason"], "too soon")
+
+    def test_gate_interrupt_reason_reaches_canceled_outcome_and_notification(self):
+        # 门控中断曾只留下"收到停止请求"，通知无法说明备份为何被取消
+        runtime, runner = self.make_runner()
+        runtime.service.server = FakePluginServer()
+        runtime.config_state.config = {
+            "notification": {"notify_on_failure": True},
+            "runtime": {},
+        }
+        gate_reason = "在线人数持续超过门控阈值（8/5 达 600 秒），中断备份以恢复世界自动保存"
+
+        with mock.patch(
+            "mcdr2restic.minecraft.minecraft_service.terminate_process"
+        ), mock.patch(
+            "mcdr2restic.minecraft.minecraft_service.warn_if_termination_failed"
+        ):
+            request_cancel_current_backup(runtime, gate_reason)
+
+        with self.assertRaises(BackupCanceled) as raised:
+            check_canceled(runtime)
+        self.assertEqual(str(raised.exception), gate_reason)
+
+        with mock.patch(
+            "mcdr2restic.backup.backup_runner.run_backup_body",
+            side_effect=build_canceled_error(runtime.backup),
+        ):
+            outcome = runner._execute_backup_run(
+                runtime.service.server, runtime.config_state.config, "定时", 0
+            )
+
+        self.assertEqual(outcome.status, BackupRunStatus.CANCELED)
+        self.assertEqual(outcome.detail, gate_reason)
+        self.assertIn(gate_reason, outcome.message)
+
+        runner._notify_backup_finished(
+            runtime.config_state.config,
+            "定时",
+            "2026-01-02 03:00:00",
+            "2026-01-02 03:10:00",
+            outcome,
+        )
+        template_key, values = runner.admin_notifier.call_args.args[:2]
+        self.assertEqual(template_key, "backup_failure")
+        self.assertEqual(values["detail"], gate_reason)
+
+    def test_canceled_outcome_falls_back_to_generic_reason_without_recorded_cause(self):
+        _, runner = self.make_runner()
+        server = FakePluginServer()
+
+        with mock.patch(
+            "mcdr2restic.backup.backup_runner.run_backup_body",
+            side_effect=BackupCanceled(i18n_key="error.backup.cancel_requested"),
+        ):
+            outcome = runner._execute_backup_run(server, {}, "manual", 0)
+
+        self.assertEqual(outcome.status, BackupRunStatus.CANCELED)
+        self.assertEqual(outcome.detail, "收到停止请求")
 

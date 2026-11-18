@@ -80,7 +80,15 @@ def load_config_file_mapping(server: PluginServerInterface) -> Dict[str, Any]:
     try:
         loaded = yaml.safe_load(text) or {}
     except yaml.YAMLError as exc:
-        raise ConfigError("error.config.yaml_invalid", path=path) from exc
+        # 只给路径的话用户还得自己找；把解析器给出的行/列与原因一并带上
+        mark = getattr(exc, "problem_mark", None)
+        raise ConfigError(
+            "error.config.yaml_invalid",
+            path=path,
+            line=getattr(mark, "line", -1) + 1 if mark is not None else "?",
+            column=getattr(mark, "column", -1) + 1 if mark is not None else "?",
+            reason=str(getattr(exc, "problem", None) or exc),
+        ) from exc
     if not isinstance(loaded, dict):
         raise ConfigError("error.config.root_not_mapping", path=path)
     return loaded

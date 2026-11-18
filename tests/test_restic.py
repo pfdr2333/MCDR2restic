@@ -452,6 +452,51 @@ class ResticCommandTests(unittest.TestCase):
         self.assertIsNone(runtime.backup.thread)
         self.assertFalse(runtime.backup.lock.locked())
 
+    def test_manual_init_on_existing_repository_reports_friendly_message(self):
+        # 重复 init 是预期内无操作，不能把 restic 的 "Fatal: ..." 原文丢给用户（P3-4）
+        runtime = create_runtime()
+        runtime.config_state.config = {
+            "command": {"root": "!!backup", "permission_level": 3},
+            "restic": {"timeout_seconds": 0},
+        }
+        server = FakePluginServer()
+        runtime.service.server = server
+        source = PermissiveCommandSource(server)
+        commands = ResticCommands(
+            CommandContext(
+                runtime,
+                lambda: None,
+                lambda: None,
+                lambda _server: None,
+                lambda: None,
+                lambda *_args: None,
+            )
+        )
+        already_exists = ResticCommandResult(
+            "init",
+            ["init"],
+            1,
+            "",
+            "Fatal: create repository at repo: config file already exists",
+            0.1,
+        )
+
+        with (
+            mock.patch(
+                "mcdr2restic.commands.restic_commands.ensure_default_restic_executable_available"
+            ),
+            mock.patch(
+                "mcdr2restic.commands.restic_commands.run_restic_command",
+                return_value=already_exists,
+            ),
+        ):
+            commands.command_init(source)
+
+        self.assertEqual(len(source.replies), 1)
+        self.assertIn("无需重复执行 init", source.replies[0])
+        self.assertNotIn("Fatal", source.replies[0])
+        self.assertFalse(runtime.backup.lock.locked())
+
 
 class ManualUnlockCommandTests(unittest.TestCase):
     def _make_commands(self):

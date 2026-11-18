@@ -231,6 +231,20 @@ class CustomWebhookTests(unittest.TestCase):
 
         self.assertEqual(payload, {"content": "强制 正文"})
 
+    def test_webhook_message_keeps_full_text_when_values_carry_short_summary(self):
+        # 备份结果的 values 自带 message 短摘要，不能覆盖模板渲染后的完整正文（P2-1）
+        client = CustomWebhookClient(
+            FakePluginServer(),
+            {"enabled": True, "payload": {"content": "{message}"}},
+        )
+
+        payload = client._build_payload(
+            "[MCDR2Restic] 备份成功\\n触发: 手动\\n详情: 完成",
+            {"message": "手动备份成功，用时 3 秒"},
+        )
+
+        self.assertEqual(payload["content"], "[MCDR2Restic] 备份成功\\n触发: 手动\\n详情: 完成")
+
     def test_disabled_webhook_client_does_not_start_thread(self):
         server = FakePluginServer()
         client = CustomWebhookClient(server, {"enabled": False})

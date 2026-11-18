@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+import json
 import re
 import sqlite3
 import threading
@@ -386,7 +387,11 @@ def append_snapshot_cache_notes(
             translate("snapshot.cache.invalidated", reason=invalidation_reason)
         )
     if error:
-        lines.append(translate("snapshot.cache.stale_error", error=error))
+        if str(page_data.get("updated_at_text") or "").strip():
+            lines.append(translate("snapshot.cache.stale_error", error=error))
+        else:
+            # 从未成功刷新过就没有"旧缓存"可显示，措辞必须区别于陈旧缓存（P3-5）
+            lines.append(translate("snapshot.cache.refresh_failed", error=error))
 
 
 def append_snapshot_rows(
@@ -427,9 +432,7 @@ def format_snapshot_line(index: int, row: sqlite3.Row) -> str:
     time_text = format_restic_time_for_display(str(row["time_text"] or ""))
     host = str(row["hostname"] or "")
     tags = str(row["tags_text"] or "")
-    paths = str(row["paths_text"] or "")
-    if len(paths) > SNAPSHOT_PATHS_PREVIEW_MAX_LENGTH:
-        paths = paths[:SNAPSHOT_PATHS_PREVIEW_TRUNCATE_AT] + "..."
+    paths = format_snapshot_paths_preview(str(row["paths_text"] or ""))
     extras = []
     if host:
         extras.append(host)
@@ -441,6 +444,41 @@ def format_snapshot_line(index: int, row: sqlite3.Row) -> str:
     if detail:
         return "  {}. {} {} | {}".format(index, short_id, time_text, detail)
     return "  {}. {} {}".format(index, short_id, time_text)
+
+
+def format_snapshot_paths_preview(paths_text: str) -> str:
+    """快照来源只显示目录名：绝对路径又长又会被截成 "C:\\...\\M2…"，信息量低。"""
+
+    paths = split_snapshot_paths(paths_text)
+    if not paths:
+        return ""
+    names = [snapshot_path_basename(path) for path in paths]
+    preview = ", ".join(names)
+    if len(preview) > SNAPSHOT_PATHS_PREVIEW_MAX_LENGTH:
+        preview = preview[:SNAPSHOT_PATHS_PREVIEW_TRUNCATE_AT] + "..."
+    return preview
+
+
+def snapshot_path_basename(path: str) -> str:
+    """按 POSIX 与 Windows 两种分隔符取目录名，跨平台展示一致。"""
+
+    text = str(path or "").strip().rstrip("\\/")
+    parts = [part for part in re.split(r"[\\/]", text) if part]
+    return parts[-1] if parts else text
+
+
+def split_snapshot_paths(paths_text: str) -> List[str]:
+    raw = str(paths_text or "").strip()
+    if not raw:
+        return []
+    if raw.startswith("["):
+        try:
+            payload = json.loads(raw)
+        except Exception:
+            payload = None
+        if isinstance(payload, list):
+            return [str(item).strip() for item in payload if str(item).strip()]
+    return [part.strip() for part in raw.split(", ") if part.strip()]
 
 
 def format_restic_time_for_display(value: str) -> str:

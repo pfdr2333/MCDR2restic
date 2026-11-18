@@ -8,7 +8,7 @@ from mcdreforged.api.all import PluginServerInterface
 
 from mcdr2restic.core.i18n import server_tr
 from mcdr2restic.core.language import get_mcdr_language
-from mcdr2restic.core.models import BackupCanceled, BackupProblem
+from mcdr2restic.core.models import BackupProblem, build_canceled_error
 from mcdr2restic.core.utils import get_config_section
 from mcdr2restic.restic.restic_termination import (
     TerminateResult,
@@ -27,7 +27,9 @@ def execute_mc_command(
         raise BackupProblem(
             i18n_key="error.minecraft.command_server_not_running", label=label
         )
-    server.logger.info(server_tr(server, "log.minecraft.command_execute", label=label))
+    server.logger.info(
+        server_tr(server, "log.minecraft.command_execute", command=command)
+    )
     try:
         server.execute(command)
     except Exception as exc:
@@ -66,6 +68,7 @@ def request_cancel_current_process(
 ) -> Optional[TerminateResult]:
     """置位取消事件并终止正在运行的 restic 进程；备份与恢复共用同一事件。"""
 
+    app_runtime.backup.cancel_reason = str(reason or "").strip() or None
     app_runtime.backup.cancel.set()
     process = app_runtime.backup.current_process
     result = None
@@ -111,9 +114,16 @@ def is_backup_running(app_runtime: PluginRuntime) -> bool:
     return app_runtime.backup.lock.locked()
 
 
+def has_active_restic_process(app_runtime: PluginRuntime) -> bool:
+    """当前是否真有 restic 子进程在跑，用于区分"终止进程"与"已进入收尾"。"""
+
+    process = app_runtime.backup.current_process
+    return process is not None and process.poll() is None
+
+
 def check_canceled(app_runtime: PluginRuntime):
     if app_runtime.backup.cancel.is_set():
-        raise BackupCanceled(i18n_key="error.backup.cancel_requested")
+        raise build_canceled_error(app_runtime.backup)
 
 
 def sleep_or_cancel(app_runtime: PluginRuntime, seconds: float):

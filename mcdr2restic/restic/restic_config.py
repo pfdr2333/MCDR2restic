@@ -303,8 +303,11 @@ WINDOWS_VERBATIM_UNC_PREFIX = "\\\\?\\UNC\\"
 WINDOWS_VERBATIM_PREFIX = "\\\\?\\"
 # 管理共享 \\主机\X$\… 与盘符 X:\… 指向同一位置，可确定性互映射；
 # 普通共享无法离线判定，不做映射。
+# 只允许一个前导反斜杠的形态也要识别：MCDR 解析聊天命令时会把 "\\\\host\\c$"
+# 折叠成 "\\host\\c$"，随后被 os.path.abspath 当成当前盘符的相对根解析，
+# 若只匹配双反斜杠，管理共享检查会因参数已被改写而漏过（P3-7）。
 UNC_ADMIN_SHARE_PATTERN = re.compile(
-    r"^(?:\\\\(?P<host>[^\\/]+)\\)(?P<share>[A-Za-z])\$(?P<rest>\\.*)?$"
+    r"^(?:\\{1,2}(?P<host>[^\\/]+)\\)(?P<share>[A-Za-z])\$(?P<rest>\\.*)?$"
 )
 _local_unc_host_names: Set[str] | None = None
 

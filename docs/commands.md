@@ -339,10 +339,14 @@ restic:
 适合什么时候用：
 
 - 你修改了 `config.yml`
-- 你改了备份路径、仓库、通知或命令根
+- 你改了备份路径、仓库、通知或调度配置
 - 你想应用新的调度配置
 
 如果配置文件损坏或 YAML 不合法，插件会快速失败，不会静默重置成默认值。
+
+注意：命令树（`command.root`、`command.aliases`、`command.permission_level`）只在插件加载时注册，
+`!!m2r reload` 无法刷新它们。改了这些键请执行 `!!MCDR plugin reload mcdr2restic`（或重启 MCDR），
+否则旧命令仍然可用、新命令不会出现；reload 会检测到这类改动并给出提示。
 
 ## 常用操作示例
 

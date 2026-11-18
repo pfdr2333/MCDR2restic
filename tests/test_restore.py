@@ -276,6 +276,20 @@ class RestoreTargetDirectoryTests(unittest.TestCase):
             error.exception.i18n_key, "error.restore.target_admin_share_unc"
         )
 
+    def test_normalize_target_rejects_collapsed_single_backslash_admin_share(self):
+        # MCDR 会把聊天里的 "\\\\host\\c$" 折叠成 "\\host\\c$"，abspath 再把
+        # 它变成 "C:\\host\\c$\\..."；折叠形态同样必须按管理共享拒绝（P3-7）
+        restic_cfg = {"working_directory": str(REPO_ROOT)}
+
+        with self.assertRaises(BackupProblem) as error:
+            restore_paths.normalize_restore_target_directory(
+                "\\127.0.0.1\\c$\\temp", restic_cfg
+            )
+
+        self.assertEqual(
+            error.exception.i18n_key, "error.restore.target_admin_share_unc"
+        )
+
     @unittest.skipUnless(os.name == "nt", "verbatim UNC prefix is Windows-specific")
     def test_normalize_target_rejects_verbatim_unc_foreign_host(self):
         restic_cfg = {"working_directory": str(REPO_ROOT)}

@@ -29,6 +29,11 @@ except ImportError:
         unittest,
     )
 
+from mcdr2restic.core.presentation import (
+    append_snapshot_cache_notes,
+    format_snapshot_paths_preview,
+)
+
 
 class UtilsTests(unittest.TestCase):
     def test_safe_int_uses_default_on_bad_input(self):
@@ -156,4 +161,54 @@ class UtilsTests(unittest.TestCase):
             "距上次成功备份（服务器运行时间）：25 小时（上次成功：2026-01-01 00:00:00）",
             output,
         )
+
+    def test_snapshot_paths_show_directory_names_instead_of_full_paths(self):
+        preview = format_snapshot_paths_preview(
+            "C:\\MinecraftServer\\iris\\world, C:\\MinecraftServer\\iris\\world_nether"
+        )
+
+        self.assertEqual(preview, "world, world_nether")
+
+    def test_snapshot_paths_accept_json_list_and_keep_unknown_shapes(self):
+        self.assertEqual(
+            format_snapshot_paths_preview(
+                '["/srv/mc/world", "/srv/mc/plugins"]'
+            ),
+            "world, plugins",
+        )
+        self.assertEqual(
+            format_snapshot_paths_preview("relative/tail/"), "tail"
+        )
+
+    def test_first_refresh_failure_does_not_claim_old_cache(self):
+        def translate(key, **params):
+            return "{}:{}".format(key, params.get("error", ""))
+
+        lines = []
+
+        append_snapshot_cache_notes(
+            lines,
+            translate,
+            {"error": "restic not found", "updated_at_text": None},
+            "",
+        )
+
+        self.assertEqual(len(lines), 1)
+        self.assertIn("snapshot.cache.refresh_failed", lines[0])
+        self.assertNotIn("snapshot.cache.stale_error", lines[0])
+
+    def test_refresh_failure_with_existing_cache_reports_stale_cache(self):
+        def translate(key, **params):
+            return "{}:{}".format(key, params.get("error", ""))
+
+        lines = []
+
+        append_snapshot_cache_notes(
+            lines,
+            translate,
+            {"error": "timeout", "updated_at_text": "2026-01-01 00:00:00"},
+            "",
+        )
+
+        self.assertIn("snapshot.cache.stale_error", lines[0])
 

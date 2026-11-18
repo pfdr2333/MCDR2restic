@@ -646,6 +646,11 @@ class ConfigurationTests(unittest.TestCase):
                 load_config_file_mapping(server)
 
         self.assertEqual(error.exception.i18n_key, "error.config.yaml_invalid")
+        # 只给路径等于让用户自己逐行找；解析器给出的行列与原因必须带上（P3-3）
+        self.assertIn("line", error.exception.i18n_params)
+        self.assertIn("column", error.exception.i18n_params)
+        self.assertNotEqual(error.exception.i18n_params["line"], "?")
+        self.assertTrue(str(error.exception.i18n_params["reason"]).strip())
 
     @mock.patch("mcdr2restic.core.i18n._ACTIVE_LANGUAGE", "")
     def test_config_migration_serializes_with_enabled_flip(self):

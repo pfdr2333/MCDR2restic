@@ -111,6 +111,7 @@ class PluginEntrypoint:
         self.bootstrap_result.logs.clear()
         self.runtime.service.stopping.clear()
         self.runtime.backup.cancel.clear()
+        self.runtime.backup.cancel_reason = None
         self.runtime.service.server_ready = server_is_running(self.runtime, server)
 
     def on_unload(self, server: PluginServerInterface):

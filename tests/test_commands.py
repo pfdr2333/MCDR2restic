@@ -113,6 +113,22 @@ class CancelCommandTests(unittest.TestCase):
         )
         return BackupCommands(context), runtime
 
+    def test_cancel_after_restic_exit_reports_finishing(self):
+        # 备份刚结束（锁仍持有、restic 已退出）时不能声称"正在终止 restic 进程"（P3-1）
+        commands, runtime = self.make_commands()
+        source = PermissiveCommandSource(FakePluginServer())
+        runtime.backup.lock.acquire()
+        try:
+            with mock.patch(
+                "mcdr2restic.commands.backup_commands.request_cancel_current_backup"
+            ):
+                commands.command_cancel(source)
+        finally:
+            runtime.backup.lock.release()
+
+        self.assertIn("restic 进程已结束", source.replies[-1])
+        self.assertNotIn("正在终止 restic 进程", source.replies[-1])
+
     def test_cancel_terminates_running_backup(self):
         commands, runtime = self.make_commands()
         source = PermissiveCommandSource(FakePluginServer())
@@ -224,6 +240,41 @@ class ReloadCommandTests(unittest.TestCase):
 
         load_config.assert_called_once()
         commands.context.reload_services.assert_called_once()
+
+    def test_reload_warns_when_command_tree_keys_changed(self):
+        # 命令树只在插件加载时注册，改了 root 又只说"重载成功"会误导用户（P2-2）
+        commands, runtime = self.make_commands()
+        runtime.config_state.config = {
+            "command": {"root": "!!m2r", "aliases": [], "permission_level": 3}
+        }
+        source = PermissiveCommandSource(FakePluginServer())
+
+        def fake_load(app_runtime, _server, _source=None):
+            app_runtime.config_state.config["command"] = {
+                "root": "!!bk",
+                "aliases": ["!!backup"],
+                "permission_level": 4,
+            }
+
+        with mock.patch(
+            "mcdr2restic.commands.backup_commands.load_config",
+            side_effect=fake_load,
+        ):
+            commands.command_reload(source)
+
+        self.assertIn("plugin reload", source.replies[-1])
+
+    def test_reload_without_command_changes_keeps_normal_reply(self):
+        commands, runtime = self.make_commands()
+        runtime.config_state.config = {
+            "command": {"root": "!!m2r", "aliases": [], "permission_level": 3}
+        }
+        source = PermissiveCommandSource(FakePluginServer())
+
+        with mock.patch("mcdr2restic.commands.backup_commands.load_config"):
+            commands.command_reload(source)
+
+        self.assertEqual(source.replies, [])
 
 
 class NotifyTestCommandTests(unittest.TestCase):

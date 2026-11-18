@@ -5,9 +5,12 @@ from mcdreforged.api.all import CommandSource
 
 from mcdr2restic.commands.command_context import CommandContext
 from mcdr2restic.config.config_loader import load_config, save_enabled_unlocked
+from mcdr2restic.config.state_store import get_config_snapshot
 from mcdr2restic.core.i18n import reply_tr, server_tr, source_error_text
 from mcdr2restic.core.models import BackupTrigger, LocalizedValueError
+from mcdr2restic.core.utils import get_config_section
 from mcdr2restic.minecraft.minecraft_service import (
+    has_active_restic_process,
     is_backup_running,
     is_mc_ready,
     request_cancel_current_backup,
@@ -96,7 +99,15 @@ class BackupCommands:
                     scheduled_time=pending.scheduled_time_text,
                 )
                 return
-            reply_tr(source, server, "info.backup.cancel_requested")
+            # restic 进程已退出但备份仍在收尾（写状态、恢复 save-on）时，
+            # 不要再声称"正在终止 restic 进程"（P3-1）
+            reply_tr(
+                source,
+                server,
+                "info.backup.cancel_requested"
+                if has_active_restic_process(self.context.app_runtime)
+                else "info.backup.cancel_requested_finishing",
+            )
             return
         if pending is not None:
             reply_tr(
@@ -136,6 +147,9 @@ class BackupCommands:
         if not self.context.check_command_permission(source):
             return
         server = self.context.server_from_source(source)
+        # 命令树只在插件加载时注册：root/aliases/权限等级改了也刷新不了，
+        # 重载后必须明确告知需要整插件重载，不能让人以为已经生效（P2-2）
+        command_signature_before = self._command_signature()
         try:
             load_config(self.context.app_runtime, server, source)
         except LocalizedValueError as exc:
@@ -143,3 +157,18 @@ class BackupCommands:
             source.reply(source_error_text(source, server, exc))
             return
         self.context.reload_services(server)
+        if self._command_signature() != command_signature_before:
+            reply_tr(source, server, "info.config.reload_command_tree_stale")
+
+    def _command_signature(self):
+        command_cfg = get_config_section(
+            get_config_snapshot(self.context.app_runtime), "command"
+        )
+        aliases = command_cfg.get("aliases", [])
+        if not isinstance(aliases, (list, tuple)):
+            aliases = []
+        return (
+            str(command_cfg.get("root", "") or ""),
+            tuple(str(alias) for alias in aliases),
+            str(command_cfg.get("permission_level", "") or ""),
+        )
