@@ -283,8 +283,13 @@ def ensure_remote_repository_for_copy(  # noqa: PLR0913 仓库准备需要完整
         "error.staging.remote_init_failed",
         slot,
     )
+    # init 可能本身耗掉整个探测预算；verify 必须用新的 deadline，否则
+    # 成功的初始化会被立即判成超时失败（P2-2）
     verify = probe_repository(
-        app_runtime, remote_cfg, slot=slot, deadline=probe_deadline
+        app_runtime,
+        remote_cfg,
+        slot=slot,
+        deadline=make_remote_probe_deadline(settings.remote_probe_timeout_seconds),
     )
     if not verify.ok:
         raise BackupProblem(
@@ -307,6 +312,10 @@ def run_initialization(  # noqa: PLR0913 初始化参数集中在一个内部入
             app_runtime, restic_cfg, args, phase, None, slot=slot
         )
         assert_restic_success(restic_cfg, result, logger=getattr(server, "logger", None))
+    except BackupCanceled:
+        # 取消不是初始化失败：包成 xxx_init_failed 会让 purge 误回滚、
+        # 状态页显示失败而不是取消（P2-5）
+        raise
     except BackupProblem as exc:
         raise BackupProblem(
             i18n_key=failure_key,

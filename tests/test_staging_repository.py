@@ -307,6 +307,85 @@ class EnsureRemoteRepositoryForCopyTest(unittest.TestCase):
         self.assertIsNotNone(deadline)
         self.assertLessEqual(deadline - time.monotonic(), 30.0)
 
+    def test_verify_after_init_uses_fresh_deadline(self):
+        # init 可能吃掉整个探测预算；复验必须重新计时，否则成功初始化被判失败（P2-2）
+        runtime, server, cfg, settings, paths = self.make_context()
+        probes = [
+            staging_repository.RepoProbe(RepoProbeStatus.MISSING),
+            staging_repository.RepoProbe(RepoProbeStatus.OK),
+        ]
+        with (
+            mock.patch.object(
+                staging_repository, "probe_repository", side_effect=probes
+            ) as probe,
+            mock.patch.object(
+                staging_repository, "run_initialization"
+            ),
+            mock.patch.object(
+                staging_repository,
+                "make_remote_probe_deadline",
+                side_effect=[100.0, 200.0],
+            ) as make_deadline,
+        ):
+            _remote_cfg, created = (
+                staging_repository.ensure_remote_repository_for_copy(
+                    runtime, server, cfg["restic"], settings, paths
+                )
+            )
+
+        self.assertTrue(created)
+        self.assertEqual(make_deadline.call_count, 2)
+        self.assertEqual(
+            [call.kwargs["deadline"] for call in probe.call_args_list],
+            [100.0, 200.0],
+        )
+
+
+class RunInitializationTest(unittest.TestCase):
+    def test_cancel_propagates_instead_of_becoming_init_failure(self):
+        runtime = create_runtime()
+        server = mock.Mock()
+
+        with mock.patch.object(
+            staging_repository,
+            "run_restic_command",
+            side_effect=BackupCanceled(i18n_key="error.backup.cancel_requested"),
+        ), self.assertRaises(BackupCanceled):
+            staging_repository.run_initialization(
+                runtime,
+                server,
+                {},
+                ["init"],
+                "staging-init-remote",
+                "error.staging.remote_init_failed",
+                None,
+            )
+
+    def test_real_failure_is_wrapped_with_phase_key(self):
+        runtime = create_runtime()
+        server = mock.Mock()
+
+        with mock.patch.object(
+            staging_repository,
+            "run_restic_command",
+            side_effect=BackupProblem(
+                i18n_key="error.restic.return_code", output="boom"
+            ),
+        ), self.assertRaises(BackupProblem) as raised:
+            staging_repository.run_initialization(
+                runtime,
+                server,
+                {},
+                ["init"],
+                "staging-init-remote",
+                "error.staging.remote_init_failed",
+                None,
+            )
+
+        self.assertEqual(
+            raised.exception.i18n_key, "error.staging.remote_init_failed"
+        )
+
 
 class SnapshotParsingTest(unittest.TestCase):
     def test_parse_array_and_line_delimited_json(self):
