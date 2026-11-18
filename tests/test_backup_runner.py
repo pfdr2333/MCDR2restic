@@ -322,7 +322,6 @@ class BackupRunnerTests(unittest.TestCase):
 
         def acquire_slot(_server, _pending):
             runtime.backup.lock.acquire()
-            return None
 
         with (
             mock.patch.object(runner, "_prepare_scheduled_start", return_value=True),
@@ -334,9 +333,9 @@ class BackupRunnerTests(unittest.TestCase):
                 "_player_gate_reopened",
                 side_effect=OSError("state write failed"),
             ),
+            self.assertRaises(OSError),
         ):
-            with self.assertRaises(OSError):
-                runner._await_slot_with_gate(server, occurrence, pending)
+            runner._await_slot_with_gate(server, occurrence, pending)
 
         self.assertFalse(runtime.backup.lock.locked())
 
