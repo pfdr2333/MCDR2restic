@@ -126,9 +126,10 @@ class CopyClassificationTest(unittest.TestCase):
                 self.assertFalse(result.retryable)
 
     def test_failure_markers_are_shared_with_repository_probes(self):
+        from mcdr2restic.staging import staging_repository
+
         self.assertIs(
-            staging_failure.AUTH_ERROR_MARKERS,
-            staging_failure.AUTH_ERROR_MARKERS,
+            staging_repository.classify_failure, staging_failure.classify_failure
         )
         self.assertNotIn("exceeded", staging_failure.QUOTA_ERROR_MARKERS)
 
