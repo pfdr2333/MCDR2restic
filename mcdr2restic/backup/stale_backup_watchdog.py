@@ -69,7 +69,7 @@ class StaleBackupWatchdog:
             name="MCDR2Restic-StaleWatchdog",
             daemon=True,
         )
-        self._last_heartbeat_monotonic = 0.0
+        self._last_heartbeat_monotonic: Optional[float] = None
 
     def start(self):
         self.thread.start()
@@ -121,7 +121,11 @@ class StaleBackupWatchdog:
         """每 30 分钟把运行片段结算落盘，崩溃后最多丢一个间隔的精度。"""
 
         now = time.monotonic()
-        if now - self._last_heartbeat_monotonic < RUNNING_CLOCK_HEARTBEAT_SECONDS:
+        # None 表示本进程还没结算过：首轮直接结算，避免依赖宿主 uptime
+        if (
+            self._last_heartbeat_monotonic is not None
+            and now - self._last_heartbeat_monotonic < RUNNING_CLOCK_HEARTBEAT_SECONDS
+        ):
             return
         server = self.app_runtime.service.server
         # 服务器未运行时运行时钟本就不走，无需结算（心跳时间保持不变）
