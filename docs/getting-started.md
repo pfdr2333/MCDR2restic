@@ -97,7 +97,7 @@
 
 ```yaml
 restic:
-  repository: "s3:http://192.168.1.118:9000/mcdr-backup"
+  repository: "s3:https://s3.example.com/mcdr-backup"
   environment:
     AWS_ACCESS_KEY_ID: "换成你的访问密钥"
     AWS_SECRET_ACCESS_KEY: "换成你的私密密钥"

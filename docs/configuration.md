@@ -36,7 +36,7 @@ notification: {}
 snapshot_cache: {}
 restore: {}
 messages: {}
-config_version: 12
+config_version: 13
 ```
 
 ## 1. 总开关和命令入口
@@ -142,7 +142,9 @@ schedule:
 - **触发前**：定时备份到点时在线人数达到 `backup_player_gate_max_online`，备份推迟，
   每 60 秒重查一次，人数降回阈值内自动开始。推迟可被 `!!m2r cancel`、`!!m2r stop`、
   插件停止或本次期限终止；越过期限就跳过本次，等下一个计划点。
-  开始推迟、被取消/停用/期限终止都会写入日志，并按 `notify_on_skip` 通知管理员。
+  开始推迟会写入日志并按 `notify_on_skip` 通知管理员；停用/期限终止按同一开关通知；
+  取消只写日志，不发通知。拿到备份槽位后还会再复检一次人数，若等槽位期间人数
+  重新超过阈值，备份归还槽位继续等待，不会先进入 `save-off` 再被中断。
 - **运行中**：备份执行期间人数持续超过阈值达 `backup_player_gate_overlimit_seconds`
   （默认 600 秒，即 10 分钟），中断备份并立即恢复 `save-on`。
   restic 按内容寻址存储，中断的备份没有副作用，残余数据由 forget/prune 周期回收。
@@ -542,14 +544,17 @@ staging:
 关键规则：
 
 - 中转库、`cache_dir`、`password_file` 都必须位于任何备份源之外，否则备份在 `save-off` 前硬失败；
+- 中转库不得与本地路径型远端仓库相同或互相包含，否则复制会变成同库自复制、维护会双重 prune；
+- `password_file` 是实际生效凭据时（未填 `password`）文件必须存在，否则在备份前直接报配置错误；
 - 已有直传远端首次启用时，本地库从远端复制 chunker 参数，首次复制只传增量；
 - 远端可达时插件会自行比对 `chunker_polynomial`，不一致明确报错，不依赖 restic 报错；
 - 复制、维护、purge 与手管 restic 命令由 `staging.io_lock` 串行；备份不占该锁；
-- 有复制 backlog 时维护整轮跳过，避免本地 prune 删除尚未复制的快照；
+- 有复制 backlog 时维护整轮跳过，避免本地 prune 删除尚未复制的快照；游标与本地快照不一致时
+  同样跳过本地 prune，并改为全量重放、重建游标；
 - 恢复前的保护快照始终直传远端，不走中转库；
 - `staging purge` 仅支持文件系统型远端，远端比本地新时需要 `--force`。
 
-其余键（`keep_last`、`prune_max_unused`、`deep_prune_interval_days`、`copy_retry_max`、`copy_retry_backoff_seconds`、`copy_limit_upload_kib`、`remote_stale_warning_hours`、`emergency_prune_timeout_seconds`）见[中转库文档](staging.md)的配置表。
+其余键（`keep_last`、`prune_max_unused`、`deep_prune_interval_days`、`copy_retry_max`、`copy_retry_backoff_seconds`、`copy_limit_upload_kib`、`remote_stale_warning_hours`、`emergency_prune_timeout_seconds`、`remote_probe_timeout_seconds`）见[中转库文档](staging.md)的配置表。
 
 ## 7. 通知配置
 
