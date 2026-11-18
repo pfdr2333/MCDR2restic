@@ -222,7 +222,13 @@ class StagingValidationTest(unittest.TestCase):
                 raised.exception.i18n_key,
                 "error.staging.password_file_missing",
             )
-            self.assertEqual(raised.exception.i18n_params["path"], missing)
+            # Windows 临时目录可能是 8.3 短路径，插件返回的是真实路径
+            self.assertEqual(
+                os.path.normcase(
+                    os.path.realpath(raised.exception.i18n_params["path"])
+                ),
+                os.path.normcase(os.path.realpath(missing)),
+            )
 
     def test_password_takes_priority_so_missing_file_is_not_checked(self):
         with tempfile.TemporaryDirectory() as root:
