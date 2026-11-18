@@ -19,7 +19,7 @@ from mcdr2restic.core.i18n import config_language, reply_tr, server_tr, tr, tr_e
 from mcdr2restic.core.language import get_mcdr_language, get_source_language
 from mcdr2restic.core.models import BackupProblem
 from mcdr2restic.core.runtime import ResticExecutionSlot
-from mcdr2restic.core.utils import get_config_section, safe_int
+from mcdr2restic.core.utils import format_bytes, get_config_section, safe_int
 from mcdr2restic.restic.restic_config import nearest_existing_directory
 from mcdr2restic.restore.restore_workflow import is_restore_running
 from mcdr2restic.staging.staging_config import (
@@ -335,15 +335,6 @@ class StagingCommands:
 
 def localized_copy_status(status: str, language: str) -> str:
     return tr(language, "status.staging.copy_status.{}".format(status))
-
-
-def format_bytes(value: int) -> str:
-    size = float(max(0, int(value)))
-    for unit in ("B", "KiB", "MiB", "GiB", "TiB"):
-        if size < 1024.0 or unit == "TiB":
-            return "{:.1f} {}".format(size, unit)
-        size /= 1024.0
-    return "{:.1f} TiB".format(size)
 
 
 __all__ = ["StagingCommands"]

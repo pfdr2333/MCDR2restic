@@ -6,8 +6,21 @@ from datetime import datetime
 from typing import Any, Dict
 
 
+# 运行时长文本的唯一格式：state.yml 写入、状态页展示与各模块解析都用它
+RUNTIME_TIME_FORMAT = "%Y-%m-%d %H:%M:%S"
+
+
 def now_text() -> str:
-    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    return datetime.now().strftime(RUNTIME_TIME_FORMAT)
+
+
+def format_bytes(value: int) -> str:
+    size = float(max(0, int(value)))
+    for unit in ("B", "KiB", "MiB", "GiB", "TiB"):
+        if size < 1024.0 or unit == "TiB":
+            return "{:.1f} {}".format(size, unit)
+        size /= 1024.0
+    return "{:.1f} TiB".format(size)
 
 
 def tail_text(text: str, max_chars: int) -> str:

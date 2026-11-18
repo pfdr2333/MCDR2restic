@@ -15,7 +15,7 @@ from mcdreforged.api.all import PluginServerInterface
 from mcdr2restic.core.i18n import config_language
 from mcdr2restic.core.language import get_mcdr_language
 from mcdr2restic.core.runtime import PluginRuntime
-from mcdr2restic.core.utils import now_text, safe_int
+from mcdr2restic.core.utils import RUNTIME_TIME_FORMAT, now_text, safe_int
 from mcdr2restic.notifications.message_templates import (
     MessageRenderOptions,
     render_message,
@@ -29,7 +29,6 @@ from mcdr2restic.staging.staging_state import (
 
 
 AdminNotifier = Callable[..., None]
-SIMPLE_TIME_FORMAT = "%Y-%m-%d %H:%M:%S"
 
 
 def maybe_warn_remote_stale(
@@ -120,7 +119,7 @@ def parse_runtime_time(text: str) -> Optional[datetime]:
     if moment is not None:
         return moment
     try:
-        return datetime.strptime(value, SIMPLE_TIME_FORMAT).replace(
+        return datetime.strptime(value, RUNTIME_TIME_FORMAT).replace(
             tzinfo=datetime.now().astimezone().tzinfo
         )
     except ValueError:

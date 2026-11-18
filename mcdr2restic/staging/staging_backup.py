@@ -17,7 +17,7 @@ from mcdreforged.api.all import PluginServerInterface
 from mcdr2restic.core.i18n import server_tr
 from mcdr2restic.core.models import BackupProblem
 from mcdr2restic.core.runtime import PluginRuntime
-from mcdr2restic.core.utils import get_config_section, now_text, safe_int
+from mcdr2restic.core.utils import format_bytes, get_config_section, now_text, safe_int
 from mcdr2restic.minecraft.minecraft_service import is_mc_ready
 from mcdr2restic.minecraft.player_gate_service import (
     start_backup_player_gate_monitor,
@@ -179,7 +179,7 @@ def run_disk_preflight(  # noqa: PLR0913 预检需要完整上下文
         server_tr(
             server,
             "info.staging.disk_preflight",
-            estimated=_format_bytes(estimated_bytes),
+            estimated=format_bytes(estimated_bytes),
             path=paths.repository_path,
         )
     )
@@ -205,10 +205,10 @@ def assert_staging_disk_space(
     raise BackupProblem(
         i18n_key="error.staging.disk_insufficient",
         path=check_root,
-        free=_format_bytes(int(usage.free)),
-        estimated=_format_bytes(int(estimated_bytes)),
-        projected=_format_bytes(projected_free),
-        reserve=_format_bytes(reserve_bytes),
+        free=format_bytes(int(usage.free)),
+        estimated=format_bytes(int(estimated_bytes)),
+        projected=format_bytes(projected_free),
+        reserve=format_bytes(reserve_bytes),
         min_free_percent="{:.0f}".format(settings.min_free_percent_after),
     )
 
@@ -308,15 +308,6 @@ def ensure_option(args: List[str], option: str) -> List[str]:
         index = args.index("--")
         return [*args[:index], option, *args[index:]]
     return [*args, option]
-
-
-def _format_bytes(value: int) -> str:
-    size = float(max(0, int(value)))
-    for unit in ("B", "KiB", "MiB", "GiB", "TiB"):
-        if size < 1024.0 or unit == "TiB":
-            return "{:.1f} {}".format(size, unit)
-        size /= 1024.0
-    return "{:.1f} TiB".format(size)
 
 
 __all__ = [

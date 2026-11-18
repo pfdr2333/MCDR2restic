@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+
+from mcdr2restic.core.utils import RUNTIME_TIME_FORMAT
 from typing import Any, Dict, Optional, Tuple, cast
 
 from mcdr2restic.backup.cron import CronExpression
@@ -17,7 +19,7 @@ from mcdr2restic.defaults.default_constants import (
 
 DEFAULT_NORMAL_CRON = "0 0 0,3,6,9,12,15,18,21 * * *"
 DISABLED_CRON = "0"
-SCHEDULE_TIME_FORMAT = "%Y-%m-%d %H:%M:%S"
+SCHEDULE_TIME_FORMAT = RUNTIME_TIME_FORMAT
 
 
 @dataclass(frozen=True)

@@ -12,6 +12,7 @@ from mcdreforged.api.all import PluginServerInterface
 from mcdr2restic.backup.running_time import reset_running_clock_state
 from mcdr2restic.backup.scheduling import (
     ScheduledOccurrence,
+    format_schedule_time,
     parse_schedule_time,
     schedule_min_gap_seconds,
 )
@@ -371,7 +372,7 @@ class BackupRunner:
             language,
             message_key,
             scheduled_time=occurrence.scheduled_at,
-            next_due=occurrence.next_due.strftime("%Y-%m-%d %H:%M:%S"),
+            next_due=format_schedule_time(occurrence.next_due),
         )
         if message_key.startswith("warn."):
             server.logger.warning(message)
