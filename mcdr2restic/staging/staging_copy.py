@@ -30,8 +30,10 @@ from mcdr2restic.staging.staging_config import (
 )
 from mcdr2restic.staging.staging_repository import (
     COPY_PHASE,
+    CursorCoverage,
     RepoProbeStatus,
     assert_matching_chunkers,
+    check_cursor_coverage,
     cursor_from_snapshots,
     ensure_remote_repository_for_copy,
     latest_snapshot_time,
@@ -69,6 +71,21 @@ QUOTA_ERROR_MARKERS = (
     "exceeded",
     "out of space",
 )
+# 游标不可信时无法断言还有多少本地快照未复制；状态页与告警都按"未知"处理
+BACKLOG_UNKNOWN = -1
+
+
+@dataclass(frozen=True)
+class RemoteLatest:
+    """[beta] 远端最新快照的探测结果。
+
+    ``ok=False`` 表示探测本身失败（超时/不可达），此时 ``time`` 无意义：
+    调用方必须保留上次已知值，不能用本地快照时间顶替，否则"远端落后"
+    会被误判成已追平而不再告警。
+    """
+
+    time: Optional[str] = None
+    ok: bool = False
 
 
 @dataclass(frozen=True)
@@ -84,6 +101,9 @@ class CopyCycleResult:
     chunker_mismatch: bool = False
     auth_error: bool = False
     quota_error: bool = False
+    # 游标与本地快照不一致：本轮不信任游标并全量重放，backlog 无法断言
+    cursor_untrusted: bool = False
+    backlog_unknown: bool = False
 
     @property
     def success(self) -> bool:
@@ -105,6 +125,7 @@ def run_copy_cycle(  # noqa: PLR0913,PLR0911 复制周期需要完整上下文�
     local_cfg = build_local_restic_config(restic_cfg, settings, paths)
     pending = []
     remote_initialized = False
+    coverage = CursorCoverage(True)
     language = config_language(cfg, get_mcdr_language(server))
     try:
         local_probe = probe_repository(app_runtime, local_cfg, slot=slot)
@@ -128,16 +149,29 @@ def run_copy_cycle(  # noqa: PLR0913,PLR0911 复制周期需要完整上下文�
             return chunker_result
 
         snapshots = read_snapshots(app_runtime, server, local_cfg, slot=slot)
-        pending = select_pending_snapshots(
-            snapshots,
-            str(cursor_time) if cursor_time else None,
-            _coerce_ids(cursor_ids),
+        cursor_text = str(cursor_time) if cursor_time else None
+        coverage = check_cursor_coverage(
+            snapshots, cursor_text, _coerce_ids(cursor_ids)
         )
-        update_staging_runtime(
-            app_runtime, server, staging_copy_backlog=len(pending)
-        )
+        if coverage.untrusted:
+            # 游标不可信时不能据此跳过任何本地快照：全量重放（restic copy 幂等），
+            # 复制成功后再用真实快照重建游标。backlog 此时无法断言，记为未知。
+            _record_cursor_anomaly(app_runtime, server, language, coverage, cursor_text)
+            pending = select_pending_snapshots(snapshots, None, ())
+            update_staging_runtime(
+                app_runtime, server, staging_copy_backlog=BACKLOG_UNKNOWN
+            )
+        else:
+            pending = select_pending_snapshots(
+                snapshots,
+                cursor_text,
+                _coerce_ids(cursor_ids),
+            )
+            update_staging_runtime(
+                app_runtime, server, staging_copy_backlog=len(pending)
+            )
         if not pending:
-            remote_latest = probe_remote_latest(
+            remote = probe_remote_latest(
                 app_runtime,
                 server,
                 remote_cfg,
@@ -149,7 +183,7 @@ def run_copy_cycle(  # noqa: PLR0913,PLR0911 复制周期需要完整上下文�
                 app_runtime,
                 server,
                 message,
-                remote_latest,
+                remote,
                 remote_initialized,
             )
             return CopyCycleResult(
@@ -175,19 +209,28 @@ def run_copy_cycle(  # noqa: PLR0913,PLR0911 复制周期需要完整上下文�
         )
     except BackupCanceled as exc:
         message = tr(language, "warn.staging.copy_canceled", error=exc)
-        _record_canceled(app_runtime, server, len(pending), message)
+        _record_canceled(
+            app_runtime,
+            server,
+            _backlog_value(pending, coverage),
+            message,
+        )
         return CopyCycleResult(
             STAGING_COPY_STATUS_CANCELED,
             message=message,
             pending_count=len(pending),
             retryable=True,
             canceled=True,
+            cursor_untrusted=coverage.untrusted,
+            backlog_unknown=coverage.untrusted,
         )
     except BackupProblem as exc:
         return _record_failure(
             app_runtime,
             server,
-            _classify_copy_problem(server, exc, pending),
+            _classify_copy_problem(
+                server, exc, pending, backlog_unknown=coverage.untrusted
+            ),
         )
     except Exception as exc:
         return _record_failure(
@@ -198,19 +241,27 @@ def run_copy_cycle(  # noqa: PLR0913,PLR0911 复制周期需要完整上下文�
                 message=tr_error(language, exc),
                 pending_count=len(pending),
                 retryable=True,
+                cursor_untrusted=coverage.untrusted,
+                backlog_unknown=coverage.untrusted,
             ),
         )
 
     latest_time, latest_ids = cursor_from_snapshots(pending)
-    remote_latest = probe_remote_latest(
+    remote = probe_remote_latest(
         app_runtime, server, remote_cfg, slot, settings.remote_probe_timeout_seconds
     )
-    message = tr(language, "info.staging.copy_completed", count=len(pending))
+    message = tr(
+        language,
+        "info.staging.copy_recovered"
+        if coverage.untrusted
+        else "info.staging.copy_completed",
+        count=len(pending),
+    )
     _record_success(
         app_runtime,
         server,
         message,
-        remote_latest or latest_time,
+        remote,
         remote_initialized,
     )
     update_staging_runtime(
@@ -225,6 +276,7 @@ def run_copy_cycle(  # noqa: PLR0913,PLR0911 复制周期需要完整上下文�
         pending_count=0,
         copied_count=len(pending),
         remote_initialized=remote_initialized,
+        cursor_untrusted=coverage.untrusted,
     )
 
 
@@ -294,6 +346,7 @@ def _classify_copy_problem(
     server: PluginServerInterface,
     exc: BackupProblem,
     pending: Sequence[Dict[str, str]],
+    backlog_unknown: bool = False,
 ) -> CopyCycleResult:
     language = get_mcdr_language(server)
     message = tr_error(language, exc)
@@ -307,6 +360,7 @@ def _classify_copy_problem(
             pending_count=len(pending),
             retryable=False,
             auth_error=True,
+            backlog_unknown=backlog_unknown,
         )
     if any(marker in text for marker in QUOTA_ERROR_MARKERS):
         return CopyCycleResult(
@@ -315,12 +369,14 @@ def _classify_copy_problem(
             pending_count=len(pending),
             retryable=False,
             quota_error=True,
+            backlog_unknown=backlog_unknown,
         )
     return CopyCycleResult(
         STAGING_COPY_STATUS_FAILED,
         message=message,
         pending_count=len(pending),
         retryable=True,
+        backlog_unknown=backlog_unknown,
     )
 
 
@@ -364,11 +420,50 @@ def _coerce_ids(value: Any) -> Sequence[str]:
     return tuple(str(item) for item in value)
 
 
+def _backlog_value(
+    pending: Sequence[Dict[str, str]], coverage: CursorCoverage
+) -> int:
+    """游标不可信时 backlog 无法断言，用哨兵值表示"未知"。"""
+
+    return BACKLOG_UNKNOWN if coverage.untrusted else len(pending)
+
+
+def _record_cursor_anomaly(
+    app_runtime: PluginRuntime,
+    server: PluginServerInterface,
+    language: str,
+    coverage: CursorCoverage,
+    cursor_time: Optional[str],
+):
+    if coverage.reason == "missing_ids":
+        message = tr(
+            language,
+            "warn.staging.cursor_ids_missing",
+            missing_ids=", ".join(coverage.missing_ids) or "-",
+            local_latest=coverage.local_latest or "-",
+        )
+    else:
+        message = tr(
+            language,
+            "warn.staging.cursor_ahead",
+            cursor_time=str(cursor_time or "-"),
+            local_latest=coverage.local_latest or "-",
+        )
+    update_staging_runtime(
+        app_runtime,
+        server,
+        staging_cursor_anomaly=coverage.reason,
+        staging_copy_backlog=BACKLOG_UNKNOWN,
+        staging_last_copy_message=message,
+    )
+    server.logger.warning(message)
+
+
 def _record_success(
     app_runtime: PluginRuntime,
     server: PluginServerInterface,
     message: str,
-    remote_latest: Optional[str],
+    remote: RemoteLatest,
     _remote_initialized: bool,
 ):
     finished_at = now_text()
@@ -379,10 +474,15 @@ def _record_success(
         "staging_last_copy_message": message,
         "staging_copy_backlog": 0,
         "staging_chunker_mismatch": False,
-        "staging_remote_stale_warned_at": None,
+        "staging_cursor_anomaly": "",
     }
-    if remote_latest:
-        values["staging_remote_latest_time"] = remote_latest
+    if remote.ok:
+        values["staging_remote_latest_time"] = remote.time
+        values["staging_remote_probe_failed"] = False
+        values["staging_remote_stale_warned_at"] = None
+    else:
+        # 探测失败时保留上次已知值：用本地快照时间顶替会让远端落后被误判为已追平
+        values["staging_remote_probe_failed"] = True
     update_staging_runtime(app_runtime, server, **values)
 
 
@@ -391,12 +491,15 @@ def _record_failure(
     server: PluginServerInterface,
     result: CopyCycleResult,
 ):
+    # 游标异常原因由 _record_cursor_anomaly 写入，这里只更新复制结果字段
     values: Dict[str, Any] = {
         "staging_last_copy_time": now_text(),
         "staging_last_copy_status": result.status,
         "staging_last_copy_message": result.message,
     }
-    if result.pending_count > 0:
+    if result.backlog_unknown:
+        values["staging_copy_backlog"] = BACKLOG_UNKNOWN
+    elif result.pending_count > 0:
         values["staging_copy_backlog"] = result.pending_count
     update_staging_runtime(app_runtime, server, **values)
     log_copy_failure(server, result)
@@ -406,7 +509,7 @@ def _record_failure(
 def _record_canceled(
     app_runtime: PluginRuntime,
     server: PluginServerInterface,
-    pending_count: int,
+    backlog: int,
     message: str,
 ):
     update_staging_runtime(
@@ -415,7 +518,7 @@ def _record_canceled(
         staging_last_copy_time=now_text(),
         staging_last_copy_status=STAGING_COPY_STATUS_CANCELED,
         staging_last_copy_message=message,
-        staging_copy_backlog=pending_count,
+        staging_copy_backlog=backlog,
     )
     server.logger.info(message)
 
@@ -443,7 +546,7 @@ def probe_remote_latest(
     remote_cfg: Dict[str, Any],
     slot: Any,
     remote_probe_timeout_seconds: int = 0,
-) -> Optional[str]:
+) -> RemoteLatest:
     try:
         snapshots = read_snapshots(
             app_runtime,
@@ -456,12 +559,14 @@ def probe_remote_latest(
             deadline=make_remote_probe_deadline(remote_probe_timeout_seconds),
         )
     except Exception:
-        return None
-    return latest_snapshot_time(snapshots)
+        return RemoteLatest(ok=False)
+    return RemoteLatest(time=latest_snapshot_time(snapshots), ok=True)
 
 
 __all__ = [
+    "BACKLOG_UNKNOWN",
     "CopyCycleResult",
+    "RemoteLatest",
     "copy_pending_snapshots",
     "log_copy_failure",
     "probe_remote_latest",

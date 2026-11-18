@@ -386,5 +386,60 @@ class CursorTest(unittest.TestCase):
         self.assertIsNone(latest_snapshot_time([]))
 
 
+class CursorCoverageTest(unittest.TestCase):
+    @staticmethod
+    def snapshot(snapshot_id, time_text):
+        return {"id": snapshot_id, "time": time_text}
+
+    def test_no_cursor_is_covered(self):
+        coverage = staging_repository.check_cursor_coverage(
+            [self.snapshot("a", "2026-01-01T00:00:00Z")], None, ()
+        )
+
+        self.assertTrue(coverage.covered)
+        self.assertEqual(coverage.reason, "")
+
+    def test_cursor_ahead_of_local_latest_is_untrusted(self):
+        coverage = staging_repository.check_cursor_coverage(
+            [
+                self.snapshot("a", "2026-11-18T10:00:00+08:00"),
+                self.snapshot("b", "2026-11-18T09:00:00+08:00"),
+            ],
+            "2026-11-18T11:00:00+08:00",
+            ["old"],
+        )
+
+        self.assertTrue(coverage.untrusted)
+        self.assertEqual(coverage.reason, "ahead")
+        self.assertEqual(coverage.local_latest, "2026-11-18T10:00:00+08:00")
+
+    def test_cursor_ids_missing_from_local_repository_are_untrusted(self):
+        coverage = staging_repository.check_cursor_coverage(
+            [self.snapshot("a", "2026-01-01T00:00:00Z")],
+            "2026-01-01T00:00:00Z",
+            ["b"],
+        )
+
+        self.assertTrue(coverage.untrusted)
+        self.assertEqual(coverage.reason, "missing_ids")
+        self.assertEqual(coverage.missing_ids, ("b",))
+
+    def test_cursor_matching_local_snapshots_is_covered(self):
+        coverage = staging_repository.check_cursor_coverage(
+            [self.snapshot("a", "2026-01-01T00:00:00Z")],
+            "2026-01-01T00:00:00Z",
+            ["a"],
+        )
+
+        self.assertTrue(coverage.covered)
+
+    def test_empty_local_repository_cannot_contradict_cursor(self):
+        coverage = staging_repository.check_cursor_coverage(
+            [], "2026-01-01T00:00:00Z", ["a"]
+        )
+
+        self.assertTrue(coverage.covered)
+
+
 if __name__ == "__main__":
     unittest.main()

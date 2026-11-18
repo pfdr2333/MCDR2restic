@@ -234,6 +234,94 @@ class CopyCycleTest(unittest.TestCase):
         self.assertTrue(cycle.canceled)
         self.assertTrue(cycle.retryable)
 
+    def test_cursor_ahead_replays_every_local_snapshot(self):
+        # 游标晚于本地最新快照时不能相信"没有待复制快照"：必须全量重放，
+        # 否则复制假成功 + backlog=0 会让维护删掉未复制的本地快照（P1-1）
+        local = [
+            snapshot("a" * 64, "2026-01-01T00:00:00Z"),
+            snapshot("b" * 64, "2026-01-01T01:00:00Z"),
+            snapshot("c" * 64, "2026-01-01T02:00:00Z"),
+        ]
+        self.runtime.config_state.config["runtime"].update(
+            {
+                "staging_cursor_time": "2026-01-02T00:00:00Z",
+                "staging_cursor_ids": ["c" * 64],
+            }
+        )
+        run_command = mock.Mock(return_value=result(0))
+
+        cycle = self.run_cycle(
+            read_snapshots=mock.Mock(side_effect=[local, local]),
+            run_restic_command=run_command,
+        )
+
+        self.assertTrue(cycle.cursor_untrusted)
+        self.assertTrue(cycle.success)
+        copied = run_command.call_args.args[2]
+        for item in local:
+            self.assertIn(item["id"], copied)
+        self.assertTrue(self.server.logger.warning_messages)
+        runtime = self.runtime.config_state.config["runtime"]
+        self.assertEqual(runtime["staging_cursor_anomaly"], "")
+        self.assertEqual(runtime["staging_cursor_time"], "2026-01-01T02:00:00Z")
+        self.assertEqual(runtime["staging_copy_backlog"], 0)
+
+    def test_cursor_ahead_failure_reports_unknown_backlog(self):
+        local = [
+            snapshot("a" * 64, "2026-01-01T00:00:00Z"),
+            snapshot("b" * 64, "2026-01-01T01:00:00Z"),
+        ]
+        self.runtime.config_state.config["runtime"].update(
+            {"staging_cursor_time": "2026-01-02T00:00:00Z"}
+        )
+
+        cycle = self.run_cycle(
+            read_snapshots=mock.Mock(side_effect=[local]),
+            run_restic_command=mock.Mock(
+                return_value=result(1, stderr="network down")
+            ),
+            assert_restic_success=mock.Mock(
+                side_effect=BackupProblem(
+                    i18n_key="error.restic.return_code",
+                    phase="staging-copy",
+                    return_code=1,
+                    duration_seconds=1,
+                    output="network down",
+                )
+            ),
+        )
+
+        self.assertTrue(cycle.retryable)
+        self.assertTrue(cycle.backlog_unknown)
+        runtime = self.runtime.config_state.config["runtime"]
+        # 未知 backlog 用 -1 表示，状态页与维护都不能当成"已补齐"
+        self.assertEqual(runtime["staging_copy_backlog"], -1)
+        self.assertEqual(runtime["staging_cursor_anomaly"], "ahead")
+
+    def test_remote_probe_failure_keeps_last_known_remote_latest(self):
+        # 探测失败时用本地时间顶替远端时间，会让"远端落后"被误判为已追平（P1-1）
+        local = [snapshot("a" * 64, "2026-01-01T00:00:00Z")]
+        self.runtime.config_state.config["runtime"].update(
+            {"staging_remote_latest_time": "2025-12-31T00:00:00Z"}
+        )
+
+        cycle = self.run_cycle(
+            read_snapshots=mock.Mock(
+                side_effect=[
+                    local,
+                    BackupProblem(i18n_key="error.restic.command_timeout"),
+                ]
+            ),
+            run_restic_command=mock.Mock(return_value=result(0)),
+        )
+
+        self.assertTrue(cycle.success)
+        runtime = self.runtime.config_state.config["runtime"]
+        self.assertEqual(
+            runtime["staging_remote_latest_time"], "2025-12-31T00:00:00Z"
+        )
+        self.assertTrue(runtime["staging_remote_probe_failed"])
+
     def test_local_repository_missing_is_retryable(self):
         cycle = self.run_cycle(
             probe_repository=mock.Mock(
@@ -395,6 +483,41 @@ class RemoteStaleWarningTest(unittest.TestCase):
 
         self.assertFalse(staging_warning.stale_warning_due(state, 24))
         self.assertTrue(staging_warning.stale_warning_due({}, 24))
+
+    def test_probe_failure_does_not_suppress_stale_warning(self):
+        # 复制成功但远端探测失败：backlog=0 也不能当作"远端已追平"（P1-1）
+        self.runtime.config_state.config["runtime"].update(
+            {
+                "staging_local_latest_time": "2026-01-03 00:00:00",
+                "staging_remote_latest_time": "2026-01-01T00:00:00Z",
+                "staging_copy_backlog": 0,
+                "staging_remote_probe_failed": True,
+            }
+        )
+        notifier = mock.Mock()
+        with mock.patch.object(staging_warning, "update_staging_runtime"):
+            warned = staging_warning.maybe_warn_remote_stale(
+                self.runtime, self.server, self.cfg, self.settings, notifier
+            )
+
+        self.assertTrue(warned)
+        notifier.assert_called_once()
+
+    def test_unknown_backlog_does_not_suppress_stale_warning(self):
+        self.runtime.config_state.config["runtime"].update(
+            {
+                "staging_local_latest_time": "2026-01-03 00:00:00",
+                "staging_remote_latest_time": "2026-01-01T00:00:00Z",
+                "staging_copy_backlog": -1,
+            }
+        )
+        notifier = mock.Mock()
+        with mock.patch.object(staging_warning, "update_staging_runtime"):
+            warned = staging_warning.maybe_warn_remote_stale(
+                self.runtime, self.server, self.cfg, self.settings, notifier
+            )
+
+        self.assertTrue(warned)
 
 
 if __name__ == "__main__":

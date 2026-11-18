@@ -119,6 +119,24 @@ class RepoProbe:
         return self.status == RepoProbeStatus.MISSING
 
 
+@dataclass(frozen=True)
+class CursorCoverage:
+    """[beta] 游标相对本地快照的覆盖性结论。
+
+    ``reason`` 为空表示游标可信，否则是异常的机器可读原因（``ahead`` /
+    ``missing_ids``），由调用方翻译成用户文案。
+    """
+
+    covered: bool
+    reason: str = ""
+    local_latest: Optional[str] = None
+    missing_ids: Tuple[str, ...] = ()
+
+    @property
+    def untrusted(self) -> bool:
+        return not self.covered
+
+
 def make_remote_probe_deadline(timeout_seconds: int) -> Optional[float]:
     """[beta] 远端探测的独立短超时；独立于 restic.timeout_seconds，0 = 关闭。
 
@@ -467,6 +485,46 @@ def select_pending_snapshots(
         ):
             pending.append(snapshot)
     return pending
+
+
+def check_cursor_coverage(
+    snapshots: Sequence[Dict[str, str]],
+    cursor_time: Optional[str],
+    cursor_ids: Optional[Sequence[str]] = None,
+) -> CursorCoverage:
+    """[beta] 校验游标没有超前于本地快照，且游标记录的快照仍在本地库。
+
+    游标晚于本地最新快照（系统时钟回拨、state.yml 被恢复或手改、本地库回滚）
+    时，``select_pending_snapshots`` 选不出任何快照，复制会"假成功"并把
+    backlog 置 0，随后的本地 prune 就会删掉尚未复制的快照。游标 ID 不在本地
+    库同理：无法证明远端已有对应数据。两种情况下游标都不可信，调用方必须
+    放弃游标并跳过本地 prune。
+    """
+
+    if not cursor_time:
+        return CursorCoverage(True)
+    local_latest = latest_snapshot_time(snapshots)
+    if local_latest is None:
+        # 本地库没有任何快照：没有可丢的数据，游标超前也无从谈起
+        return CursorCoverage(True)
+    if compare_restic_times(str(cursor_time), local_latest) > 0:
+        return CursorCoverage(False, reason="ahead", local_latest=local_latest)
+    known_ids = {str(item.get("id") or "") for item in snapshots}
+    missing = tuple(
+        sorted(
+            str(item)
+            for item in (cursor_ids or ())
+            if str(item) and str(item) not in known_ids
+        )
+    )
+    if missing:
+        return CursorCoverage(
+            False,
+            reason="missing_ids",
+            local_latest=local_latest,
+            missing_ids=missing,
+        )
+    return CursorCoverage(True, local_latest=local_latest)
 
 
 def cursor_from_snapshots(

@@ -137,11 +137,22 @@ def run_maintenance_locked(  # noqa: PLR0913 维护上下文集中在一个内�
         command_root=command_root,
     )
     deep = should_deep_prune(app_runtime, settings)
-    run_local_prune(local_ctx, settings, paths, deep)
+    prune_skipped = copy_result.cursor_untrusted
+    if prune_skipped:
+        # 游标与本地快照不一致：本轮复制是全量重放，仍保守跳过本地 prune，
+        # 等下一轮游标正常后再回收（P1-1）
+        server.logger.warning(tr(language, "warn.staging.prune_skipped_cursor"))
+    else:
+        run_local_prune(local_ctx, settings, paths, deep)
     cleanup_restic_cache(app_runtime, server, local_cfg, paths)
     invalidate_remote_cache(
         server, restic_cfg, invalidate_snapshot_cache_func
     )
+    if prune_skipped:
+        return MaintenanceOutcome(
+            MaintenanceRunStatus.SUCCESS,
+            tr(language, "info.staging.maintenance_completed_cursor_skipped"),
+        )
     return MaintenanceOutcome(
         MaintenanceRunStatus.SUCCESS,
         tr(

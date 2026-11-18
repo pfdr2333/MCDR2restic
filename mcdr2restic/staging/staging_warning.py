@@ -15,7 +15,7 @@ from mcdreforged.api.all import PluginServerInterface
 from mcdr2restic.core.i18n import config_language
 from mcdr2restic.core.language import get_mcdr_language
 from mcdr2restic.core.runtime import PluginRuntime
-from mcdr2restic.core.utils import non_negative_int, now_text
+from mcdr2restic.core.utils import now_text, safe_int
 from mcdr2restic.notifications.message_templates import (
     MessageRenderOptions,
     render_message,
@@ -43,12 +43,16 @@ def maybe_warn_remote_stale(
     if hours <= 0:
         return False
     runtime_state = staging_runtime_state(app_runtime)
-    backlog = non_negative_int(runtime_state.get("staging_copy_backlog", 0))
+    # 负值表示游标不可信、backlog 未知（P1-1），此时不能当作"已追平"
+    backlog = safe_int(runtime_state.get("staging_copy_backlog", 0))
     local_latest = str(runtime_state.get("staging_local_latest_time") or "").strip()
     if not local_latest:
         return False
     remote_latest = str(runtime_state.get("staging_remote_latest_time") or "").strip()
-    if backlog <= 0 and remote_latest:
+    probe_failed = bool(runtime_state.get("staging_remote_probe_failed", False))
+    # 只有"复制无积压且远端刚探测成功"才能断言远端已追平；探测失败时
+    # 保留的远端时间是上次已知值，落后仍需继续累计并告警
+    if backlog == 0 and remote_latest and not probe_failed:
         return False
     lag_hours = remote_lag_hours(runtime_state, local_latest, remote_latest)
     if lag_hours < hours:

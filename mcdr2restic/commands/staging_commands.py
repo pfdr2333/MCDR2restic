@@ -19,7 +19,7 @@ from mcdr2restic.core.i18n import config_language, reply_tr, server_tr, tr, tr_e
 from mcdr2restic.core.language import get_mcdr_language, get_source_language
 from mcdr2restic.core.models import BackupProblem
 from mcdr2restic.core.runtime import ResticExecutionSlot
-from mcdr2restic.core.utils import get_config_section, non_negative_int
+from mcdr2restic.core.utils import get_config_section, safe_int
 from mcdr2restic.restic.restic_config import nearest_existing_directory
 from mcdr2restic.restore.restore_workflow import is_restore_running
 from mcdr2restic.staging.staging_config import (
@@ -156,15 +156,8 @@ class StagingCommands:
                 )
             )
         lines.append(self.format_disk_free(language, paths.repository_path))
-        lines.append(
-            tr(
-                language,
-                "status.staging.backlog",
-                value=non_negative_int(
-                    runtime_state.get("staging_copy_backlog", 0)
-                ),
-            )
-        )
+        lines.append(self.format_backlog(language, runtime_state))
+        lines.extend(self.format_cursor_anomaly(language, runtime_state))
         lines.append(self.format_last_copy(language, runtime_state))
         lines.append(
             self.format_chunker_status(language, local_cfg, remote_cfg, slot, settings)
@@ -207,6 +200,24 @@ class StagingCommands:
             total=format_bytes(usage.total),
             percent="{:.1f}".format(free_percent),
         )
+
+    def format_backlog(
+        self, language: str, runtime_state: Dict[str, Any]
+    ) -> str:
+        backlog = safe_int(runtime_state.get("staging_copy_backlog", 0))
+        if backlog < 0:
+            # 游标不可信时不能让状态页显示 0，否则等于声称"远端已完整"
+            return tr(language, "status.staging.backlog_unknown")
+        return tr(language, "status.staging.backlog", value=backlog)
+
+    def format_cursor_anomaly(
+        self, language: str, runtime_state: Dict[str, Any]
+    ) -> List[str]:
+        anomaly = str(runtime_state.get("staging_cursor_anomaly") or "").strip()
+        if not anomaly:
+            return []
+        reason = tr(language, "status.staging.cursor_reason.{}".format(anomaly))
+        return [tr(language, "status.staging.cursor_anomaly", reason=reason)]
 
     def format_last_copy(
         self, language: str, runtime_state: Dict[str, Any]

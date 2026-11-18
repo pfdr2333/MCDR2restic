@@ -42,6 +42,8 @@ _DEFAULT_RUNTIME: Dict[str, Any] = {
     # 避免每次渲染状态都去探测本地/远端仓库。
     "staging_cursor_time": None,
     "staging_cursor_ids": [],
+    # 非空表示游标与本地快照不一致（ahead / missing_ids），此时 backlog 记为 -1
+    "staging_cursor_anomaly": "",
     "staging_last_copy_time": None,
     "staging_last_copy_success_time": None,
     "staging_last_copy_status": "never",
@@ -49,6 +51,8 @@ _DEFAULT_RUNTIME: Dict[str, Any] = {
     "staging_copy_backlog": 0,
     "staging_local_latest_time": None,
     "staging_remote_latest_time": None,
+    # 上次复制后远端快照探测失败：staging_remote_latest_time 只是上次已知值
+    "staging_remote_probe_failed": False,
     "staging_last_deep_prune_time": None,
     "staging_chunker_mismatch": False,
     "staging_remote_stale_warned_at": None,

@@ -146,6 +146,16 @@ class MaintenanceTest(unittest.TestCase):
         self.assertEqual(outcome.status, MaintenanceRunStatus.SUCCESS)
         self.assertEqual(order, ["local_prune", "cache"])
 
+    def test_cursor_anomaly_skips_local_prune(self):
+        # 游标不可信时本轮已全量重放，仍保守跳过本地 prune（P1-1）
+        outcome, order, _copy = self.run_maintenance(
+            CopyCycleResult("success", cursor_untrusted=True)
+        )
+
+        self.assertEqual(outcome.status, MaintenanceRunStatus.SUCCESS)
+        self.assertEqual(order, ["remote", "cache"])
+        self.assertIn("跳过本地 prune", outcome.message)
+
     def test_deep_prune_is_due_when_never_run_or_interval_elapsed(self):
         self.assertTrue(
             staging_maintenance.should_deep_prune(self.runtime, self.settings)
