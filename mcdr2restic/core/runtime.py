@@ -28,6 +28,7 @@ class ServiceRuntimeState:
     server_ready: bool = False
     scheduler: Optional[Any] = None
     update_checker: Optional[Any] = None
+    stale_watchdog: Optional[Any] = None
     command_handlers: Optional[Any] = None
     onebot: Optional[Any] = None
     discord: Optional[Any] = None

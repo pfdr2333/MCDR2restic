@@ -20,6 +20,11 @@ from mcdr2restic.core.utils import non_negative_int
 
 ACCUMULATED_KEY = "backup_running_seconds_since_success"
 RUNNING_SINCE_KEY = "server_running_since_epoch"
+HEARTBEAT_KEY = "server_running_heartbeat_at"
+# 心跳结算间隔：进程被强杀/断电后，最多丢弃一个间隔内无法确认存活的时长
+RUNNING_CLOCK_HEARTBEAT_SECONDS = 1800
+# 心跳超过该倍数的间隔即判定为过期；正常重载最多滞后一个间隔
+HEARTBEAT_STALE_FACTOR = 2
 
 
 def running_seconds_since_success(
@@ -55,6 +60,7 @@ def start_server_running_clock(
         if parse_epoch(runtime_state.get(RUNNING_SINCE_KEY)) is not None:
             return False
         runtime_state[RUNNING_SINCE_KEY] = time.time()
+        runtime_state[HEARTBEAT_KEY] = runtime_state[RUNNING_SINCE_KEY]
         save_config_unlocked(app_runtime, server)
         return True
 
@@ -77,6 +83,78 @@ def stop_server_running_clock(
             runtime_state.get(ACCUMULATED_KEY, 0)
         ) + max(0, int(time.time() - since))
         runtime_state[RUNNING_SINCE_KEY] = None
+        runtime_state[HEARTBEAT_KEY] = time.time()
+        save_config_unlocked(app_runtime, server)
+        return True
+
+
+def settle_running_clock(
+    app_runtime: PluginRuntime,
+    server: PluginServerInterface,
+    now: Optional[float] = None,
+) -> bool:
+    """把当前运行片段结算进累计值，并把片段起点推到当前时刻。
+
+    周期性心跳结算的写入点：结算同时刷新心跳时间，崩溃重启后
+    ``recover_running_clock`` 只信任到最后一个心跳，从而不把停机时长
+    算成运行时长。
+    """
+
+    with app_runtime.config_state.lock:
+        ensure_runtime(
+            app_runtime.config_state.config,
+            app_runtime.config_state.state,
+        )
+        runtime_state = app_runtime.config_state.config["runtime"]
+        since = parse_epoch(runtime_state.get(RUNNING_SINCE_KEY))
+        if since is None:
+            return False
+        current = time.time() if now is None else now
+        runtime_state[ACCUMULATED_KEY] = non_negative_int(
+            runtime_state.get(ACCUMULATED_KEY, 0)
+        ) + max(0, int(current - since))
+        runtime_state[RUNNING_SINCE_KEY] = current
+        runtime_state[HEARTBEAT_KEY] = current
+        save_config_unlocked(app_runtime, server)
+        return True
+
+
+def recover_running_clock(
+    app_runtime: PluginRuntime,
+    server: PluginServerInterface,
+    server_ready: bool,
+    now: Optional[float] = None,
+) -> bool:
+    """启动/重载时结算遗留的运行片段。
+
+    进程被强杀或断电时 ``server_running_since_epoch`` 会停留在崩溃前，
+    重启后 ``now - since`` 会把停机时长算成运行时长。这里只结算到最后
+    一个心跳；心跳之后无法确认服务器是否在运行，直接丢弃——宁可少算
+    （晚一点告警），也不制造假告警。插件热重载时心跳仍然新鲜，按连续
+    片段处理，不丢时间。
+    """
+
+    with app_runtime.config_state.lock:
+        ensure_runtime(
+            app_runtime.config_state.config,
+            app_runtime.config_state.state,
+        )
+        runtime_state = app_runtime.config_state.config["runtime"]
+        since = parse_epoch(runtime_state.get(RUNNING_SINCE_KEY))
+        if since is None:
+            return False
+        current = time.time() if now is None else now
+        heartbeat = parse_epoch(runtime_state.get(HEARTBEAT_KEY))
+        stale_after = RUNNING_CLOCK_HEARTBEAT_SECONDS * HEARTBEAT_STALE_FACTOR
+        if heartbeat is None or current - heartbeat > stale_after:
+            credited_until = heartbeat if heartbeat is not None else since
+        else:
+            credited_until = current
+        runtime_state[ACCUMULATED_KEY] = non_negative_int(
+            runtime_state.get(ACCUMULATED_KEY, 0)
+        ) + max(0, int(credited_until - since))
+        runtime_state[HEARTBEAT_KEY] = credited_until
+        runtime_state[RUNNING_SINCE_KEY] = current if server_ready else None
         save_config_unlocked(app_runtime, server)
         return True
 
@@ -89,9 +167,9 @@ def reset_running_clock_state(
     """成功备份后清零累计；服务器仍在运行时从当前时刻重新计时。"""
 
     runtime_state[ACCUMULATED_KEY] = 0
-    runtime_state[RUNNING_SINCE_KEY] = (
-        (time.time() if now is None else now) if server_running else None
-    )
+    current = time.time() if now is None else now
+    runtime_state[RUNNING_SINCE_KEY] = current if server_running else None
+    runtime_state[HEARTBEAT_KEY] = current if server_running else None
 
 
 def parse_epoch(value: Any) -> Optional[float]:

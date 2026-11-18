@@ -44,7 +44,7 @@ from mcdr2restic.minecraft.player_activity_service import (
     get_online_check_command,
     query_online_players,
 )
-from mcdr2restic.backup.stale_backup_warning import maybe_warn_stale_backup
+from mcdr2restic.backup.gate_stall import mark_gate_stall_started
 from mcdr2restic.restic.restic_config import is_local_restic_repository
 
 
@@ -179,9 +179,8 @@ def wait_for_player_gate(
             admin_notifier,
             app_runtime,
         )
-        maybe_warn_stale_backup(
-            app_runtime, server, cfg, admin_notifier, (count, max_online)
-        )
+        # 停滞时长由独立看门狗按运行时钟重算，门控等待只负责登记起点
+        mark_gate_stall_started(app_runtime, server)
         _wait_next_gate_poll(app_runtime, pending)
 
 

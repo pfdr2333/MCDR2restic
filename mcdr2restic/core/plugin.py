@@ -10,9 +10,11 @@ from mcdreforged.api.all import Info, PluginServerInterface
 from mcdr2restic.backup.backup_runner import BackupRunner
 from mcdr2restic.backup.backup_scheduler import BackupScheduler, SchedulerDependencies
 from mcdr2restic.backup.running_time import (
+    recover_running_clock,
     start_server_running_clock,
     stop_server_running_clock,
 )
+from mcdr2restic.backup.stale_backup_watchdog import StaleBackupWatchdog
 from mcdr2restic.commands.command_context import CommandContext
 from mcdr2restic.commands.command_handlers import CommandHandlers
 from mcdr2restic.core.runtime import PluginRuntime, create_runtime
@@ -71,6 +73,10 @@ class PluginEntrypoint:
         self.shutdown_previous_module(server, prev_module)
         self.prepare_runtime(server)
         load_config(self.runtime, server)
+        # 上个进程若是被强杀/断电，遗留的运行片段会把停机时长算成运行时长
+        recover_running_clock(
+            self.runtime, server, self.runtime.service.server_ready
+        )
         if self.runtime.service.server_ready:
             start_server_running_clock(self.runtime, server)
         warn_if_remote_gate_disabled(server, get_config_snapshot(self.runtime))
@@ -81,6 +87,7 @@ class PluginEntrypoint:
         self.restart_custom_webhook(server)
         self.start_scheduler(server)
         self.start_staging_worker(server)
+        self.start_stale_watchdog(server)
         self.restart_update_checker(server, startup_check=True)
         server.logger.info(server_tr(server, "log.plugin.loaded"))
 
@@ -191,6 +198,7 @@ class PluginEntrypoint:
         stop_server_running_clock(self.runtime, server)
         self.cancel_pending_backup()
         self.stop_staging_worker()
+        self.stop_stale_watchdog()
         self.stop_update_checker()
         self.stop_scheduler()
         self.cancel_running_backup(reason)
@@ -212,6 +220,26 @@ class PluginEntrypoint:
             return
         self.runtime.service.update_checker.stop()
         self.runtime.service.update_checker = None
+
+    def start_stale_watchdog(self, server: PluginServerInterface):
+        """陈旧备份看门狗：独立时钟检查门控停滞，不受备份调度周期影响。"""
+
+        self.stop_stale_watchdog()
+        self.runtime.service.stale_watchdog = StaleBackupWatchdog(
+            self.runtime, self.create_notification_dispatcher().notify_admins
+        )
+        self.runtime.service.stale_watchdog.start()
+
+    def stop_stale_watchdog(self):
+        watchdog = self.runtime.service.stale_watchdog
+        if watchdog is None:
+            return
+        watchdog.stop()
+        self.runtime.service.stale_watchdog = None
+
+    def wake_stale_watchdog(self):
+        if self.runtime.service.stale_watchdog is not None:
+            self.runtime.service.stale_watchdog.wakeup()
 
     def stop_scheduler(self):
         if self.runtime.service.scheduler is None:
@@ -294,6 +322,7 @@ class PluginEntrypoint:
         self.restart_update_checker(server, startup_check=False)
         self.start_staging_worker(server)
         self.wake_scheduler()
+        self.wake_stale_watchdog()
 
     def invalidate_snapshot_cache(
         self,

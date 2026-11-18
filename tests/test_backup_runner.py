@@ -387,6 +387,8 @@ class BackupRunnerTests(unittest.TestCase):
                 "last_success_backup_end_time": "2026-01-01 00:00:00",
                 "stale_backup_warned_at": "2026-01-01 01:00:00",
                 "gate_deferral_count_since_success": 4,
+                "gate_stall_baseline_seconds": 1200,
+                "gate_stall_started_at": "2026-01-01 01:00:00",
             }
         }
         server = FakePluginServer()
@@ -405,6 +407,8 @@ class BackupRunnerTests(unittest.TestCase):
         self.assertEqual(runtime_state["last_backup_duration_seconds"], 12)
         self.assertIsNone(runtime_state["stale_backup_warned_at"])
         self.assertEqual(runtime_state["gate_deferral_count_since_success"], 0)
+        self.assertIsNone(runtime_state["gate_stall_baseline_seconds"])
+        self.assertIsNone(runtime_state["gate_stall_started_at"])
         self.assertEqual(runtime_state["backup_running_seconds_since_success"], 0)
         self.assertIsNotNone(runtime_state["server_running_since_epoch"])
 

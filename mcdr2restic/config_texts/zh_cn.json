@@ -26,7 +26,7 @@
   "template.comment.notification.notify_on_skip": "# 备份被跳过时通知",
   "template.comment.notification.notify_on_start": "# 备份开始时通知",
   "template.comment.notification.notify_on_success": "# 备份成功时通知",
-  "template.comment.notification.stale_backup_warning_hours": "# 服务器累计运行时间超过该小时数仍未成功备份、且定时备份正被人数门控推迟时告警（0 = 关闭）。默认 24 小时。",
+  "template.comment.notification.stale_backup_warning_hours": "# 首次被人数门控推迟后，累计运行超过该小时数仍无成功备份时告警（0 = 关闭）。默认 24 小时；告警后每 24 小时提醒一次，成功备份即复位。",
   "template.comment.onebot.access_token": "# 连接验证令牌",
   "template.comment.onebot.admin_qqs": "# 需要通知的 QQ",
   "template.comment.onebot.connect_timeout_seconds": "# 连接与发送超时、重连间隔（秒）",

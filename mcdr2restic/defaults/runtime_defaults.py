@@ -29,11 +29,17 @@ _DEFAULT_RUNTIME: Dict[str, Any] = {
     # 距上次成功备份的服务器实际运行时间；停服期间不计入
     "backup_running_seconds_since_success": 0,
     "server_running_since_epoch": None,
+    # 最后一次确认服务器仍在运行的时间点：崩溃后据此丢弃停机时长
+    "server_running_heartbeat_at": None,
     # 跳过只记录在这里，不污染 last_backup_status
     "last_skip_time": None,
     "last_skip_reason": "",
     "last_skip_scheduled_time": None,
     "gate_deferral_count_since_success": 0,
+    # 首次被人数门控推迟时的运行时间基线；None 表示当前没有积压的推迟
+    "gate_stall_baseline_seconds": None,
+    # 同一时刻的墙钟文本，仅用于告警文案展示“从什么时候开始”
+    "gate_stall_started_at": None,
     "stale_backup_warned_at": None,
     "last_maintenance_end_time": None,
     "last_maintenance_status": MaintenanceRunStatus.NEVER.value,

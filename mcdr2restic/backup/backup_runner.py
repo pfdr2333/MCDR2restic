@@ -9,6 +9,7 @@ from typing import Any, Callable, Dict, Optional, Union
 
 from mcdreforged.api.all import PluginServerInterface
 
+from mcdr2restic.backup.gate_stall import clear_gate_stall
 from mcdr2restic.backup.running_time import reset_running_clock_state
 from mcdr2restic.backup.scheduling import (
     ScheduledOccurrence,
@@ -692,6 +693,7 @@ class BackupRunner:
                 runtime_state["last_success_backup_end_time"] = finished_at
                 runtime_state["stale_backup_warned_at"] = None
                 runtime_state["gate_deferral_count_since_success"] = 0
+                clear_gate_stall(runtime_state)
                 reset_running_clock_state(runtime_state, server_running=True)
             save_config_unlocked(self.app_runtime, server)
 

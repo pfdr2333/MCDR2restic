@@ -6,9 +6,13 @@ except ImportError:
 
 from mcdr2restic.backup import running_time
 from mcdr2restic.backup.running_time import (
+    HEARTBEAT_KEY,
+    RUNNING_CLOCK_HEARTBEAT_SECONDS,
+    recover_running_clock,
     reset_running_clock_state,
     running_hours_since_success,
     running_seconds_since_success,
+    settle_running_clock,
     start_server_running_clock,
     stop_server_running_clock,
 )
@@ -54,6 +58,7 @@ class RunningTimeTests(unittest.TestCase):
 
         state = runtime.config_state.config["runtime"]
         self.assertEqual(state["server_running_since_epoch"], 1000.0)
+        self.assertEqual(state[HEARTBEAT_KEY], 1000.0)
         self.assertEqual(save.call_count, 1)
 
     def test_stop_clock_accumulates_and_clears(self):
@@ -82,6 +87,69 @@ class RunningTimeTests(unittest.TestCase):
         reset_running_clock_state(state, server_running=False, now=9000.0)
         self.assertEqual(state["backup_running_seconds_since_success"], 0)
         self.assertIsNone(state["server_running_since_epoch"])
+
+    def test_settle_moves_segment_and_refreshes_heartbeat(self):
+        runtime = make_runtime(
+            {
+                "backup_running_seconds_since_success": 600,
+                "server_running_since_epoch": 1000.0,
+            }
+        )
+        with mock.patch.object(running_time, "save_config_unlocked"):
+            self.assertTrue(settle_running_clock(runtime, mock.Mock(), now=1600.0))
+
+        state = runtime.config_state.config["runtime"]
+        self.assertEqual(state["backup_running_seconds_since_success"], 1200)
+        self.assertEqual(state["server_running_since_epoch"], 1600.0)
+        self.assertEqual(state[HEARTBEAT_KEY], 1600.0)
+
+    def test_settle_without_segment_is_noop(self):
+        runtime = make_runtime({"server_running_since_epoch": None})
+
+        self.assertFalse(settle_running_clock(runtime, mock.Mock(), now=100.0))
+
+    def test_recover_keeps_fresh_heartbeat_continuous(self):
+        runtime = make_runtime(
+            {
+                "backup_running_seconds_since_success": 100,
+                "server_running_since_epoch": 1000.0,
+                HEARTBEAT_KEY: 1200.0,
+            }
+        )
+        with mock.patch.object(running_time, "save_config_unlocked"):
+            self.assertTrue(
+                recover_running_clock(runtime, mock.Mock(), server_ready=True, now=1300.0)
+            )
+
+        state = runtime.config_state.config["runtime"]
+        self.assertEqual(state["backup_running_seconds_since_success"], 400)
+        self.assertEqual(state["server_running_since_epoch"], 1300.0)
+
+    def test_recover_drops_downtime_after_stale_heartbeat(self):
+        runtime = make_runtime(
+            {
+                "backup_running_seconds_since_success": 100,
+                "server_running_since_epoch": 1000.0,
+                HEARTBEAT_KEY: 1200.0,
+            }
+        )
+        # 停机时长超过两个心跳间隔：只信任到最后一个心跳
+        now = 1200.0 + 3 * RUNNING_CLOCK_HEARTBEAT_SECONDS
+        with mock.patch.object(running_time, "save_config_unlocked"):
+            self.assertTrue(
+                recover_running_clock(runtime, mock.Mock(), server_ready=False, now=now)
+            )
+
+        state = runtime.config_state.config["runtime"]
+        self.assertEqual(state["backup_running_seconds_since_success"], 300)
+        self.assertIsNone(state["server_running_since_epoch"])
+
+    def test_recover_without_segment_is_noop(self):
+        runtime = make_runtime({"server_running_since_epoch": None})
+
+        self.assertFalse(
+            recover_running_clock(runtime, mock.Mock(), server_ready=False, now=100.0)
+        )
 
 
 if __name__ == "__main__":

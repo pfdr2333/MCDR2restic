@@ -26,7 +26,7 @@
   "template.comment.notification.notify_on_skip": "# Notify when a backup is skipped.",
   "template.comment.notification.notify_on_start": "# Notify when a backup starts.",
   "template.comment.notification.notify_on_success": "# Notify when a backup succeeds.",
-  "template.comment.notification.stale_backup_warning_hours": "# Warn when the server has accumulated this many running hours since the last successful backup while scheduled backups are being deferred by the player gate (0 = off). Default 24 hours.",
+  "template.comment.notification.stale_backup_warning_hours": "# Warn when the accumulated running time since the player gate first deferred a backup exceeds this many hours without a successful backup (0 = off). Default 24 hours; re-warns every 24 hours until a backup succeeds.",
   "template.comment.onebot.access_token": "# Connection auth token",
   "template.comment.onebot.admin_qqs": "# QQ accounts to receive notifications",
   "template.comment.onebot.connect_timeout_seconds": "# Connect/send timeouts and reconnect interval (seconds)",
