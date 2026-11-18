@@ -49,7 +49,7 @@ Updating later is also a one-liner:
 !!MCDR plugin install -U mcdr2restic
 ```
 
-Manual installation: grab `MCDR2Restic.mcdr` from the latest [Release](https://github.com/pfdr2333/MCDR2restic/releases), drop it into MCDR's `plugins/` directory, and run `!!MCDR reload all`. On first load a sample configuration tailored to your system is generated at `config/mcdr2restic/config.yml` — the defaults just work:
+Manual installation: grab the `.mcdr` file (named like `MCDR2Restic_v0.12.2.mcdr`) from the latest [Release](https://github.com/pfdr2333/MCDR2restic/releases), drop it into MCDR's `plugins/` directory, and run `!!MCDR reload all`. On first load a sample configuration tailored to your system is generated at `config/mcdr2restic/config.yml` — the defaults just work:
 
 - restic is downloaded, kept up to date and the local repository initialized automatically
 - `./server/world` is backed up by default (all three world directories are added when detected)

@@ -49,7 +49,7 @@ MCDReforged 插件：调用 [restic](https://restic.readthedocs.io/en/stable/) �
 !!MCDR plugin install -U mcdr2restic
 ```
 
-也可以手动安装：下载最新 [Release](https://github.com/pfdr2333/MCDR2restic/releases) 中的 `MCDR2Restic.mcdr`，放入 MCDR 的 `plugins/` 目录后执行 `!!MCDR reload all`。首次加载会在 `config/mcdr2restic/config.yml` 自动生成适配当前系统的示例配置，默认即可运行：
+也可以手动安装：下载最新 [Release](https://github.com/pfdr2333/MCDR2restic/releases) 中的 `.mcdr` 文件（文件名形如 `MCDR2Restic_v0.12.2.mcdr`），放入 MCDR 的 `plugins/` 目录后执行 `!!MCDR reload all`。首次加载会在 `config/mcdr2restic/config.yml` 自动生成适配当前系统的示例配置，默认即可运行：
 
 - 自动下载 restic、过旧自动升级、自动初始化本地仓库
 - 默认备份 `./server/world`（检测到三世界目录时自动全部写入）
