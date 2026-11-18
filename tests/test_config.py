@@ -984,3 +984,47 @@ class StateFileDurabilityTests(unittest.TestCase):
             apply_config_file_migrations(migrated.splitlines(keepends=True), "zh_cn", cfg)
         )
         self.assertEqual(migrated_again, migrated)
+
+    def test_gate_comment_migration_runs_only_below_current_version(self):
+        # 迁移是否执行以文件里的 config_version 为准，不再靠中文文案匹配（P3-8）
+        from mcdr2restic.config import config_migration
+
+        cfg = {"schedule": {"backup_player_gate_max_online": 5}}
+        legacy = [
+            "enabled: true\n",
+            "schedule:\n",
+            "  backup_player_gate_max_online: 5\n",
+            "config_version: 12\n",
+        ]
+        current = [*legacy[:-1], "config_version: 13\n"]
+
+        with mock.patch.object(
+            config_migration,
+            "refresh_player_gate_comment_lines",
+            side_effect=lambda lines, language: lines,
+        ) as refresh:
+            config_migration.apply_config_file_migrations(legacy, "zh_cn", cfg)
+        refresh.assert_called_once()
+
+        with mock.patch.object(
+            config_migration,
+            "refresh_player_gate_comment_lines",
+            side_effect=lambda lines, language: lines,
+        ) as refresh:
+            config_migration.apply_config_file_migrations(current, "zh_cn", cfg)
+        refresh.assert_not_called()
+
+    def test_old_config_with_custom_gate_comment_is_still_refreshed(self):
+        lines = [
+            "enabled: true\n",
+            "schedule:\n",
+            "  # 我自己写的备注\n",
+            "  backup_player_gate_max_online: 5\n",
+            "config_version: 10\n",
+        ]
+        cfg = {"schedule": {"backup_player_gate_max_online": 5}}
+
+        migrated = "".join(apply_config_file_migrations(lines, "zh_cn", cfg))
+
+        self.assertIn("该阈值就是门控唯一的开关", migrated)
+        self.assertNotIn("我自己写的备注", migrated)

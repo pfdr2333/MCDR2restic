@@ -254,6 +254,20 @@ def write_durable_text_file(path: Path, text: str, exclusive: bool):
         os.fsync(file.fileno())
 
 
+# 门控注释在这一版改成"阈值即开关 + 推迟有期限"的语义
+PLAYER_GATE_COMMENT_MIGRATION_VERSION = 13
+
+
+def config_version_in_lines(lines: List[str]) -> int:
+    """从原始配置行读取版本号；迁移是否执行以文件里的版本为准。"""
+
+    for line in lines:
+        match = re.match(r"^config_version\s*:\s*(\d+)", str(line).strip())
+        if match:
+            return int(match.group(1))
+    return 0
+
+
 def apply_config_file_migrations(
     lines: List[str],
     language: str,
@@ -261,7 +275,10 @@ def apply_config_file_migrations(
 ) -> List[str]:
     lines = ensure_language_line(lines, language, cfg)
     lines = remove_deprecated_schedule_lines(lines)
-    lines = refresh_player_gate_comment_lines(lines, language)
+    if config_version_in_lines(lines) < PLAYER_GATE_COMMENT_MIGRATION_VERSION:
+        # 旧注释措辞随模板文案变化，按中文/英文原文匹配既脆弱又会漏；配置
+        # 版本才是权威信号，一次性迁移后不再触碰用户注释（P3-8）
+        lines = refresh_player_gate_comment_lines(lines, language)
     lines = remove_deprecated_restore_lines(lines)
     lines = remove_deprecated_restic_lines(lines)
     # runtime 顶级块是内存生成态，文件里的残留块早已无任何效果（P3-7）
@@ -457,35 +474,31 @@ def remove_deprecated_schedule_lines(lines: List[str]) -> List[str]:
 
 
 def refresh_player_gate_comment_lines(lines: List[str], language: str) -> List[str]:
-    """把旧的门控注释刷新为阈值/期限语义。
+    """把旧版本的门控注释刷新为阈值/期限语义。
 
-    旧注释会告诉本地库用户阈值默认 5，并声称推迟等待不受时限；这与
-    新语义（0 = 关闭、推迟有 deadline）冲突。仅当检测到旧措辞时替换
-    注释文本，不碰用户的值，也不影响新格式配置。
+    调用方按配置版本决定是否执行；旧注释会告诉本地库用户阈值默认 5，并
+    声称推迟等待不受时限，这与新语义（0 = 关闭、推迟有 deadline）冲突。
     """
 
-    for key, comment_key, markers in (
+    for key, comment_key in (
         (
             "backup_player_gate_max_online",
             "template.comment.schedule.backup_player_gate_max_online",
-            ("backup_player_gate_enabled", "默认 5", "default 5"),
         ),
         (
             "backup_player_gate_overlimit_seconds",
             "template.comment.schedule.backup_player_gate_overlimit_seconds",
-            ("不受此时长限制", "not limited by this duration"),
         ),
     ):
-        lines = replace_legacy_schedule_comment(lines, language, key, comment_key, markers)
+        lines = replace_schedule_comment(lines, language, key, comment_key)
     return lines
 
 
-def replace_legacy_schedule_comment(
+def replace_schedule_comment(
     lines: List[str],
     language: str,
     key: str,
     comment_key: str,
-    legacy_markers: Tuple[str, ...],
 ) -> List[str]:
     start, end = find_top_level_block(lines, "schedule")
     if start is None:
@@ -495,9 +508,6 @@ def replace_legacy_schedule_comment(
     if key_index is None:
         return lines
     comment_start = find_comment_run_start(block, key_index)
-    old_comments = "".join(block[comment_start:key_index]).lower()
-    if not any(marker in old_comments for marker in legacy_markers):
-        return lines
     key_line = block[key_index]
     eol = "\r\n" if key_line.endswith("\r\n") else "\n"
     new_comments = [
