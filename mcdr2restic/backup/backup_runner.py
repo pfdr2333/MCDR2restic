@@ -180,7 +180,14 @@ class BackupRunner:
             if reason is not None:
                 self._handle_slot_wait_abort(server, occurrence, pending, reason)
                 return False
-            if not self._player_gate_reopened(server):
+            try:
+                gate_reopened = self._player_gate_reopened(server)
+            except Exception:
+                # 已持有备份槽位：复检抛错（如 state.yml 写入失败）必须归还，
+                # 否则后续定时备份会永久卡在等槽位，直到 reload/重启
+                self.app_runtime.release_backup_slot()
+                raise
+            if not gate_reopened:
                 break
             self.app_runtime.release_backup_slot()
         try:

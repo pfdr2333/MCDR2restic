@@ -313,6 +313,33 @@ class BackupRunnerTests(unittest.TestCase):
         self.assertEqual(prepare.call_count, 2)
         run.assert_not_called()
 
+    def test_gate_recheck_exception_releases_backup_slot(self):
+        # 拿到槽位后复检抛错（如状态落盘失败）必须释放槽位，否则后续备份永久卡死
+        runtime, runner = self.make_runner()
+        server = FakePluginServer()
+        occurrence = mock.Mock(scheduled_at="2026-01-01 00:00:00")
+        pending = runtime.register_pending_backup(occurrence.scheduled_at, None)
+
+        def acquire_slot(_server, _pending):
+            runtime.backup.lock.acquire()
+            return None
+
+        with (
+            mock.patch.object(runner, "_prepare_scheduled_start", return_value=True),
+            mock.patch.object(
+                runner, "_wait_for_backup_slot", side_effect=acquire_slot
+            ),
+            mock.patch.object(
+                runner,
+                "_player_gate_reopened",
+                side_effect=OSError("state write failed"),
+            ),
+        ):
+            with self.assertRaises(OSError):
+                runner._await_slot_with_gate(server, occurrence, pending)
+
+        self.assertFalse(runtime.backup.lock.locked())
+
     def test_scheduled_start_proceeds_when_gate_still_open(self):
         runtime, runner = self.make_runner()
         server = FakePluginServer()
