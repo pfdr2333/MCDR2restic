@@ -22,7 +22,9 @@ from mcdr2restic.restic.restic_config import (
     is_local_restic_repository,
     normalize_command_args,
     normalize_filesystem_path,
+    path_contains_or_equals,
     resolve_path_against_working_directory,
+    resolve_restic_repository_path,
 )
 from mcdr2restic.restic.restic_constants import (
     RESTIC_CFG_BACKUP_COMMAND,
@@ -213,9 +215,50 @@ def validate_staging_settings(
             i18n_key="error.staging.repository_path_not_directory",
             repository_path=resolved.repository_path,
         )
+    assert_repository_not_overlapping_remote(restic_cfg, resolved)
     assert_paths_outside_backup_sources(restic_cfg, resolved)
+    assert_password_file_exists(settings, resolved)
     assert_backup_command_has_no_repository_options(restic_cfg)
     return resolved
+
+
+def assert_repository_not_overlapping_remote(
+    restic_cfg: Dict[str, Any], paths: StagingPaths
+):
+    """[beta] 中转库与本地路径型远端仓库不得相同或互相包含。
+
+    两者指向同一目录时复制变成同库自复制，维护会对同一个库执行两次 prune；
+    purge 还会移动本地库。网络型远端没有本地路径，不在此校验范围。
+    """
+
+    remote_value = get_effective_restic_repository(restic_cfg)
+    if not remote_value or not is_local_restic_repository(remote_value):
+        return
+    remote_path = resolve_restic_repository_path(restic_cfg, remote_value)
+    if path_contains_or_equals(
+        paths.repository_path, remote_path
+    ) or path_contains_or_equals(remote_path, paths.repository_path):
+        raise BackupProblem(
+            i18n_key="error.staging.repository_overlaps_remote",
+            local_path=paths.repository_path,
+            remote_path=remote_path,
+        )
+
+
+def assert_password_file_exists(
+    settings: StagingSettings, paths: StagingPaths
+):
+    """[beta] password_file 是实际生效的凭据时，文件必须存在。
+
+    否则用户只会在 restic 报 "unable to open password file" 时才发现问题。
+    填了 password 时 password_file 不生效，不做存在性校验。
+    """
+
+    _password, password_file = local_source_credentials(settings, paths)
+    if password_file and not os.path.isfile(password_file):
+        raise BackupProblem(
+            i18n_key="error.staging.password_file_missing", path=password_file
+        )
 
 
 def assert_paths_outside_backup_sources(

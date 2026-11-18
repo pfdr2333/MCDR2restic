@@ -244,7 +244,9 @@ class PurgeTest(unittest.TestCase):
                 )
 
             self.assertEqual(
-                raised.exception.i18n_key, "error.staging.purge_path_overlap"
+                raised.exception.i18n_key,
+                # 路径重叠现在在 validate_staging_settings 统一拦截（P2-7）
+                "error.staging.repository_overlaps_remote",
             )
 
     def test_purge_rejects_remote_that_contains_backup_sources(self):

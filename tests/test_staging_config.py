@@ -166,6 +166,78 @@ class StagingValidationTest(unittest.TestCase):
                 os.path.dirname(paths.repository_path),
             )
 
+    def test_staging_repository_must_not_overlap_local_remote_repository(self):
+        with tempfile.TemporaryDirectory() as root:
+            staging_repo = os.path.join(root, "staging-repo")
+            os.makedirs(staging_repo)
+            cases = (
+                (staging_repo, staging_repo),
+                (staging_repo, root),
+                (os.path.join(staging_repo, "remote"), staging_repo),
+            )
+            for remote, expected_local in cases:
+                with self.subTest(remote=remote):
+                    cfg = staging_cfg(expected_local)
+                    cfg["restic"]["repository"] = remote
+                    with self.assertRaises(BackupProblem) as raised:
+                        validate_staging_settings(
+                            get_staging_settings(cfg), cfg["restic"]
+                        )
+                    self.assertEqual(
+                        raised.exception.i18n_key,
+                        "error.staging.repository_overlaps_remote",
+                    )
+                    self.assertIn(
+                        "local_path", raised.exception.i18n_params
+                    )
+                    self.assertIn(
+                        "remote_path", raised.exception.i18n_params
+                    )
+
+    def test_network_remote_is_exempt_from_overlap_check(self):
+        cfg = staging_cfg("/data/staging-repo")
+        cfg["restic"]["repository"] = "s3:https://s3.example.com/mcdr-backup"
+
+        paths = validate_staging_settings(
+            get_staging_settings(cfg), cfg["restic"]
+        )
+
+        self.assertTrue(paths.repository_path.endswith("staging-repo"))
+
+    def test_missing_password_file_is_reported_before_restic_runs(self):
+        with tempfile.TemporaryDirectory() as root:
+            missing = os.path.join(root, "missing-password.txt")
+            cfg = staging_cfg(
+                os.path.join(root, "staging-repo"),
+                password="",
+                password_file=missing,
+            )
+
+            with self.assertRaises(BackupProblem) as raised:
+                validate_staging_settings(
+                    get_staging_settings(cfg), cfg["restic"]
+                )
+
+            self.assertEqual(
+                raised.exception.i18n_key,
+                "error.staging.password_file_missing",
+            )
+            self.assertEqual(raised.exception.i18n_params["path"], missing)
+
+    def test_password_takes_priority_so_missing_file_is_not_checked(self):
+        with tempfile.TemporaryDirectory() as root:
+            cfg = staging_cfg(
+                os.path.join(root, "staging-repo"),
+                password="inline-pass",
+                password_file=os.path.join(root, "missing.txt"),
+            )
+
+            paths = validate_staging_settings(
+                get_staging_settings(cfg), cfg["restic"]
+            )
+
+            self.assertTrue(paths.repository_path.endswith("staging-repo"))
+
 
 class StagingCommandTest(unittest.TestCase):
     def test_local_restic_config_uses_staging_repository_and_password(self):
