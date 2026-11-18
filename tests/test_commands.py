@@ -145,18 +145,23 @@ class CancelCommandTests(unittest.TestCase):
         cancel_backup.assert_not_called()
         self.assertIn("已请求取消恢复流程", source.replies[-1])
 
-    def test_cancel_requests_purge_cancel_before_backup(self):
+    def test_cancel_during_purge_also_cancels_running_backup(self):
         commands, runtime = self.make_commands()
         source = PermissiveCommandSource(FakePluginServer())
         runtime.staging.purge_active = True
         with mock.patch(
+            "mcdr2restic.commands.backup_commands.is_backup_running",
+            return_value=True,
+        ), mock.patch(
             "mcdr2restic.commands.backup_commands.request_cancel_current_backup"
         ) as cancel_backup:
             commands.command_cancel(source)
 
         self.assertTrue(runtime.staging.copy_slot.cancel.is_set())
-        cancel_backup.assert_not_called()
-        self.assertIn("已请求取消中转库 purge", source.replies[-1])
+        cancel_backup.assert_called_once()
+        replies = "\n".join(source.replies)
+        self.assertIn("已请求取消中转库 purge", replies)
+        self.assertIn("已请求取消当前备份", replies)
 
     def test_cancel_cancels_pending_deferred_backup(self):
         commands, runtime = self.make_commands()
